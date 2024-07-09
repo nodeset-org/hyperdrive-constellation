@@ -7,7 +7,7 @@ toolchain go1.21.10
 require (
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/fatih/color v1.16.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240709193038-ff4d0ca8acef
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240709204807-24ee43c46661
 	github.com/nodeset-org/osha v0.2.0
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.1
@@ -109,7 +109,7 @@ require (
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/nodeset-org/nodeset-client-go v0.0.0-20240709032341-2c0db9517c00 // indirect
+	github.com/nodeset-org/nodeset-client-go v0.0.0-20240709204602-d660ec1e19ad // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/opencontainers/runtime-spec v1.2.0 // indirect

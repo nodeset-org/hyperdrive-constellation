@@ -71,11 +71,15 @@ func TestConstellationRegistration_GoodSignature(t *testing.T) {
 	t.Log("Node is not registered with Constellation yet, as expected")
 
 	// Make a signature
+	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(adminKey)
 	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
-	signature, err := nsMgr.GetConstellationWhitelistSignature(nodeAddress)
+	response, err := hd.NodeSet_Constellation.GetRegistrationSignature()
 	require.NoError(t, err)
+	require.False(t, response.Data.NotAuthorized)
+	require.False(t, response.Data.NotRegistered)
+	signature := response.Data.Signature
 	t.Logf("Generated signature: %s", utils.EncodeHexWithPrefix(signature))
 
 	// Make the registration tx
@@ -88,7 +92,6 @@ func TestConstellationRegistration_GoodSignature(t *testing.T) {
 	t.Log("Generated registration tx")
 
 	// Submit the tx
-	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	submission, _ := eth.CreateTxSubmissionFromInfo(txInfo, nil)
 	txResponse, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
 	require.NoError(t, err)
