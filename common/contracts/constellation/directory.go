@@ -60,3 +60,15 @@ func NewDirectory(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tr
 func (c *Directory) HasRole(mc *batch.MultiCaller, out *bool, role [32]byte, account common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "hasRole", role, account)
 }
+
+func (c *Directory) GetRocketStorageAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRocketStorageAddress")
+}
+
+func (c *Directory) GetSuperNodeAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getSuperNodeAddress")
+}
+
+func (c *Directory) GetWhitelistAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getWhitelistAddress")
+}

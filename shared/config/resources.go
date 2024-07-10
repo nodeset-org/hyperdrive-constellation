@@ -15,6 +15,9 @@ type ConstellationResources struct {
 	// The Constellation directory contract address, which houses all of the other contract addresses
 	Directory *common.Address
 
+	// Address of the RocketStorage contract, the master contract for all of Rocket Pool
+	RocketStorage *common.Address
+
 	// The fee recipient to use for the Constellation VC. This must ALWAYS be set to the Rocket Pool Smoothing Pool contract address.
 	// Technically this should come from Directory (or RocketStorage within Directory) but it needs to be set here for templating to use it.
 	FeeRecipient *common.Address
@@ -26,6 +29,7 @@ func newConstellationResources(network config.Network) *ConstellationResources {
 	mainnetResources := &ConstellationResources{
 		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Mainnet),
 		Directory:           nil,
+		RocketStorage:       config.HexToAddressPtr("0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46"),
 		FeeRecipient:        config.HexToAddressPtr("0xd4E96eF8eee8678dBFf4d535E033Ed1a4F7605b7"),
 	}
 
@@ -33,6 +37,7 @@ func newConstellationResources(network config.Network) *ConstellationResources {
 	holeskyResources := &ConstellationResources{
 		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Holesky),
 		Directory:           nil,
+		RocketStorage:       config.HexToAddressPtr("0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1"),
 		FeeRecipient:        config.HexToAddressPtr("0xA347C391bc8f740CAbA37672157c8aAcD08Ac567"),
 	}
 
@@ -40,6 +45,7 @@ func newConstellationResources(network config.Network) *ConstellationResources {
 	holeskyDevResources := &ConstellationResources{
 		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Holesky),
 		Directory:           nil,
+		RocketStorage:       config.HexToAddressPtr("0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1"),
 		FeeRecipient:        config.HexToAddressPtr("0xA347C391bc8f740CAbA37672157c8aAcD08Ac567"),
 	}
 

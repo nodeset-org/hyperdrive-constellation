@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
+	csnode "github.com/nodeset-org/hyperdrive-constellation/server/node"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/rocket-pool/node-manager-core/api/server"
 )
@@ -52,9 +53,11 @@ func (m *ServerManager) Stop() {
 // Creates a new Hyperdrive API server
 func createServer(sp *cscommon.ConstellationServiceProvider, ip string, port uint16) (*server.NetworkSocketApiServer, error) {
 	apiLogger := sp.GetApiLogger()
-	//ctx := apiLogger.CreateContextWithLogger(sp.GetBaseContext())
+	ctx := apiLogger.CreateContextWithLogger(sp.GetBaseContext())
 
-	handlers := []server.IHandler{}
+	handlers := []server.IHandler{
+		csnode.NewNodeHandler(apiLogger, ctx, sp),
+	}
 	server, err := server.NewNetworkSocketApiServer(apiLogger.Logger, ip, port, handlers, csconfig.DaemonBaseRoute, csconfig.ApiVersion)
 	if err != nil {
 		return nil, err

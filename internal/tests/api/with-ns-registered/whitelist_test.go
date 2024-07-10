@@ -27,7 +27,7 @@ var (
 )
 
 // Test registration with Constellation using a good signature
-func TestConstellationRegistration_GoodSignature(t *testing.T) {
+func TestConstellationRegistration(t *testing.T) {
 	// Take a snapshot, revert at the end
 	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
 	if err != nil {
@@ -58,16 +58,18 @@ func TestConstellationRegistration_GoodSignature(t *testing.T) {
 	require.True(t, isAdmin)
 	t.Log("Admin has the right role")
 
+	// Commit a block just so the latest block is fresh - otherwise the sync progress check will
+	// error out because the block is too old and it thinks the client just can't find any peers
+	err = testMgr.CommitBlock()
+	if err != nil {
+		t.Fatalf("Error committing block: %v", err)
+	}
+
 	// Check if the node is registered
-	whitelist, err := constellation.NewWhitelist(whitelistAddress, sp.GetEthClient(), sp.GetTransactionManager())
+	cs := testMgr.GetApiClient()
+	statusResponse, err := cs.Node.GetRegistrationStatus()
 	require.NoError(t, err)
-	var isRegistered bool
-	err = qMgr.Query(func(mc *batchquery.MultiCaller) error {
-		whitelist.IsAddressInWhitelist(mc, &isRegistered, nodeAddress)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	require.False(t, isRegistered)
+	require.False(t, statusResponse.Data.Registered)
 	t.Log("Node is not registered with Constellation yet, as expected")
 
 	// Make a signature
@@ -86,7 +88,8 @@ func TestConstellationRegistration_GoodSignature(t *testing.T) {
 	opts := &bind.TransactOpts{
 		From: nodeAddress,
 	}
-	txInfo, err := whitelist.AddOperator(nodeAddress, signature, opts)
+	whitelist := testMgr.GetConstellationServiceProvider().GetConstellationManager().Whitelist
+	txInfo, err := whitelist.AddOperator(nodeAddress, signature, opts) // TODO: make this a route
 	require.NoError(t, err)
 	require.Empty(t, txInfo.SimulationResult.SimulationError)
 	t.Log("Generated registration tx")
@@ -108,12 +111,9 @@ func TestConstellationRegistration_GoodSignature(t *testing.T) {
 	t.Log("Waiting for registration tx complete")
 
 	// Check if the node is registered
-	err = qMgr.Query(func(mc *batchquery.MultiCaller) error {
-		whitelist.IsAddressInWhitelist(mc, &isRegistered, nodeAddress)
-		return nil
-	}, nil)
+	statusResponse, err = cs.Node.GetRegistrationStatus()
 	require.NoError(t, err)
-	require.True(t, isRegistered)
+	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
 }
 
