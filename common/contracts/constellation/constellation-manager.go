@@ -11,8 +11,9 @@ import (
 
 // Manager for Constellation contract bindings
 type ConstellationManager struct {
-	Directory *Directory
-	Whitelist *Whitelist
+	Directory        *Directory
+	Whitelist        *Whitelist
+	SuperNodeAccount *SuperNodeAccount
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -30,7 +31,6 @@ func NewConstellationManager(res *csconfig.ConstellationResources, ec eth.IExecu
 
 	return &ConstellationManager{
 		Directory: directory,
-		Whitelist: nil,
 		ec:        ec,
 		qMgr:      qMgr,
 		txMgr:     txMgr,
@@ -46,8 +46,10 @@ func (m *ConstellationManager) LoadContracts() error {
 
 	// Get the addresses
 	var whitelistAddress common.Address
+	var superNodeAccountAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
+		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -59,9 +61,14 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating whitelist binding: %w", err)
 	}
+	superNodeAccount, err := NewSuperNodeAccount(superNodeAccountAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating super node account binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
+	m.SuperNodeAccount = superNodeAccount
 	m.isLoaded = true
 	return nil
 }

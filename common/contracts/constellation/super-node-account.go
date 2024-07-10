@@ -1,0 +1,73 @@
+package constellation
+
+import (
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/rocket-pool/node-manager-core/eth"
+)
+
+const (
+	superNodeAccountAbiString string = `[{"inputs":[{"internalType":"uint256","name":"expectedBondAmount","type":"uint256"},{"internalType":"uint256","name":"actualBondAmount","type":"uint256"}],"name":"BadBondAmount","type":"error"},{"inputs":[{"internalType":"address","name":"expected","type":"address"},{"internalType":"address","name":"actual","type":"address"}],"name":"BadPredictedCreation","type":"error"},{"inputs":[{"internalType":"bytes32","name":"role","type":"bytes32"},{"internalType":"address","name":"user","type":"address"}],"name":"BadRole","type":"error"},{"inputs":[{"internalType":"address","name":"expectedSender","type":"address"}],"name":"BadSender","type":"error"},{"inputs":[{"internalType":"uint256","name":"expectedBalance","type":"uint256"},{"internalType":"uint256","name":"actualBalance","type":"uint256"}],"name":"InsufficientBalance","type":"error"},{"inputs":[{"internalType":"bool","name":"success","type":"bool"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"LowLevelCall","type":"error"},{"inputs":[{"internalType":"bool","name":"success","type":"bool"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"LowLevelEthTransfer","type":"error"},{"inputs":[{"internalType":"address","name":"addr","type":"address"}],"name":"NotAContract","type":"error"},{"inputs":[],"name":"ZeroAddressError","type":"error"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint8","name":"version","type":"uint8"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[{"internalType":"address","name":"_subNodeOperator","type":"address"},{"internalType":"address","name":"_minipool","type":"address"}],"name":"close","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"configs","outputs":[{"internalType":"string","name":"timezoneLocation","type":"string"},{"internalType":"uint256","name":"bondAmount","type":"uint256"},{"internalType":"uint256","name":"minimumNodeFee","type":"uint256"},{"internalType":"bytes","name":"validatorPubkey","type":"bytes"},{"internalType":"bytes","name":"validatorSignature","type":"bytes"},{"internalType":"bytes32","name":"depositDataRoot","type":"bytes32"},{"internalType":"uint256","name":"salt","type":"uint256"},{"internalType":"address","name":"expectedMinipoolAddress","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[{"components":[{"internalType":"string","name":"timezoneLocation","type":"string"},{"internalType":"uint256","name":"bondAmount","type":"uint256"},{"internalType":"uint256","name":"minimumNodeFee","type":"uint256"},{"internalType":"bytes","name":"validatorPubkey","type":"bytes"},{"internalType":"bytes","name":"validatorSignature","type":"bytes"},{"internalType":"bytes32","name":"depositDataRoot","type":"bytes32"},{"internalType":"uint256","name":"salt","type":"uint256"},{"internalType":"address","name":"expectedMinipoolAddress","type":"address"}],"internalType":"struct SuperNodeAccount.ValidatorConfig","name":"_config","type":"tuple"},{"internalType":"bytes","name":"_sig","type":"bytes"}],"name":"createMinipool","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"currentMinipool","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_minipool","type":"address"}],"name":"delegateRollback","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_minipool","type":"address"}],"name":"delegateUpgrade","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"disablePreSignedExitMessageCheck","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bool","name":"_rewardsOnly","type":"bool"},{"internalType":"address","name":"_subNodeOperator","type":"address"},{"internalType":"address","name":"_minipool","type":"address"}],"name":"distributeBalance","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getDirectory","outputs":[{"internalType":"contract Directory","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getImplementation","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getNextMinipool","outputs":[{"internalType":"contract IMinipool","name":"","type":"address"}],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_bond","type":"uint256"}],"name":"hasSufficentLiquidity","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_directory","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"lazyInitialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lockStarted","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"lockThreshhold","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"lockUpTime","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"lockedEth","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_nodeAddress","type":"address"},{"internalType":"uint256[]","name":"_rewardIndex","type":"uint256[]"},{"internalType":"uint256[]","name":"_amountRPL","type":"uint256[]"},{"internalType":"uint256[]","name":"_amountETH","type":"uint256[]"},{"internalType":"bytes32[][]","name":"_merkleProof","type":"bytes32[][]"}],"name":"merkleClaim","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"}],"name":"minipoolIndex","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"minipools","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"preSignedExitMessageCheck","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"uint256","name":"_newLockThreshold","type":"uint256"}],"name":"setLockAmount","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"uint256","name":"_newLockUpTime","type":"uint256"}],"name":"setLockUpTime","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bool","name":"_setting","type":"bool"},{"internalType":"address","name":"_minipool","type":"address"}],"name":"setUseLatestDelegate","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes","name":"","type":"bytes"}],"name":"sigsUsed","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_minipool","type":"address"}],"name":"stake","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_subNodeOperator","type":"address"}],"name":"stopTrackingOperatorMinipools","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"name":"subNodeOperatorHasMinipool","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"","type":"address"},{"internalType":"uint256","name":"","type":"uint256"}],"name":"subNodeOperatorMinipools","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalEthLocked","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"totalEthStaking","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_minipool","type":"address"}],"name":"unlockEth","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"}],"name":"upgradeTo","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"usePreSignedExitMessageCheck","outputs":[],"stateMutability":"nonpayable","type":"function"},{"stateMutability":"payable","type":"receive"}]`
+)
+
+// ABI cache
+var superNodeAccountAbi abi.ABI
+var superNodeAccountOnce sync.Once
+
+type SuperNodeAccount struct {
+	contract *eth.Contract
+	txMgr    *eth.TransactionManager
+}
+
+// Create a new SuperNodeAccount instance
+func NewSuperNodeAccount(address common.Address, ec eth.IExecutionClient, txMgr *eth.TransactionManager) (*SuperNodeAccount, error) {
+	// Parse the ABI
+	var err error
+	superNodeAccountOnce.Do(func() {
+		var parsedAbi abi.ABI
+		parsedAbi, err = abi.JSON(strings.NewReader(superNodeAccountAbiString))
+		if err == nil {
+			superNodeAccountAbi = parsedAbi
+		}
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error parsing SuperNodeAccount ABI: %w", err)
+	}
+
+	// Create the contract
+	contract := &eth.Contract{
+		ContractImpl: bind.NewBoundContract(address, superNodeAccountAbi, ec, ec, ec),
+		Address:      address,
+		ABI:          &superNodeAccountAbi,
+	}
+
+	return &SuperNodeAccount{
+		contract: contract,
+		txMgr:    txMgr,
+	}, nil
+}
+
+// =============
+// === Calls ===
+// =============
+
+// ====================
+// === Transactions ===
+// ====================
+
+func (c *SuperNodeAccount) DelegateRollback(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "delegateRollback", opts, minipool)
+}
+
+func (c *SuperNodeAccount) DelegateUpgrade(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "delegateUpgrade", opts, minipool)
+}
+
+func (c *SuperNodeAccount) SetUseLatestDelegate(setting bool, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "setUseLatestDelegate", opts, setting, minipool)
+}
