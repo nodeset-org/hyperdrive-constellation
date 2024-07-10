@@ -65,10 +65,10 @@ func (c *nodeGetRegistrationStatusContext) PrepareData(data *csapi.NodeGetRegist
 		return types.ResponseStatus_Error, err
 	}
 
-	// Refresh the Constellation contracts
-	err = csMgr.RefreshContracts()
+	// Load the Constellation contracts
+	err = csMgr.LoadContracts()
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error refreshing contracts: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error loading constellation contracts: %w", err)
 	}
 
 	// Get the registration status

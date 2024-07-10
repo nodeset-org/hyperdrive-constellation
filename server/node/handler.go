@@ -24,6 +24,7 @@ func NewNodeHandler(logger *log.Logger, ctx context.Context, serviceProvider *cs
 	}
 	h.factories = []server.IContextFactory{
 		&nodeGetRegistrationStatusContextFactory{h},
+		&nodeRegisterContextFactory{h},
 	}
 	return h
 }

@@ -26,8 +26,14 @@ func (r *NodeRequester) GetContext() client.IRequesterContext {
 	return r.context
 }
 
-// Get the registration status of the node with the Constellation contracts
+// Get the registration status of the node with Constellation
 func (r *NodeRequester) GetRegistrationStatus() (*types.ApiResponse[csapi.NodeGetRegistrationStatusData], error) {
 	args := map[string]string{}
 	return client.SendGetRequest[csapi.NodeGetRegistrationStatusData](r, "get-registration-status", "GetRegistrationStatus", args)
+}
+
+// Gets a TX for registering the node with Constellation
+func (r *NodeRequester) Register() (*types.ApiResponse[csapi.NodeRegisterData], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.NodeRegisterData](r, "register", "Register", args)
 }

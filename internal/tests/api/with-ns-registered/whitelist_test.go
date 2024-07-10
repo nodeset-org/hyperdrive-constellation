@@ -4,7 +4,6 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
@@ -12,7 +11,6 @@ import (
 	"github.com/nodeset-org/osha/keys"
 	batchquery "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
-	"github.com/rocket-pool/node-manager-core/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,30 +70,22 @@ func TestConstellationRegistration(t *testing.T) {
 	require.False(t, statusResponse.Data.Registered)
 	t.Log("Node is not registered with Constellation yet, as expected")
 
-	// Make a signature
+	// Set up the NodeSet mock server
 	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(adminKey)
 	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
-	response, err := hd.NodeSet_Constellation.GetRegistrationSignature()
-	require.NoError(t, err)
-	require.False(t, response.Data.NotAuthorized)
-	require.False(t, response.Data.NotRegistered)
-	signature := response.Data.Signature
-	t.Logf("Generated signature: %s", utils.EncodeHexWithPrefix(signature))
+	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx
-	opts := &bind.TransactOpts{
-		From: nodeAddress,
-	}
-	whitelist := testMgr.GetConstellationServiceProvider().GetConstellationManager().Whitelist
-	txInfo, err := whitelist.AddOperator(nodeAddress, signature, opts) // TODO: make this a route
+	response, err := cs.Node.Register()
 	require.NoError(t, err)
-	require.Empty(t, txInfo.SimulationResult.SimulationError)
+	require.False(t, response.Data.NotAuthorized)
+	require.False(t, response.Data.NotRegisteredWithNodeSet)
 	t.Log("Generated registration tx")
 
 	// Submit the tx
-	submission, _ := eth.CreateTxSubmissionFromInfo(txInfo, nil)
+	submission, _ := eth.CreateTxSubmissionFromInfo(response.Data.TxInfo, nil)
 	txResponse, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
 	require.NoError(t, err)
 	t.Logf("Submitted registration tx: %s", txResponse.Data.TxHash)
