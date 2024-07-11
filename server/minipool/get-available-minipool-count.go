@@ -49,7 +49,7 @@ func (c *minipoolGetAvailableMinipoolCountContext) PrepareData(data *csapi.Minip
 	hd := sp.GetHyperdriveClient()
 
 	// Requirements
-	err := sp.RequireNodeAddress(walletStatus)
+	err := sp.RequireWalletReady(walletStatus)
 	if err != nil {
 		return types.ResponseStatus_WalletNotReady, err
 	}
