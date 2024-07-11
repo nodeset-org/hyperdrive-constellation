@@ -1,10 +1,6 @@
 package csclient
 
 import (
-	"log/slog"
-	"net/http/httptrace"
-	"net/url"
-
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/client"
 	"github.com/rocket-pool/node-manager-core/api/types"
@@ -14,15 +10,11 @@ type MinipoolRequester struct {
 	context client.IRequesterContext
 }
 
-func NewMinipoolRequester(apiUrl *url.URL, logger *slog.Logger, tracer *httptrace.ClientTrace) *MinipoolRequester {
-	context := client.NewNetworkRequesterContext(apiUrl, logger, tracer)
-
-	client := &MinipoolRequester{
+func NewMinipoolRequester(context client.IRequesterContext) *MinipoolRequester {
+	return &MinipoolRequester{
 		context: context,
 	}
-	return client
 }
-
 func (r *MinipoolRequester) GetName() string {
 	return "Minipool"
 }
@@ -33,7 +25,7 @@ func (r *MinipoolRequester) GetContext() client.IRequesterContext {
 	return r.context
 }
 
-func (r *MinipoolRequester) GetAvailabilityCount() (*types.ApiResponse[csapi.NodeGetAvailabilityCount], error) {
+func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCount], error) {
 	args := map[string]string{}
-	return client.SendGetRequest[csapi.NodeGetAvailabilityCount](r, "get-availability-count", "GetAvailabilityCount", args)
+	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCount](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
 }

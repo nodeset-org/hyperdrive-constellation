@@ -18,21 +18,21 @@ import (
 // === Factory ===
 // ===============
 
-type nodeGetAvailabilityCountContextFactory struct {
+type minipoolGetAvailableMinipoolCountContextFactory struct {
 	handler *MinipoolHandler
 }
 
-func (f *nodeGetAvailabilityCountContextFactory) Create(args url.Values) (*nodeGetAvailabilityCountContext, error) {
-	c := &nodeGetAvailabilityCountContext{
+func (f *minipoolGetAvailableMinipoolCountContextFactory) Create(args url.Values) (*minipoolGetAvailableMinipoolCountContext, error) {
+	c := &minipoolGetAvailableMinipoolCountContext{
 		handler: f.handler,
 	}
 	inputErrs := []error{}
 	return c, errors.Join(inputErrs...)
 }
 
-func (f *nodeGetAvailabilityCountContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterQuerylessGet[*nodeGetAvailabilityCountContext, csapi.NodeGetAvailabilityCount](
-		router, "get-availability-count", f, f.handler.logger.Logger, f.handler.serviceProvider.ServiceProvider,
+func (f *minipoolGetAvailableMinipoolCountContextFactory) RegisterRoute(router *mux.Router) {
+	server.RegisterQuerylessGet[*minipoolGetAvailableMinipoolCountContext, csapi.MinipoolGetAvailableMinipoolCount](
+		router, "get-available-minipool-count", f, f.handler.logger.Logger, f.handler.serviceProvider.ServiceProvider,
 	)
 }
 
@@ -40,11 +40,11 @@ func (f *nodeGetAvailabilityCountContextFactory) RegisterRoute(router *mux.Route
 // === Context ===
 // ===============
 
-type nodeGetAvailabilityCountContext struct {
+type minipoolGetAvailableMinipoolCountContext struct {
 	handler *MinipoolHandler
 }
 
-func (c *nodeGetAvailabilityCountContext) PrepareData(data *csapi.NodeGetAvailabilityCount, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *minipoolGetAvailableMinipoolCountContext) PrepareData(data *csapi.MinipoolGetAvailableMinipoolCount, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	// Call hyperdrive daemon to make the call to NodeSet
 	sp := c.handler.serviceProvider
 	hd := sp.GetHyperdriveClient()

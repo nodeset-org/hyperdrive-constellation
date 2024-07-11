@@ -23,13 +23,13 @@ func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider
 		serviceProvider: serviceProvider,
 	}
 	h.factories = []server.IContextFactory{
-		&nodeGetAvailabilityCountContextFactory{h},
+		&minipoolGetAvailableMinipoolCountContextFactory{h},
 	}
 	return h
 }
 
 func (h *MinipoolHandler) RegisterRoutes(router *mux.Router) {
-	subrouter := router.PathPrefix("/node").Subrouter()
+	subrouter := router.PathPrefix("/minipool").Subrouter()
 	for _, factory := range h.factories {
 		factory.RegisterRoute(subrouter)
 	}

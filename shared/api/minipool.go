@@ -1,5 +1,5 @@
 package csapi
 
-type NodeGetAvailabilityCount struct {
+type MinipoolGetAvailableMinipoolCount struct {
 	Count int `json:"count"`
 }
