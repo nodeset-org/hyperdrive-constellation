@@ -45,7 +45,6 @@ type minipoolGetAvailableMinipoolCountContext struct {
 }
 
 func (c *minipoolGetAvailableMinipoolCountContext) PrepareData(data *csapi.MinipoolGetAvailableMinipoolCount, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
-	// Call hyperdrive daemon to make the call to NodeSet
 	sp := c.handler.serviceProvider
 	hd := sp.GetHyperdriveClient()
 

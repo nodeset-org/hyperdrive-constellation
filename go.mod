@@ -11,7 +11,7 @@ require (
 	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240709204807-24ee43c46661
 	github.com/nodeset-org/osha v0.2.0
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.1
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20240711145202-d927402794fc
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.1
@@ -174,3 +174,5 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/nodeset-org/hyperdrive-daemon => ../hyperdrive-daemon

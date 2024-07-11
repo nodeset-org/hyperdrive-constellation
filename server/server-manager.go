@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
+	csminipool "github.com/nodeset-org/hyperdrive-constellation/server/minipool"
 	csnode "github.com/nodeset-org/hyperdrive-constellation/server/node"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/rocket-pool/node-manager-core/api/server"
@@ -57,6 +58,7 @@ func createServer(sp *cscommon.ConstellationServiceProvider, ip string, port uin
 
 	handlers := []server.IHandler{
 		csnode.NewNodeHandler(apiLogger, ctx, sp),
+		csminipool.NewMinipoolHandler(apiLogger, ctx, sp),
 	}
 	server, err := server.NewNetworkSocketApiServer(apiLogger.Logger, ip, port, handlers, csconfig.DaemonBaseRoute, csconfig.ApiVersion)
 	if err != nil {
