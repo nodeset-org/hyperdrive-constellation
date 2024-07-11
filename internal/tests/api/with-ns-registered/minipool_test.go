@@ -20,7 +20,7 @@ func TestMinipoolGetAvailableMinipoolCount_Zero(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
-	// Check if the node is registered
+	// Check the available minipool count
 	cs := testMgr.GetApiClient()
 	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
 	require.NoError(t, err)
@@ -40,7 +40,7 @@ func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 
-	// Check if the node is registered
+	// Check the available minipool count
 	cs := testMgr.GetApiClient()
 	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
 	require.NoError(t, err)
