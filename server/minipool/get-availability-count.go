@@ -45,6 +45,22 @@ type nodeGetAvailabilityCountContext struct {
 }
 
 func (c *nodeGetAvailabilityCountContext) PrepareData(data *csapi.NodeGetAvailabilityCount, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+	// Call hyperdrive daemon to make the call to NodeSet
+	sp := c.handler.serviceProvider
+	hd := sp.GetHyperdriveClient()
+
+	// Requirements
+	err := sp.RequireNodeAddress(walletStatus)
+	if err != nil {
+		return types.ResponseStatus_WalletNotReady, err
+	}
+
+	response, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
+	if err != nil {
+		return types.ResponseStatus_Error, err
+	}
+
+	data.Count = response.Data.Count
 
 	return types.ResponseStatus_Success, nil
 }
