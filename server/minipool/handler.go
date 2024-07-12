@@ -7,6 +7,7 @@ import (
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/log"
+	snminipool "github.com/rocket-pool/smartnode/v2/rocketpool-daemon/api/minipool"
 )
 
 type MinipoolHandler struct {
@@ -14,6 +15,7 @@ type MinipoolHandler struct {
 	ctx             context.Context
 	serviceProvider cscommon.IConstellationServiceProvider
 	factories       []server.IContextFactory
+	snHandler       *snminipool.MinipoolHandler
 }
 
 func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider cscommon.IConstellationServiceProvider) *MinipoolHandler {
@@ -21,6 +23,7 @@ func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider
 		logger:          logger,
 		ctx:             ctx,
 		serviceProvider: serviceProvider,
+		snHandler:       snminipool.NewMinipoolHandler(logger, ctx, serviceProvider.GetSmartNodeServiceProvider()),
 	}
 	h.factories = []server.IContextFactory{
 		&minipoolCloseDetailsContextFactory{h},
