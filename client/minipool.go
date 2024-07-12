@@ -1,6 +1,7 @@
 package csclient
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/client"
 	"github.com/rocket-pool/node-manager-core/api/types"
@@ -27,6 +28,11 @@ func (r *MinipoolRequester) GetContext() client.IRequesterContext {
 }
 
 // Get close details
+func (r *MinipoolRequester) Close(addresses []common.Address) (*types.ApiResponse[types.BatchTxInfoData], error) {
+	return sendMultiMinipoolRequest[types.BatchTxInfoData](r, "close", "Close", addresses, nil)
+}
+
+// Get close details
 func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.MinipoolCloseDetailsData], error) {
 	return client.SendGetRequest[csapi.MinipoolCloseDetailsData](r, "close/details", "GetCloseDetails", nil)
 }
@@ -35,4 +41,13 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCount], error) {
 	args := map[string]string{}
 	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCount](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
+}
+
+// Submit a minipool request that takes in a list of addresses and returns whatever type is requested
+func sendMultiMinipoolRequest[DataType any](r *MinipoolRequester, method string, requestName string, addresses []common.Address, args map[string]string) (*types.ApiResponse[DataType], error) {
+	if args == nil {
+		args = map[string]string{}
+	}
+	args["addresses"] = client.MakeBatchArg(addresses)
+	return client.SendGetRequest[DataType](r, method, requestName, args)
 }

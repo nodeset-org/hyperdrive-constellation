@@ -1,11 +1,13 @@
 package cscommon
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
+	"github.com/rocket-pool/node-manager-core/wallet"
 	snservices "github.com/rocket-pool/smartnode/v2/rocketpool-daemon/common/services"
 	snconfig "github.com/rocket-pool/smartnode/v2/shared/config"
 )
@@ -38,10 +40,26 @@ type ISmartNodeServiceProvider interface {
 	GetSmartNodeServiceProvider() snservices.ISmartNodeServiceProvider
 }
 
+// Provides the requirements for the Constellation daemon
+type IConstellationRequirementsProvider interface {
+	// Requires either the node address or the wallet address to be registered with Constellation.
+	// If useWalletAddress is true, the wallet address will be used to check registration. If false, the node address will be used.
+	// Errors include:
+	// - services.ErrNodeAddressNotSet
+	// - services.ErrNeedPassword
+	// - services.ErrWalletLoadFailure
+	// - services.ErrNoWallet
+	// - services.ErrWalletMismatch
+	// - services.ErrExecutionClientNotSynced
+	// - ErrNotRegisteredWithConstellation
+	RequireRegisteredWithConstellation(ctx context.Context, walletStatus wallet.WalletStatus, useWalletAddress bool) error
+}
+
 // Provides all services for the Constellation daemon
 type IConstellationServiceProvider interface {
 	IConstellationConfigProvider
 	IConstellationManagerProvider
+	IConstellationRequirementsProvider
 	ISmartNodeServiceProvider
 
 	services.IModuleServiceProvider

@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
@@ -59,6 +60,11 @@ func NewSuperNodeAccount(address common.Address, ec eth.IExecutionClient, txMgr 
 // =============
 // === Calls ===
 // =============
+
+func (c *SuperNodeAccount) SubNodeOperatorHasMinipool(mc *batch.MultiCaller, out *bool, subNode common.Address, minipoolAddress common.Address) {
+	key := crypto.Keccak256(subNode[:], minipoolAddress[:]) // Temp until there's a proper view for this
+	eth.AddCallToMulticaller(mc, c.contract, out, "subNodeOperatorHasMinipool", key)
+}
 
 func (c *SuperNodeAccount) GetSubNodeMinipoolAt(mc *batch.MultiCaller, out *common.Address, subNode common.Address, index *big.Int) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "subNodeOperatorMinipools", subNode, index)

@@ -173,7 +173,7 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	// Get the minipool addresses
 	count := int(minipoolCount.Int64())
 	addresses := make([]common.Address, count)
-	err = qMgr.BatchQuery(count, minipoolAddressBatchSize, func(mc *batch.MultiCaller, i int) error {
+	err = qMgr.BatchQuery(count, minipoolAddressQueryBatchSize, func(mc *batch.MultiCaller, i int) error {
 		csMgr.SuperNodeAccount.GetSubNodeMinipoolAt(mc, &addresses[i], walletStatus.Address.NodeAddress, big.NewInt(int64(i)))
 		return nil
 	}, callOpts)
