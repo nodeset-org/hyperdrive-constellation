@@ -24,3 +24,5 @@ go.work
 internal/hardhat/node_modules/
 internal/hardhat/artifacts/
 internal/hardhat/cache/
+
+build/

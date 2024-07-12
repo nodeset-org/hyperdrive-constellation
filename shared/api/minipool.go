@@ -7,3 +7,7 @@ import (
 type MinipoolCloseDetailsData struct {
 	Details []snapi.MinipoolCloseDetails `json:"details"`
 }
+
+type MinipoolGetAvailableMinipoolCount struct {
+	Count int `json:"count"`
+}
