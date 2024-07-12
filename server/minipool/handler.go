@@ -24,6 +24,7 @@ func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider
 	}
 	h.factories = []server.IContextFactory{
 		&minipoolGetAvailableMinipoolCountContextFactory{h},
+		&minipoolDepositMinipoolContextFactory{h},
 	}
 	return h
 }

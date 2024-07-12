@@ -2,12 +2,14 @@ package constellation
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -22,6 +24,18 @@ var superNodeAccountOnce sync.Once
 type SuperNodeAccount struct {
 	contract *eth.Contract
 	txMgr    *eth.TransactionManager
+}
+
+// TODO: Need Json tag (name of parameter in abi)
+type ValidatorConfig struct {
+	TimezoneLocation        string         `json:"timezoneLocation"`
+	BondAmount              *big.Int       `json:"bondAmount"`
+	MinimumNodeFee          *big.Int       `json:"minimumNodeFee"`
+	ValidatorPubkey         []byte         `json:"validatorPubkey"`
+	ValidatorSignature      []byte         `json:"validatorSignature"`
+	DepositDataRoot         []byte         `json:"depositDataRoot"`
+	Salt                    *big.Int       `json:"salt"`
+	ExpectedMinipoolAddress common.Address `json:"expectedMinipoolAddress"`
 }
 
 // Create a new SuperNodeAccount instance
@@ -56,6 +70,10 @@ func NewSuperNodeAccount(address common.Address, ec eth.IExecutionClient, txMgr 
 // === Calls ===
 // =============
 
+func (c *SuperNodeAccount) GetNextMinipool(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getNextMinipool")
+}
+
 // ====================
 // === Transactions ===
 // ====================
@@ -70,4 +88,8 @@ func (c *SuperNodeAccount) DelegateUpgrade(minipool common.Address, opts *bind.T
 
 func (c *SuperNodeAccount) SetUseLatestDelegate(setting bool, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setUseLatestDelegate", opts, setting, minipool)
+}
+
+func (c *SuperNodeAccount) CreateMinipool(config ValidatorConfig, sig []byte, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "createMinipool", opts, config, sig)
 }
