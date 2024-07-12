@@ -33,7 +33,7 @@ func (f *nodeRegisterContextFactory) Create(args url.Values) (*nodeRegisterConte
 
 func (f *nodeRegisterContextFactory) RegisterRoute(router *mux.Router) {
 	server.RegisterQuerylessGet[*nodeRegisterContext, csapi.NodeRegisterData](
-		router, "register", f, f.handler.logger.Logger, f.handler.serviceProvider.ServiceProvider,
+		router, "register", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -58,7 +58,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	}
 	err = sp.RequireEthClientSynced(ctx)
 	if err != nil {
-		if errors.Is(err, services.ErrBeaconNodeNotSynced) {
+		if errors.Is(err, services.ErrExecutionClientNotSynced) {
 			return types.ResponseStatus_ClientsNotSynced, err
 		}
 		return types.ResponseStatus_Error, err
@@ -67,7 +67,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	// Load the Constellation contracts
 	err = csMgr.LoadContracts()
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error loading constellation contracts: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error loading Constellation contracts: %w", err)
 	}
 
 	// Request a registration signature - note this will use the wallet address, not the node address

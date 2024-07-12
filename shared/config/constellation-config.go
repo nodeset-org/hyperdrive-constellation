@@ -33,27 +33,12 @@ type ConstellationConfig struct {
 	Teku       *config.TekuVcConfig
 
 	// Internal fields
-	Version   string
-	hdCfg     *hdconfig.HyperdriveConfig
-	resources *ConstellationResources
+	Version string
+	hdCfg   *hdconfig.HyperdriveConfig
 }
 
 // Generates a new Constellation config
 func NewConstellationConfig(hdCfg *hdconfig.HyperdriveConfig) *ConstellationConfig {
-	csCfg := newConstellationConfigImpl(hdCfg)
-	csCfg.updateResources()
-	return csCfg
-}
-
-// Generates a new Constellation config with custom resources
-func NewConstellationConfigWithResources(hdCfg *hdconfig.HyperdriveConfig, resources *ConstellationResources) *ConstellationConfig {
-	csCfg := newConstellationConfigImpl(hdCfg)
-	csCfg.resources = resources
-	return csCfg
-}
-
-// Internal constructor for Constellation config
-func newConstellationConfigImpl(hdCfg *hdconfig.HyperdriveConfig) *ConstellationConfig {
 	cfg := &ConstellationConfig{
 		hdCfg: hdCfg,
 
@@ -155,7 +140,6 @@ func (cfg *ConstellationConfig) GetSubconfigs() map[string]config.IConfigSection
 func (cfg *ConstellationConfig) ChangeNetwork(oldNetwork config.Network, newNetwork config.Network) {
 	// Run the changes
 	config.ChangeNetwork(cfg, oldNetwork, newNetwork)
-	cfg.updateResources()
 }
 
 // Creates a copy of the configuration
@@ -163,13 +147,7 @@ func (cfg *ConstellationConfig) Clone() hdconfig.IModuleConfig {
 	clone := NewConstellationConfig(cfg.hdCfg)
 	config.Clone(cfg, clone, cfg.hdCfg.Network.Value)
 	clone.Version = cfg.Version
-	clone.updateResources()
 	return clone
-}
-
-// Get the Constellation resources for the selected network
-func (cfg *ConstellationConfig) GetConstellationResources() *ConstellationResources {
-	return cfg.resources
 }
 
 // Updates the default parameters based on the current network value
@@ -208,15 +186,6 @@ func (cfg *ConstellationConfig) Deserialize(configMap map[string]any, network co
 // Get the version of the module config
 func (cfg *ConstellationConfig) GetVersion() string {
 	return cfg.Version
-}
-
-// =====================
-// === Field Helpers ===
-// =====================
-
-// Update the config's resource cache
-func (cfg *ConstellationConfig) updateResources() {
-	cfg.resources = newConstellationResources(cfg.hdCfg.Network.Value)
 }
 
 // ===================

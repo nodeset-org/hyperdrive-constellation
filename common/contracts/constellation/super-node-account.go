@@ -2,12 +2,14 @@ package constellation
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -20,6 +22,7 @@ var superNodeAccountAbi abi.ABI
 var superNodeAccountOnce sync.Once
 
 type SuperNodeAccount struct {
+	Address  common.Address
 	contract *eth.Contract
 	txMgr    *eth.TransactionManager
 }
@@ -47,6 +50,7 @@ func NewSuperNodeAccount(address common.Address, ec eth.IExecutionClient, txMgr 
 	}
 
 	return &SuperNodeAccount{
+		Address:  address,
 		contract: contract,
 		txMgr:    txMgr,
 	}, nil
@@ -56,9 +60,21 @@ func NewSuperNodeAccount(address common.Address, ec eth.IExecutionClient, txMgr 
 // === Calls ===
 // =============
 
+func (c *SuperNodeAccount) GetSubNodeMinipoolAt(mc *batch.MultiCaller, out *common.Address, subNode common.Address, index *big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "subNodeOperatorMinipools", subNode, index)
+}
+
 // ====================
 // === Transactions ===
 // ====================
+
+func (c *SuperNodeAccount) Close(subNode common.Address, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "close", opts, subNode, minipool)
+}
+
+func (c *SuperNodeAccount) DistributeBalance(rewardsOnly bool, subNode common.Address, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "distributeBalance", opts, rewardsOnly, subNode, minipool)
+}
 
 func (c *SuperNodeAccount) DelegateRollback(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "delegateRollback", opts, minipool)
@@ -70,4 +86,8 @@ func (c *SuperNodeAccount) DelegateUpgrade(minipool common.Address, opts *bind.T
 
 func (c *SuperNodeAccount) SetUseLatestDelegate(setting bool, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setUseLatestDelegate", opts, setting, minipool)
+}
+
+func (c *SuperNodeAccount) Stake(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "stake", opts, minipool)
 }

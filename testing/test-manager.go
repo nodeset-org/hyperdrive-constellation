@@ -22,7 +22,7 @@ type ConstellationTestManager struct {
 	*hdtesting.HyperdriveTestManager
 
 	// The service provider for the test environment
-	sp *cscommon.ConstellationServiceProvider
+	sp cscommon.IConstellationServiceProvider
 
 	// The Constellation Daemon server
 	serverMgr *csserver.ServerManager
@@ -50,8 +50,8 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	hdClient := tm.GetApiClient()
 
 	// Make Constellation resources
-	resources := GetTestResources(hdSp.GetResources())
-	csCfg := csconfig.NewConstellationConfigWithResources(hdCfg, resources)
+	csResources, snResources := GetTestResources(hdSp.GetResources())
+	csCfg := csconfig.NewConstellationConfig(hdCfg)
 
 	// Make the module directory
 	moduleDir := filepath.Join(hdCfg.UserDataPath.Value, hdconfig.ModulesName, csconfig.ModuleName)
@@ -62,12 +62,12 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	}
 
 	// Make a new service provider
-	moduleSp, err := hdservices.NewServiceProviderFromArtifacts(hdClient, hdCfg, csCfg, hdSp.GetResources(), moduleDir, csconfig.ModuleName, csconfig.ClientLogName, hdSp.GetEthClient(), hdSp.GetBeaconClient())
+	moduleSp, err := hdservices.NewModuleServiceProviderFromArtifacts(hdClient, hdCfg, csCfg, hdSp.GetResources(), moduleDir, csconfig.ModuleName, csconfig.ClientLogName, hdSp.GetEthClient(), hdSp.GetBeaconClient())
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	constellationSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, resources)
+	constellationSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources, snResources)
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)
@@ -102,7 +102,7 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 }
 
 // Get the Constellation service provider
-func (m *ConstellationTestManager) GetConstellationServiceProvider() *cscommon.ConstellationServiceProvider {
+func (m *ConstellationTestManager) GetConstellationServiceProvider() cscommon.IConstellationServiceProvider {
 	return m.sp
 }
 

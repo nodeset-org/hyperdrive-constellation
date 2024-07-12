@@ -1,4 +1,4 @@
-package csnode
+package csminipool
 
 import (
 	"context"
@@ -9,28 +9,27 @@ import (
 	"github.com/rocket-pool/node-manager-core/log"
 )
 
-type NodeHandler struct {
+type MinipoolHandler struct {
 	logger          *log.Logger
 	ctx             context.Context
 	serviceProvider cscommon.IConstellationServiceProvider
 	factories       []server.IContextFactory
 }
 
-func NewNodeHandler(logger *log.Logger, ctx context.Context, serviceProvider cscommon.IConstellationServiceProvider) *NodeHandler {
-	h := &NodeHandler{
+func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider cscommon.IConstellationServiceProvider) *MinipoolHandler {
+	h := &MinipoolHandler{
 		logger:          logger,
 		ctx:             ctx,
 		serviceProvider: serviceProvider,
 	}
 	h.factories = []server.IContextFactory{
-		&nodeGetRegistrationStatusContextFactory{h},
-		&nodeRegisterContextFactory{h},
+		&minipoolCloseDetailsContextFactory{h},
 	}
 	return h
 }
 
-func (h *NodeHandler) RegisterRoutes(router *mux.Router) {
-	subrouter := router.PathPrefix("/node").Subrouter()
+func (h *MinipoolHandler) RegisterRoutes(router *mux.Router) {
+	subrouter := router.PathPrefix("/minipool").Subrouter()
 	for _, factory := range h.factories {
 		factory.RegisterRoute(subrouter)
 	}

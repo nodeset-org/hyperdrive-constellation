@@ -35,7 +35,7 @@ func (f *nodeGetRegistrationStatusContextFactory) Create(args url.Values) (*node
 
 func (f *nodeGetRegistrationStatusContextFactory) RegisterRoute(router *mux.Router) {
 	server.RegisterQuerylessGet[*nodeGetRegistrationStatusContext, csapi.NodeGetRegistrationStatusData](
-		router, "get-registration-status", f, f.handler.logger.Logger, f.handler.serviceProvider.ServiceProvider,
+		router, "get-registration-status", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -59,7 +59,7 @@ func (c *nodeGetRegistrationStatusContext) PrepareData(data *csapi.NodeGetRegist
 	}
 	err = sp.RequireEthClientSynced(ctx)
 	if err != nil {
-		if errors.Is(err, services.ErrBeaconNodeNotSynced) {
+		if errors.Is(err, services.ErrExecutionClientNotSynced) {
 			return types.ResponseStatus_ClientsNotSynced, err
 		}
 		return types.ResponseStatus_Error, err
@@ -68,7 +68,7 @@ func (c *nodeGetRegistrationStatusContext) PrepareData(data *csapi.NodeGetRegist
 	// Load the Constellation contracts
 	err = csMgr.LoadContracts()
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error loading constellation contracts: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error loading Constellation contracts: %w", err)
 	}
 
 	// Get the registration status

@@ -86,7 +86,7 @@ func main() {
 		stopWg := new(sync.WaitGroup)
 
 		// Create the service provider
-		sp, err := services.NewServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, csconfig.NewConstellationConfig, config.ClientTimeout)
+		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, csconfig.NewConstellationConfig, config.ClientTimeout)
 		if err != nil {
 			return fmt.Errorf("error creating service provider: %w", err)
 		}

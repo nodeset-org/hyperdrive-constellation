@@ -21,6 +21,7 @@ var directoryAbi abi.ABI
 var directoryOnce sync.Once
 
 type Directory struct {
+	Address  common.Address
 	contract *eth.Contract
 	txMgr    *eth.TransactionManager
 }
@@ -48,6 +49,7 @@ func NewDirectory(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tr
 	}
 
 	return &Directory{
+		Address:  address,
 		contract: contract,
 		txMgr:    txMgr,
 	}, nil

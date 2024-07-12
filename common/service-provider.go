@@ -4,69 +4,121 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
-	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
+	snservices "github.com/rocket-pool/smartnode/v2/rocketpool-daemon/common/services"
+	snconfig "github.com/rocket-pool/smartnode/v2/shared/config"
 )
 
-type ConstellationServiceProvider struct {
-	*services.ServiceProvider
+// ==================
+// === Interfaces ===
+// ==================
+
+// Provides the Constellation module config and resources
+type IConstellationConfigProvider interface {
+	// Gets the Constellation config
+	GetConfig() *csconfig.ConstellationConfig
+
+	// Gets the Constellation resources
+	GetResources() *csconfig.ConstellationResources
+}
+
+// Provides the Constellation manager
+type IConstellationManagerProvider interface {
+	// Gets the Constellation manager
+	GetConstellationManager() *ConstellationManager
+}
+
+// Provides the services used for Rocket Pool and Smart Node interaction
+type ISmartNodeServiceProvider interface {
+	// Gets the Rocket Pool manager
+	GetRocketPoolManager() *RocketPoolManager
+
+	// Gets the Smart Node service provider
+	GetSmartNodeServiceProvider() snservices.ISmartNodeServiceProvider
+}
+
+// Provides all services for the Constellation daemon
+type IConstellationServiceProvider interface {
+	IConstellationConfigProvider
+	IConstellationManagerProvider
+	ISmartNodeServiceProvider
+
+	services.IModuleServiceProvider
+}
+
+// ========================
+// === Service Provider ===
+// ========================
+
+type constellationServiceProvider struct {
+	services.IModuleServiceProvider
 	csCfg     *csconfig.ConstellationConfig
 	resources *csconfig.ConstellationResources
-	csMgr     *constellation.ConstellationManager
-	rp        *rocketpool.RocketPool
+	csMgr     *ConstellationManager
+	rpMgr     *RocketPoolManager
+	snSp      *smartNodeServiceProvider
 }
 
 // Create a new service provider with Constellation daemon-specific features
-func NewConstellationServiceProvider(sp *services.ServiceProvider) (*ConstellationServiceProvider, error) {
+func NewConstellationServiceProvider(sp services.IModuleServiceProvider) (IConstellationServiceProvider, error) {
 	// Create the resources
 	csCfg, ok := sp.GetModuleConfig().(*csconfig.ConstellationConfig)
 	if !ok {
 		return nil, fmt.Errorf("constellation config is not the correct type, it's a %s", reflect.TypeOf(csCfg))
 	}
-	res := csCfg.GetConstellationResources()
+	hdCfg := sp.GetHyperdriveConfig()
+	csRes := csconfig.NewConstellationResources(hdCfg.Network.Value)
+	snRes := snconfig.NewRocketPoolResources(hdCfg.Network.Value)
 
-	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, res)
+	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, csRes, snRes)
 }
 
 // Create a new service provider with Constellation daemon-specific features, using custom services instead of loading them from the module service provider.
-func NewConstellationServiceProviderFromCustomServices(sp *services.ServiceProvider, cfg *csconfig.ConstellationConfig, resources *csconfig.ConstellationResources) (*ConstellationServiceProvider, error) {
-	// Create the Rocket Pool binding
-	rp, err := rocketpool.NewRocketPool(sp.GetEthClient(), *resources.RocketStorage, resources.MulticallAddress, resources.BalanceBatcherAddress)
+func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.ConstellationResources, snresources *snconfig.RocketPoolResources) (IConstellationServiceProvider, error) {
+	// Create the Constellation manager
+	csMgr, err := NewConstellationManager(csresources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
 	if err != nil {
-		return nil, fmt.Errorf("error creating Rocket Pool binding: %w", err)
+		return nil, fmt.Errorf("error creating Constellation manager: %w", err)
 	}
 
-	// Create the Constellation manager
-	csMgr, err := constellation.NewConstellationManager(resources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
+	// Create the Rocket Pool manager
+	rpMgr, err := NewRocketPoolManager(csresources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
 	if err != nil {
-		return nil, fmt.Errorf("error creating constellation manager: %w", err)
+		return nil, fmt.Errorf("error creating Rocket Pool manager: %w", err)
 	}
 
 	// Make the provider
-	constellationSp := &ConstellationServiceProvider{
-		ServiceProvider: sp,
-		csCfg:           cfg,
-		resources:       resources,
-		csMgr:           csMgr,
-		rp:              rp,
+	constellationSp := &constellationServiceProvider{
+		IModuleServiceProvider: sp,
+		csCfg:                  cfg,
+		resources:              csresources,
+		csMgr:                  csMgr,
+		rpMgr:                  rpMgr,
 	}
+
+	// Create the Smart Node service provider
+	snSp := newSmartNodeServiceProvider(constellationSp, sp.GetHyperdriveConfig(), cfg, snresources)
+	constellationSp.snSp = snSp
 	return constellationSp, nil
 }
 
-func (s *ConstellationServiceProvider) GetModuleConfig() *csconfig.ConstellationConfig {
+func (s *constellationServiceProvider) GetConfig() *csconfig.ConstellationConfig {
 	return s.csCfg
 }
 
-func (s *ConstellationServiceProvider) GetResources() *csconfig.ConstellationResources {
+func (s *constellationServiceProvider) GetResources() *csconfig.ConstellationResources {
 	return s.resources
 }
 
-func (s *ConstellationServiceProvider) GetConstellationManager() *constellation.ConstellationManager {
+func (s *constellationServiceProvider) GetConstellationManager() *ConstellationManager {
 	return s.csMgr
 }
 
-func (s *ConstellationServiceProvider) GetRocketPool() *rocketpool.RocketPool {
-	return s.rp
+func (s *constellationServiceProvider) GetRocketPoolManager() *RocketPoolManager {
+	return s.rpMgr
+}
+
+func (s *constellationServiceProvider) GetSmartNodeServiceProvider() snservices.ISmartNodeServiceProvider {
+	return s.snSp
 }
