@@ -2,6 +2,7 @@ package constellation
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"sync"
 
@@ -21,6 +22,7 @@ var whitelistAbi abi.ABI
 var whitelistOnce sync.Once
 
 type Whitelist struct {
+	Address  common.Address
 	contract *eth.Contract
 	txMgr    *eth.TransactionManager
 }
@@ -48,6 +50,7 @@ func NewWhitelist(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tr
 	}
 
 	return &Whitelist{
+		Address:  address,
 		contract: contract,
 		txMgr:    txMgr,
 	}, nil
@@ -59,6 +62,10 @@ func NewWhitelist(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tr
 
 func (c *Whitelist) IsAddressInWhitelist(mc *batch.MultiCaller, out *bool, account common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getIsAddressInWhitelist", account)
+}
+
+func (c *Whitelist) GetNumberOfValidators(mc *batch.MultiCaller, out **big.Int, account common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getNumberOfValidators", account)
 }
 
 // ====================

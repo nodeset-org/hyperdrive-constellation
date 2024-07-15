@@ -1,9 +1,10 @@
-package constellation
+package cscommon
 
 import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
@@ -11,9 +12,9 @@ import (
 
 // Manager for Constellation contract bindings
 type ConstellationManager struct {
-	Directory        *Directory
-	Whitelist        *Whitelist
-	SuperNodeAccount *SuperNodeAccount
+	Directory        *constellation.Directory
+	Whitelist        *constellation.Whitelist
+	SuperNodeAccount *constellation.SuperNodeAccount
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -24,7 +25,7 @@ type ConstellationManager struct {
 
 // Creates a new ConstellationManager instance
 func NewConstellationManager(res *csconfig.ConstellationResources, ec eth.IExecutionClient, qMgr *eth.QueryManager, txMgr *eth.TransactionManager) (*ConstellationManager, error) {
-	directory, err := NewDirectory(*res.Directory, ec, txMgr)
+	directory, err := constellation.NewDirectory(*res.Directory, ec, txMgr)
 	if err != nil {
 		return nil, fmt.Errorf("error creating directory binding: %w", err)
 	}
@@ -57,11 +58,11 @@ func (m *ConstellationManager) LoadContracts() error {
 	}
 
 	// Generate the bindings
-	whitelist, err := NewWhitelist(whitelistAddress, m.ec, m.txMgr)
+	whitelist, err := constellation.NewWhitelist(whitelistAddress, m.ec, m.txMgr)
 	if err != nil {
 		return fmt.Errorf("error creating whitelist binding: %w", err)
 	}
-	superNodeAccount, err := NewSuperNodeAccount(superNodeAccountAddress, m.ec, m.txMgr)
+	superNodeAccount, err := constellation.NewSuperNodeAccount(superNodeAccountAddress, m.ec, m.txMgr)
 	if err != nil {
 		return fmt.Errorf("error creating super node account binding: %w", err)
 	}

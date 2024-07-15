@@ -32,7 +32,7 @@ func (f *minipoolGetAvailableMinipoolCountContextFactory) Create(args url.Values
 
 func (f *minipoolGetAvailableMinipoolCountContextFactory) RegisterRoute(router *mux.Router) {
 	server.RegisterQuerylessGet[*minipoolGetAvailableMinipoolCountContext, csapi.MinipoolGetAvailableMinipoolCount](
-		router, "get-available-minipool-count", f, f.handler.logger.Logger, f.handler.serviceProvider.ServiceProvider,
+		router, "get-available-minipool-count", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 

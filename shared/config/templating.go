@@ -73,14 +73,6 @@ func (cfg *ConstellationConfig) Graffiti() (string, error) {
 	return fmt.Sprintf("%s (%s)", prefix, customGraffiti), nil
 }
 
-func (cfg *ConstellationConfig) FeeRecipient() string {
-	return cfg.resources.FeeRecipient.Hex()
-}
-
-func (cfg *ConstellationConfig) Network() string {
-	return cfg.resources.EthNetworkName
-}
-
 func (cfg *ConstellationConfig) IsEnabled() bool {
 	return cfg.Enabled.Value
 }

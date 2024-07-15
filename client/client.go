@@ -11,8 +11,8 @@ import (
 // Binder for the Constellation API server
 type ApiClient struct {
 	context  client.IRequesterContext
-	Node     *NodeRequester
 	Minipool *MinipoolRequester
+	Node     *NodeRequester
 }
 
 // Creates a new API client instance
@@ -21,8 +21,8 @@ func NewApiClient(apiUrl *url.URL, logger *slog.Logger, tracer *httptrace.Client
 
 	client := &ApiClient{
 		context:  context,
-		Node:     NewNodeRequester(context),
 		Minipool: NewMinipoolRequester(context),
+		Node:     NewNodeRequester(context),
 	}
 	return client
 }

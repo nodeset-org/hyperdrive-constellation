@@ -12,11 +12,11 @@ import (
 type NodeHandler struct {
 	logger          *log.Logger
 	ctx             context.Context
-	serviceProvider *cscommon.ConstellationServiceProvider
+	serviceProvider cscommon.IConstellationServiceProvider
 	factories       []server.IContextFactory
 }
 
-func NewNodeHandler(logger *log.Logger, ctx context.Context, serviceProvider *cscommon.ConstellationServiceProvider) *NodeHandler {
+func NewNodeHandler(logger *log.Logger, ctx context.Context, serviceProvider cscommon.IConstellationServiceProvider) *NodeHandler {
 	h := &NodeHandler{
 		logger:          logger,
 		ctx:             ctx,

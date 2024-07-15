@@ -24,7 +24,7 @@ type ConstellationResources struct {
 }
 
 // Creates a new resource collection for the given network
-func newConstellationResources(network config.Network) *ConstellationResources {
+func NewConstellationResources(network config.Network) *ConstellationResources {
 	// Mainnet
 	mainnetResources := &ConstellationResources{
 		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Mainnet),
