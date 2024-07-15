@@ -9,10 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-<<<<<<< HEAD
-=======
 	"github.com/ethereum/go-ethereum/crypto"
->>>>>>> f1b075f0a94e3cdc10d39b2085c265075ad1025a
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
@@ -113,11 +110,10 @@ func (c *SuperNodeAccount) SetUseLatestDelegate(setting bool, minipool common.Ad
 	return c.txMgr.CreateTransactionInfo(c.contract, "setUseLatestDelegate", opts, setting, minipool)
 }
 
-<<<<<<< HEAD
 func (c *SuperNodeAccount) CreateMinipool(config ValidatorConfig, sig []byte, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "createMinipool", opts, config, sig)
-=======
+}
+
 func (c *SuperNodeAccount) Stake(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "stake", opts, minipool)
->>>>>>> f1b075f0a94e3cdc10d39b2085c265075ad1025a
 }
