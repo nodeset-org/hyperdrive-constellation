@@ -78,7 +78,7 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	serverMgr, err := csserver.NewServerManager(constellationSp, csAddress, 0, swWg)
 	if err != nil {
 		closeTestManager(tm)
-		return nil, fmt.Errorf("error creating stakewise server: %v", err)
+		return nil, fmt.Errorf("error creating constellation server: %v", err)
 	}
 
 	// Create the client

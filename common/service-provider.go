@@ -76,6 +76,7 @@ type constellationServiceProvider struct {
 	csMgr     *ConstellationManager
 	rpMgr     *RocketPoolManager
 	snSp      *smartNodeServiceProvider
+	wallet    *Wallet
 }
 
 // Create a new service provider with Constellation daemon-specific features
@@ -106,6 +107,9 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		return nil, fmt.Errorf("error creating Rocket Pool manager: %w", err)
 	}
 
+	// Create the wallet
+	wallet, err := NewWallet(sp)
+
 	// Make the provider
 	constellationSp := &constellationServiceProvider{
 		IModuleServiceProvider: sp,
@@ -113,6 +117,7 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		resources:              csresources,
 		csMgr:                  csMgr,
 		rpMgr:                  rpMgr,
+		wallet:                 wallet,
 	}
 
 	// Create the Smart Node service provider
