@@ -109,6 +109,9 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 
 	// Create the wallet
 	wallet, err := NewWallet(sp)
+	if err != nil {
+		return nil, fmt.Errorf("error creating wallet: %w", err)
+	}
 
 	// Make the provider
 	constellationSp := &constellationServiceProvider{

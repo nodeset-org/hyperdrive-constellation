@@ -58,7 +58,6 @@ type minipoolDepositMinipoolContext struct {
 	MinipoolAddresses []common.Address
 	mps               []rpminipool.IMinipool
 	mpOwnerFlags      []bool
-	csMgr             *cscommon.ConstellationManager
 
 	salt        string
 	nodeAddress string
