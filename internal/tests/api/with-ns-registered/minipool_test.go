@@ -61,7 +61,7 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	// Deposit to the minipool
 	cs := testMgr.GetApiClient()
-	depositResponse, err := cs.Minipool.Deposit()
+	depositResponse, err := cs.Minipool.Deposit(whitelistAddress, []byte("salt"))
 	require.NoError(t, err)
 	require.Equal(t, "success", depositResponse.Data.Signature)
 }

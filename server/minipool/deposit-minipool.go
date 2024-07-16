@@ -14,10 +14,12 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
 	batch "github.com/rocket-pool/batch-query"
+	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/node-manager-core/wallet"
+
 	rpminipool "github.com/rocket-pool/rocketpool-go/v2/minipool"
 )
 
@@ -33,7 +35,10 @@ func (f *minipoolDepositMinipoolContextFactory) Create(args url.Values) (*minipo
 	c := &minipoolDepositMinipoolContext{
 		handler: f.handler,
 	}
-	inputErrs := []error{}
+	inputErrs := []error{
+		nmcserver.GetStringFromVars("salt", args, &c.salt),
+		nmcserver.GetStringFromVars("nodeAddress", args, &c.nodeAddress),
+	}
 	return c, errors.Join(inputErrs...)
 }
 
@@ -55,8 +60,8 @@ type minipoolDepositMinipoolContext struct {
 	mpOwnerFlags      []bool
 	csMgr             *cscommon.ConstellationManager
 
-	salt        []byte
-	nodeAddress common.Address
+	salt        string
+	nodeAddress string
 }
 
 func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
@@ -73,8 +78,9 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 	if err != nil {
 		return types.ResponseStatus_WalletNotReady, err
 	}
-
-	response, err := hd.NodeSet_Constellation.GetDepositSignature(c.nodeAddress, c.salt)
+	nodeAddress := common.HexToAddress(c.nodeAddress)
+	saltByte := []byte(c.salt)
+	response, err := hd.NodeSet_Constellation.GetDepositSignature(nodeAddress, saltByte)
 	if err != nil {
 		return types.ResponseStatus_Error, err
 	}
@@ -148,7 +154,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 		ValidatorPubkey:         []byte(pubkey.Hex()),
 		ValidatorSignature:      depositData.Signature,
 		DepositDataRoot:         depositData.DepositDataRoot,
-		Salt:                    new(big.Int).SetBytes(c.salt),
+		Salt:                    new(big.Int).SetBytes(saltByte),
 		ExpectedMinipoolAddress: expectedMinipoolAddress,
 	}
 
