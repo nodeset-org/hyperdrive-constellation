@@ -116,6 +116,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 	// Query pubkey
 	qMgr := sp.GetQueryManager()
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		c.mps[0].Common().WithdrawalCredentials.AddToQuery(mc)
 		c.mps[0].Common().Pubkey.AddToQuery(mc)
 		return nil
 	}, nil)
@@ -128,13 +129,13 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating wallet: %w", err)
 	}
+
+	withdrawalCredentials := c.mps[0].Common().WithdrawalCredentials.Get()
+
 	privateKey, err := w.GetPrivateKeyForPubkey(pubkey)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting private key for pubkey: %w", err)
 	}
-
-	// TODO
-	var withdrawalCredentials common.Hash
 
 	depositData, err := validator.GetDepositData(
 		privateKey,
