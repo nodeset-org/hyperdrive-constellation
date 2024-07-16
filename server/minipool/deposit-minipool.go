@@ -19,8 +19,6 @@ import (
 	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	rpminipool "github.com/rocket-pool/rocketpool-go/v2/minipool"
-
-	eth2types "github.com/wealdtech/go-eth2-types/v2"
 )
 
 // ===============
@@ -126,13 +124,20 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 	}
 
 	pubkey := c.mps[0].Common().Pubkey.Get()
+	w, err := cscommon.NewWallet(sp)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error creating wallet: %w", err)
+	}
+	privateKey, err := w.GetPrivateKeyForPubkey(pubkey)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error getting private key for pubkey: %w", err)
+	}
 
 	// TODO
-	var validatorKey *eth2types.BLSPrivateKey
 	var withdrawalCredentials common.Hash
 
 	depositData, err := validator.GetDepositData(
-		validatorKey,
+		privateKey,
 		withdrawalCredentials,
 		resources.GenesisForkVersion,
 		eth.EthToWei(1).Uint64(),

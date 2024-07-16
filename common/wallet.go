@@ -7,11 +7,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	"github.com/nodeset-org/hyperdrive-daemon/shared"
 
 	"github.com/nodeset-org/hyperdrive-daemon/shared/config"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/node/validator"
 
 	eth2types "github.com/wealdtech/go-eth2-types/v2"
@@ -145,4 +147,44 @@ func (w *Wallet) GenerateNewValidatorKey() (*eth2types.BLSPrivateKey, error) {
 		return nil, fmt.Errorf("error saving validator key to the Constellation store: %w", err)
 	}
 	return key, nil
+}
+
+// Gets all of the validator private keys that are stored in the Constellation keystore folder
+func (w *Wallet) GetAllPrivateKeys() ([]*eth2types.BLSPrivateKey, error) {
+	dir := w.constellationKeystoreManager.GetKeystoreDir()
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("error enumerating Constellation keystore folder [%s]: %w", dir, err)
+	}
+
+	// Go through each file
+	keys := []*eth2types.BLSPrivateKey{}
+	for _, file := range files {
+		filename := file.Name()
+		if !strings.HasPrefix(filename, keystorePrefix) || !strings.HasSuffix(filename, keystoreSuffix) {
+			continue
+		}
+
+		// Get the pubkey from the filename
+		trimmed := strings.TrimPrefix(filename, keystorePrefix)
+		trimmed = strings.TrimSuffix(trimmed, keystoreSuffix)
+		pubkey, err := beacon.HexToValidatorPubkey(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("error getting pubkey for keystore file [%s]: %w", filename, err)
+		}
+
+		// Load it
+		key, err := w.constellationKeystoreManager.LoadValidatorKey(pubkey)
+		if err != nil {
+			return nil, fmt.Errorf("error loading validator keystore file [%s]: %w", filename, err)
+		}
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
+// Get the private validator key with the corresponding pubkey
+func (w *Wallet) GetPrivateKeyForPubkey(pubkey beacon.ValidatorPubkey) (*eth2types.BLSPrivateKey, error) {
+	return w.constellationKeystoreManager.LoadValidatorKey(pubkey)
 }
