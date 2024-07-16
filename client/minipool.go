@@ -27,7 +27,7 @@ func (r *MinipoolRequester) GetContext() client.IRequesterContext {
 	return r.context
 }
 
-// Get close details
+// Close
 func (r *MinipoolRequester) Close(addresses []common.Address) (*types.ApiResponse[types.BatchTxInfoData], error) {
 	return sendMultiMinipoolRequest[types.BatchTxInfoData](r, "close", "Close", addresses, nil)
 }
@@ -41,6 +41,12 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCount], error) {
 	args := map[string]string{}
 	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCount](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
+}
+
+// Deposit minipool
+func (r *MinipoolRequester) Deposit() (*types.ApiResponse[csapi.MinipoolDepositMinipool], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.MinipoolDepositMinipool](r, "deposit-minipool", "DepositMinipool", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

@@ -59,22 +59,6 @@ type minipoolDepositMinipoolContext struct {
 	nodeAddress common.Address
 }
 
-func (c *minipoolDepositMinipoolContext) GetState(mc *batch.MultiCaller) {
-	for i, mp := range c.mps {
-		// Get some basic minipool details
-		mpCommon := mp.Common()
-		eth.AddQueryablesToMulticall(mc,
-			mpCommon.NodeAddress,
-			mpCommon.Status,
-			mpCommon.IsFinalised,
-			mpCommon.Pubkey,
-		)
-
-		// Check if the node operator owns the minipool
-		c.csMgr.SuperNodeAccount.SubNodeOperatorHasMinipool(mc, &c.mpOwnerFlags[i], c.nodeAddress, mpCommon.Address)
-	}
-}
-
 func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.handler.serviceProvider
 	rpMgr := sp.GetRocketPoolManager()
