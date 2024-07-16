@@ -5,6 +5,7 @@ import (
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/client"
 	"github.com/rocket-pool/node-manager-core/api/types"
+	"github.com/rocket-pool/node-manager-core/utils"
 )
 
 type MinipoolRequester struct {
@@ -47,7 +48,7 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 func (r *MinipoolRequester) Deposit(nodeAddress common.Address, salt []byte) (*types.ApiResponse[csapi.MinipoolDepositMinipool], error) {
 	args := map[string]string{
 		"nodeAddress": nodeAddress.Hex(),
-		"salt":        string(salt),
+		"salt":        utils.EncodeHexWithPrefix(salt),
 	}
 	return client.SendGetRequest[csapi.MinipoolDepositMinipool](r, "deposit-minipool", "DepositMinipool", args)
 }

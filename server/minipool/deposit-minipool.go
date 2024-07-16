@@ -18,6 +18,7 @@ import (
 	"github.com/rocket-pool/node-manager-core/api/types"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
+	"github.com/rocket-pool/node-manager-core/utils/input"
 	"github.com/rocket-pool/node-manager-core/wallet"
 
 	rpminipool "github.com/rocket-pool/rocketpool-go/v2/minipool"
@@ -36,8 +37,8 @@ func (f *minipoolDepositMinipoolContextFactory) Create(args url.Values) (*minipo
 		handler: f.handler,
 	}
 	inputErrs := []error{
-		nmcserver.GetStringFromVars("salt", args, &c.salt),
-		nmcserver.GetStringFromVars("nodeAddress", args, &c.nodeAddress),
+		nmcserver.ValidateArg("salt", args, input.ValidateByteArray, &c.salt),
+		nmcserver.ValidateArg("nodeAddress", args, input.ValidateAddress, &c.nodeAddress),
 	}
 	return c, errors.Join(inputErrs...)
 }
@@ -59,8 +60,8 @@ type minipoolDepositMinipoolContext struct {
 	mps               []rpminipool.IMinipool
 	mpOwnerFlags      []bool
 
-	salt        string
-	nodeAddress string
+	salt        []byte
+	nodeAddress common.Address
 }
 
 func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
@@ -77,9 +78,8 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 	if err != nil {
 		return types.ResponseStatus_WalletNotReady, err
 	}
-	nodeAddress := common.HexToAddress(c.nodeAddress)
-	saltByte := []byte(c.salt)
-	response, err := hd.NodeSet_Constellation.GetDepositSignature(nodeAddress, saltByte)
+
+	response, err := hd.NodeSet_Constellation.GetDepositSignature(c.nodeAddress, c.salt)
 	if err != nil {
 		return types.ResponseStatus_Error, err
 	}
@@ -153,7 +153,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *types.TxInfoData, wal
 		ValidatorPubkey:         []byte(pubkey.Hex()),
 		ValidatorSignature:      depositData.Signature,
 		DepositDataRoot:         depositData.DepositDataRoot,
-		Salt:                    new(big.Int).SetBytes(saltByte),
+		Salt:                    new(big.Int).SetBytes(c.salt),
 		ExpectedMinipoolAddress: expectedMinipoolAddress,
 	}
 

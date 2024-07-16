@@ -194,3 +194,4 @@ require (
 )
 
 replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240712155203-bc4219fe2c84
+replace github.com/nodeset-org/hyperdrive-daemon => ../hyperdrive-daemon
