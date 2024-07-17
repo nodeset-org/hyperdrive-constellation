@@ -39,9 +39,9 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 }
 
 // Get the number of minipools that can currently be created by the node
-func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCount], error) {
+func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCountData], error) {
 	args := map[string]string{}
-	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCount](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
+	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCountData](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
 }
 
 // Deposit minipool

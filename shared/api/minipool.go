@@ -1,6 +1,7 @@
 package csapi
 
 import (
+	"github.com/rocket-pool/node-manager-core/eth"
 	snapi "github.com/rocket-pool/smartnode/v2/shared/types/api"
 )
 
@@ -8,10 +9,13 @@ type MinipoolCloseDetailsData struct {
 	Details []snapi.MinipoolCloseDetails `json:"details"`
 }
 
-type MinipoolGetAvailableMinipoolCount struct {
+type MinipoolGetAvailableMinipoolCountData struct {
 	Count int `json:"count"`
 }
 
-type MinipoolDepositMinipool struct {
-	Signature string `json:"signature"`
+type MinipoolDepositMinipoolData struct {
+	TxInfo                    *eth.TransactionInfo `json:"txInfo"`
+	InsufficientLiquidity     bool                 `json:"insufficientLiquidity"`
+	NotWhitelisted            bool                 `json:"notWhitelisted"`
+	InsufficientMinipoolCount bool                 `json:"insufficientMinipoolCount"`
 }
