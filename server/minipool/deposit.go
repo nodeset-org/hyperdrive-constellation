@@ -6,6 +6,8 @@ import (
 	"math/big"
 	"net/url"
 
+	"github.com/rocket-pool/node-manager-core/beacon"
+
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
@@ -46,7 +48,7 @@ func (f *minipoolDepositMinipoolContextFactory) Create(args url.Values) (*minipo
 }
 
 func (f *minipoolDepositMinipoolContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterSingleStageRoute[*minipoolDepositMinipoolContext, types.TxInfoData](
+	server.RegisterSingleStageRoute[*minipoolDepositMinipoolContext, csapi.MinipoolDepositMinipoolData](
 		router, "deposit-minipool", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
@@ -124,11 +126,11 @@ func (c *minipoolDepositMinipoolContext) Initialize(walletStatus wallet.WalletSt
 
 func (c *minipoolDepositMinipoolContext) GetState(mc *batch.MultiCaller) {
 	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.expectedMinipoolAddress, c.salt)
-	c.csMgr.SuperNodeAccount.HasSufficentLiquidity(mc, &c.hasSufficientLiquidity, eth.EthToWei(8))
+	c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &c.hasSufficientLiquidity, eth.EthToWei(8))
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 }
 
-func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDepositMinipoolData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDepositMinipoolData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.handler.serviceProvider
 	hd := sp.GetHyperdriveClient()
 	resources := sp.GetResources()
@@ -157,44 +159,41 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
 	}
 
-	// w, err := cscommon.NewWallet(sp)
-	// if err != nil {
-	// 	return types.ResponseStatus_Error, fmt.Errorf("error creating wallet: %w", err)
-	// }
+	w, err := cscommon.NewWallet(sp)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error creating wallet: %w", err)
+	}
+	validatorKey, err := w.GenerateNewValidatorKey()
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error generating new validator key: %w", err)
+	}
 
-	// depositData, err := validator.GetDepositData(
-	// 	privateKey,
-	// 	withdrawalCredentials,
-	// 	resources.GenesisForkVersion,
-	// 	eth.EthToWei(1).Uint64(),
-	// 	resources.EthNetworkName,
-	// )
-	// if err != nil {
-	// 	return types.ResponseStatus_Error, err
-	// }
+	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(*resources.FeeRecipient)
 
-	// // TODO: Call RP contract (node address + salt) (node/node.go from Rocketpool-go)
-	// var expectedMinipoolAddress common.Address
-	// err = sp.GetQueryManager().Query(func(mc *batch.MultiCaller) error {
-	// 	csMgr.SuperNodeAccount.GetNextMinipool(mc, &expectedMinipoolAddress)
-	// 	return nil
-	// }, nil)
-	// if err != nil {
-	// 	return types.ResponseStatus_Error, fmt.Errorf("error getting next minipool: %w", err)
-	// }
-
+	depositData, err := validator.GetDepositData(
+		validatorKey,
+		withdrawalCredentials,
+		resources.GenesisForkVersion,
+		eth.EthToWei(1).Uint64(),
+		resources.EthNetworkName,
+	)
+	if err != nil {
+		return types.ResponseStatus_Error, err
+	}
+	validatorPubkey := beacon.ValidatorPubkey(validatorKey.PublicKey().Marshal())
+	data.ValidatorPubKey = validatorPubkey
 	validatorConfig := constellation.ValidatorConfig{
 		TimezoneLocation:        "",
 		BondAmount:              big.NewInt(0),
 		MinimumNodeFee:          big.NewInt(0),
-		ValidatorPubkey:         []byte(pubkey.Hex()),
+		ValidatorPubkey:         validatorPubkey[:],
 		ValidatorSignature:      depositData.Signature,
 		DepositDataRoot:         depositData.DepositDataRoot,
-		Salt:                    new(big.Int).SetBytes(c.salt),
-		ExpectedMinipoolAddress: expectedMinipoolAddress,
+		Salt:                    c.salt,
+		ExpectedMinipoolAddress: c.expectedMinipoolAddress,
 	}
 
-	data.TxInfo, err = csMgr.SuperNodeAccount.CreateMinipool(validatorConfig, response.Data.Signature, opts)
+	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(validatorConfig, response.Data.Signature, opts)
 	if err != nil {
 		return types.ResponseStatus_Error, err
 	}

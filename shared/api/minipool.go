@@ -1,6 +1,8 @@
 package csapi
 
 import (
+	"github.com/rocket-pool/node-manager-core/beacon"
+
 	"github.com/rocket-pool/node-manager-core/eth"
 	snapi "github.com/rocket-pool/smartnode/v2/shared/types/api"
 )
@@ -14,8 +16,9 @@ type MinipoolGetAvailableMinipoolCountData struct {
 }
 
 type MinipoolDepositMinipoolData struct {
-	TxInfo                    *eth.TransactionInfo `json:"txInfo"`
-	InsufficientLiquidity     bool                 `json:"insufficientLiquidity"`
-	NotWhitelisted            bool                 `json:"notWhitelisted"`
-	InsufficientMinipoolCount bool                 `json:"insufficientMinipoolCount"`
+	TxInfo                    *eth.TransactionInfo   `json:"txInfo"`
+	InsufficientLiquidity     bool                   `json:"insufficientLiquidity"`
+	NotWhitelisted            bool                   `json:"notWhitelisted"`
+	InsufficientMinipoolCount bool                   `json:"insufficientMinipoolCount"`
+	ValidatorPubKey           beacon.ValidatorPubkey `json:"validatorPubKey"`
 }

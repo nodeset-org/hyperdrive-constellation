@@ -86,7 +86,7 @@ func (c *SuperNodeAccount) GetSubNodeMinipoolAt(mc *batch.MultiCaller, out *comm
 	eth.AddCallToMulticaller(mc, c.contract, out, "subNodeOperatorMinipools", subNode, index)
 }
 
-func (c *SuperNodeAccount) HasSufficentLiquidity(mc *batch.MultiCaller, out *bool, bondAmount *big.Int) {
+func (c *SuperNodeAccount) HasSufficientLiquidity(mc *batch.MultiCaller, out *bool, bondAmount *big.Int) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "hasSufficentLiquidity", bondAmount)
 }
 
