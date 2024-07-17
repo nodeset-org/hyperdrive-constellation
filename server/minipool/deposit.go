@@ -83,7 +83,6 @@ func (c *minipoolDepositMinipoolContext) Initialize(walletStatus wallet.WalletSt
 		return types.ResponseStatus_WalletNotReady, err
 	}
 
-	// Require synced execution + beacon client
 	err = sp.RequireEthClientSynced(ctx)
 	if err != nil {
 		if errors.Is(err, services.ErrExecutionClientNotSynced) {

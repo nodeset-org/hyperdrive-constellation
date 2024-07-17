@@ -1,6 +1,7 @@
 package with_ns_registered
 
 import (
+	"math/big"
 	"testing"
 
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
@@ -61,7 +62,7 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	// Deposit to the minipool
 	cs := testMgr.GetApiClient()
-	depositResponse, err := cs.Minipool.Deposit(whitelistAddress, []byte("48656c6c6f2c20576f726c64"))
+	depositResponse, err := cs.Minipool.Deposit(whitelistAddress, big.NewInt(0))
 	require.NoError(t, err)
 	require.Equal(t, "success", depositResponse.Data.TxInfo)
 }

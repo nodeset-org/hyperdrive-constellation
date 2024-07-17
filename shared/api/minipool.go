@@ -17,8 +17,8 @@ type MinipoolGetAvailableMinipoolCountData struct {
 
 type MinipoolDepositMinipoolData struct {
 	TxInfo                    *eth.TransactionInfo   `json:"txInfo"`
+	ValidatorPubKey           beacon.ValidatorPubkey `json:"validatorPubKey"`
 	InsufficientLiquidity     bool                   `json:"insufficientLiquidity"`
 	NotWhitelisted            bool                   `json:"notWhitelisted"`
 	InsufficientMinipoolCount bool                   `json:"insufficientMinipoolCount"`
-	ValidatorPubKey           beacon.ValidatorPubkey `json:"validatorPubKey"`
 }

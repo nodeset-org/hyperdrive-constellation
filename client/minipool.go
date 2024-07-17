@@ -1,11 +1,12 @@
 package csclient
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/client"
 	"github.com/rocket-pool/node-manager-core/api/types"
-	"github.com/rocket-pool/node-manager-core/utils"
 )
 
 type MinipoolRequester struct {
@@ -45,10 +46,10 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 }
 
 // Deposit minipool
-func (r *MinipoolRequester) Deposit(nodeAddress common.Address, salt []byte) (*types.ApiResponse[csapi.MinipoolDepositMinipoolData], error) {
+func (r *MinipoolRequester) Deposit(nodeAddress common.Address, salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositMinipoolData], error) {
 	args := map[string]string{
 		"nodeAddress": nodeAddress.Hex(),
-		"salt":        utils.EncodeHexWithPrefix(salt),
+		"salt":        salt.String(),
 	}
 	return client.SendGetRequest[csapi.MinipoolDepositMinipoolData](r, "deposit-minipool", "DepositMinipool", args)
 }
