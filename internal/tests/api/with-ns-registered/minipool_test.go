@@ -56,6 +56,11 @@ func TestMinipoolDeposit(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
+	err = testMgr.CommitBlock()
+	if err != nil {
+		t.Fatalf("Error committing block: %v", err)
+	}
+
 	// Set up the NodeSet mock server
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
