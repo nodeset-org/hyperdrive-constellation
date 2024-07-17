@@ -45,12 +45,12 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 }
 
 // Deposit minipool
-func (r *MinipoolRequester) Deposit(nodeAddress common.Address, salt []byte) (*types.ApiResponse[csapi.MinipoolDepositMinipool], error) {
+func (r *MinipoolRequester) Deposit(nodeAddress common.Address, salt []byte) (*types.ApiResponse[csapi.MinipoolDepositMinipoolData], error) {
 	args := map[string]string{
 		"nodeAddress": nodeAddress.Hex(),
 		"salt":        utils.EncodeHexWithPrefix(salt),
 	}
-	return client.SendGetRequest[csapi.MinipoolDepositMinipool](r, "deposit-minipool", "DepositMinipool", args)
+	return client.SendGetRequest[csapi.MinipoolDepositMinipoolData](r, "deposit-minipool", "DepositMinipool", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

@@ -63,5 +63,5 @@ func TestMinipoolDeposit(t *testing.T) {
 	cs := testMgr.GetApiClient()
 	depositResponse, err := cs.Minipool.Deposit(whitelistAddress, []byte("48656c6c6f2c20576f726c64"))
 	require.NoError(t, err)
-	require.Equal(t, "success", depositResponse.Data.Signature)
+	require.Equal(t, "success", depositResponse.Data.TxInfo)
 }
