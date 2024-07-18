@@ -87,6 +87,9 @@ func TestMinipoolDeposit(t *testing.T) {
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(adminPrivateKey)
 	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
+	// Set available minipool count to 1
+	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
+
 	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx
@@ -162,11 +165,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	// Mint RPL
 
 	// Stake RPL
-
-	// Whitelist subnode
-
-	// Set available minipool count to 1
-	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 
 	// Deposit to the minipool
 	depositResponse, err := cs.Minipool.Deposit(nodeAddress, big.NewInt(0))
