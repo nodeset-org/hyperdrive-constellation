@@ -10,7 +10,7 @@ require (
 	github.com/fatih/color v1.16.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240712193526-348ca592ec35
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240718212929-be24a38aa4a4
 	github.com/nodeset-org/osha v0.2.0
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.2-0.20240711200335-f1075a55d8b0
@@ -192,5 +192,7 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20240717213627-75462b899b33
 
 replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240712155203-bc4219fe2c84

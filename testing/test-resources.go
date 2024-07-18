@@ -30,7 +30,7 @@ func GetTestResources(hdResources *hdconfig.HyperdriveResources) (*csconfig.Cons
 	csRes := &csconfig.ConstellationResources{
 		HyperdriveResources: hdResources,
 		Directory:           config.HexToAddressPtr(DirectoryAddress),
-		RocketStorage:       config.HexToAddressPtr(DirectoryAddress),
+		RocketStorage:       config.HexToAddressPtr(RocketStorageAddress),
 		FeeRecipient:        config.HexToAddressPtr(SmoothingPoolAddress),
 	}
 	snRes := &snconfig.RocketPoolResources{

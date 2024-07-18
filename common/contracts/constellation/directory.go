@@ -74,3 +74,11 @@ func (c *Directory) GetSuperNodeAddress(mc *batch.MultiCaller, out *common.Addre
 func (c *Directory) GetWhitelistAddress(mc *batch.MultiCaller, out *common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getWhitelistAddress")
 }
+
+func (c *Directory) GetOperatorDistributorAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getOperatorDistributorAddress")
+}
+
+func (c *Directory) GetPriceFetcherAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getPriceFetcherAddress")
+}
