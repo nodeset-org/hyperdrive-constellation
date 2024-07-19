@@ -12,7 +12,9 @@ import (
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/osha/keys"
 	batch "github.com/rocket-pool/batch-query"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
@@ -287,6 +289,24 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
+
+	// Make a validator private key or whatever
+	valKey, err := keygen.GetBlsPrivateKey(0)
+	require.NoError(t, err)
+	valPubkey := beacon.ValidatorPubkey(valKey.PublicKey().Marshal())
+	t.Logf("Validator pubkey: %s\n", valPubkey.Hex())
+	withdrawalAddress := *sp.GetResources().FeeRecipient
+	withdrawalCreds := validator.GetWithdrawalCredsFromAddress(withdrawalAddress)
+
+	depositData, err := validator.GetDepositData(valKey, withdrawalCreds, testMgr.GetBeaconMockManager().GetConfig().GenesisForkVersion, 1e9, "testnet")
+	require.NoError(t, err)
+	t.Log("Generated deposit data")
+	casper, err := contracts.NewCasperDeposit(common.HexToAddress("0x5FbDB2315678afecb367f032d93F642f64180aa3"), sp.GetEthClient(), txMgr)
+	require.NoError(t, err)
+	t.Log("Created Casper contract binding")
+	txInfo, err = casper.Deposit(valPubkey, withdrawalCreds, beacon.ValidatorSignature(depositData.Signature), common.BytesToHash(depositData.DepositDataRoot), deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Deposited validator")
 }
 
 // Mint old RPL for unit testing
