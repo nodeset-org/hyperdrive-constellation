@@ -36,7 +36,7 @@ type ValidatorConfig struct {
 	MinimumNodeFee          *big.Int       `json:"minimumNodeFee"`
 	ValidatorPubkey         []byte         `json:"validatorPubkey"`
 	ValidatorSignature      []byte         `json:"validatorSignature"`
-	DepositDataRoot         [32]byte       `json:"depositDataRoot"`
+	DepositDataRoot         common.Hash    `json:"depositDataRoot"`
 	Salt                    *big.Int       `json:"salt"`
 	ExpectedMinipoolAddress common.Address `json:"expectedMinipoolAddress"`
 }

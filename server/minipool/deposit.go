@@ -172,7 +172,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		return types.ResponseStatus_Error, fmt.Errorf("error generating new validator key: %w", err)
 	}
 
-	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(*resources.FeeRecipient)
+	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(c.expectedMinipoolAddress)
 
 	depositData, err := validator.GetDepositData(
 		validatorKey,
@@ -187,8 +187,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	validatorPubkey := beacon.ValidatorPubkey(validatorKey.PublicKey().Marshal())
 	data.ValidatorPubKey = validatorPubkey
 
-	depositDataRootBytes := [32]byte{}
-	copy(depositDataRootBytes[:], depositData.DepositDataRoot)
+	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
 
 	validatorConfig := constellation.ValidatorConfig{
 		TimezoneLocation:        "",
@@ -196,7 +195,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		MinimumNodeFee:          big.NewInt(0),
 		ValidatorPubkey:         validatorPubkey[:],
 		ValidatorSignature:      depositData.Signature,
-		DepositDataRoot:         depositDataRootBytes,
+		DepositDataRoot:         depositDataRoot,
 		Salt:                    c.salt,
 		ExpectedMinipoolAddress: c.expectedMinipoolAddress,
 	}

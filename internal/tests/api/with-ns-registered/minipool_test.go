@@ -289,6 +289,10 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
 
+	txInfo, err = csMgr.OperatorDistributor.ProvisionLiquiditiesForMinipoolCreation(leb8BondInWei, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Provisioned liquidities for minipool creation")
+
 	depositResponse, err := cs.Minipool.Deposit(nodeAddress, big.NewInt(0xff))
 	require.NoError(t, err)
 	require.False(t, depositResponse.Data.InsufficientLiquidity)
