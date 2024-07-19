@@ -11,7 +11,6 @@ import (
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
-	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -178,7 +177,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		validatorKey,
 		withdrawalCredentials,
 		resources.GenesisForkVersion,
-		eth.EthToWei(1).Uint64(),
+		1e9, // TODO: Get this the right way by calling the RP contracts or something instead of hardcoding
 		resources.EthNetworkName,
 	)
 	if err != nil {
@@ -188,24 +187,21 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	data.ValidatorPubKey = validatorPubkey
 
 	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
-
-	validatorConfig := constellation.ValidatorConfig{
-		TimezoneLocation:        "",
-		BondAmount:              big.NewInt(0),
-		MinimumNodeFee:          big.NewInt(0),
-		ValidatorPubkey:         validatorPubkey[:],
-		ValidatorSignature:      depositData.Signature,
-		DepositDataRoot:         depositDataRoot,
-		Salt:                    c.salt,
-		ExpectedMinipoolAddress: c.expectedMinipoolAddress,
-	}
-
 	newOpts := &bind.TransactOpts{
 		From:  opts.From,
-		Value: big.NewInt(0).Set(eth.EthToWei(1)),
+		Value: eth.EthToWei(1),
 	}
 
-	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(validatorConfig, response.Data.Signature, response.Data.Time, newOpts)
+	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(
+		validatorPubkey[:],
+		depositData.Signature,
+		depositDataRoot,
+		c.salt,
+		c.expectedMinipoolAddress,
+		response.Data.Time,
+		response.Data.Signature,
+		newOpts,
+	)
 	if err != nil {
 		return types.ResponseStatus_Error, err
 	}

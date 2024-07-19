@@ -22,3 +22,10 @@ type MinipoolDepositMinipoolData struct {
 	NotWhitelisted            bool                   `json:"notWhitelisted"`
 	InsufficientMinipoolCount bool                   `json:"insufficientMinipoolCount"`
 }
+
+type MinipoolStakeMinipoolData struct {
+	TxInfo                    *eth.TransactionInfo `json:"txInfo"`
+	InsufficientLiquidity     bool                 `json:"insufficientLiquidity"`
+	NotWhitelisted            bool                 `json:"notWhitelisted"`
+	InsufficientMinipoolCount bool                 `json:"insufficientMinipoolCount"`
+}

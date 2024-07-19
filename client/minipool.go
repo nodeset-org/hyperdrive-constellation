@@ -53,6 +53,14 @@ func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.Min
 	return client.SendGetRequest[csapi.MinipoolDepositMinipoolData](r, "deposit-minipool", "DepositMinipool", args)
 }
 
+// Stake minipool
+func (r *MinipoolRequester) Stake(minipoolAddress common.Address) (*types.ApiResponse[csapi.MinipoolStakeMinipoolData], error) {
+	args := map[string]string{
+		"minipoolAddress": minipoolAddress.Hex(),
+	}
+	return client.SendGetRequest[csapi.MinipoolStakeMinipoolData](r, "stake", "Stake", args)
+}
+
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested
 func sendMultiMinipoolRequest[DataType any](r *MinipoolRequester, method string, requestName string, addresses []common.Address, args map[string]string) (*types.ApiResponse[DataType], error) {
 	if args == nil {
