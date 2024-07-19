@@ -317,6 +317,26 @@ func TestMinipoolDeposit(t *testing.T) {
 	_, err = hd.Tx.WaitForTransaction(txResponse.Data.TxHash)
 	require.NoError(t, err)
 	t.Log("Waiting for deposited tx complete")
+
+	/*
+		// Make a validator private key or whatever
+		valKey, err := keygen.GetBlsPrivateKey(0)
+		require.NoError(t, err)
+		valPubkey := beacon.ValidatorPubkey(valKey.PublicKey().Marshal())
+		t.Logf("Validator pubkey: %s\n", valPubkey.Hex())
+		withdrawalAddress := *sp.GetResources().FeeRecipient
+		withdrawalCreds := validator.GetWithdrawalCredsFromAddress(withdrawalAddress)
+
+		depositData, err := validator.GetDepositData(valKey, withdrawalCreds, testMgr.GetBeaconMockManager().GetConfig().GenesisForkVersion, 1e9, "testnet")
+		require.NoError(t, err)
+		t.Log("Generated deposit data")
+		casper, err := contracts.NewCasperDeposit(common.HexToAddress("0x5FbDB2315678afecb367f032d93F642f64180aa3"), sp.GetEthClient(), txMgr)
+		require.NoError(t, err)
+		t.Log("Created Casper contract binding")
+		txInfo, err = casper.Deposit(valPubkey, withdrawalCreds, beacon.ValidatorSignature(depositData.Signature), common.BytesToHash(depositData.DepositDataRoot), deployerOpts)
+		require.NoError(t, err)
+		MineTx(t, txInfo, deployerOpts, "Deposited validator")
+	*/
 }
 
 // Mint old RPL for unit testing
