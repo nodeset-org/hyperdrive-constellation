@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	whitelistString string = "0x3fdc08D815cc4ED3B7F69Ee246716f2C8bCD6b07"
+	whitelistString string = "0x1E3b98102e19D3a164d239BdD190913C2F02E756"
 	directoryString string = "0x71C95911E9a5D330f4D621842EC243EE1343292e"
 )
 

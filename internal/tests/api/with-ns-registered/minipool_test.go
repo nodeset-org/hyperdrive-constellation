@@ -8,10 +8,12 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/osha/keys"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
@@ -80,16 +82,20 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get the admin key for Constellation
-	adminKey, err := keygen.GetEthPrivateKey(1)
-	require.NoError(t, err)
-	adminPubkey := crypto.PubkeyToAddress(adminKey.PublicKey)
-	t.Logf("Admin key: %s\n", adminPubkey.Hex())
-	adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
-	require.NoError(t, err)
+	/*
+		adminKey, err := keygen.GetEthPrivateKey(1)
+		require.NoError(t, err)
+		adminPubkey := crypto.PubkeyToAddress(adminKey.PublicKey)
+		t.Logf("Admin key: %s\n", adminPubkey.Hex())
+		adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
+		require.NoError(t, err)
+	*/
 
 	// Set up the services
 	sp := testMgr.GetConstellationServiceProvider()
+	ec := sp.GetEthClient()
 	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
 
 	// Load RP
 	rpMgr := sp.GetRocketPoolManager()
@@ -98,12 +104,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	rp := rpMgr.RocketPool
 	t.Log("Loaded Rocket Pool")
 
-	// Load Constellation
-	csMgr := sp.GetConstellationManager()
-	err = csMgr.LoadContracts()
-	require.NoError(t, err)
-	t.Log("Loaded Constellation")
-
 	// Make some RP bindings
 	dpMgr, err := deposit.NewDepositPoolManager(rp)
 	require.NoError(t, err)
@@ -111,13 +111,35 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	rpl, err := tokens.NewTokenRpl(rp)
 	require.NoError(t, err)
+	pdaoMgr, err := protocol.NewProtocolDaoManager(rp)
+	require.NoError(t, err)
 	//nodeMgr, err := node.NewNodeManager(rp)
 	t.Log("Created Rocket Pool bindings")
 
-	// Make Constellation use fallback mode for now until oDAO RPL price is working
-	txInfo, err := csMgr.PriceFetcher.UseFallback(adminOpts)
+	// Load Constellation
+	csMgr := sp.GetConstellationManager()
+	err = csMgr.LoadContracts()
 	require.NoError(t, err)
-	MineTx(t, txInfo, adminOpts, "Enabled fallback mode for RPL price fetching")
+	t.Log("Loaded Constellation")
+
+	// Create some Constellation bindings
+	var rplVaultAddress common.Address
+	var wethVaultAddress common.Address
+	var wethAddress common.Address
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
+		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
+		csMgr.Directory.GetWethAddress(mc, &wethAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	rplVault, err := contracts.NewErc4626Token(rplVaultAddress, ec, qMgr, txMgr, nil)
+	require.NoError(t, err)
+	wethVault, err := contracts.NewErc4626Token(wethVaultAddress, ec, qMgr, txMgr, nil)
+	require.NoError(t, err)
+	weth, err := contracts.NewWeth(wethAddress, ec, qMgr, txMgr, nil)
+	require.NoError(t, err)
+	t.Log("Created Constellation bindings")
 
 	// Run a query
 	supernodeAddress := csMgr.SuperNodeAccount.Address
@@ -133,6 +155,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	}, nil,
 		rpSuperNode.Exists,
 		dpMgr.Balance,
+		pdaoMgr.Settings.Deposit.MaximumDepositPoolSize,
 	)
 	require.NoError(t, err)
 
@@ -145,12 +168,21 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Logf("RPL price is %.6f ETH (%s wei)", eth.WeiToEth(rplPrice), rplPrice.String())
 	t.Logf("RPL required for 8 ETH bond is %.6f RPL (%s wei)", eth.WeiToEth(rplRequired), rplRequired.String())
 
+	// Send ETH to the RP deposit pool
+	fundOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: pdaoMgr.Settings.Deposit.MaximumDepositPoolSize.Get(), // Deposit the maximum amount
+	}
+	txInfo, err := dpMgr.Deposit(fundOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Funded the deposit pool")
+
 	// Mint some old RPL
-	rplAmount := 1000
-	rplAmountWei := eth.EthToWei(1000)
+	rplAmountWei := eth.EthToWei(3200) // rplRequired
+	rplAmount := eth.WeiToEth(rplAmountWei)
 	txInfo, err = MintLegacyRpl(rp, deployerOpts, deployerPubkey, rplAmountWei)
 	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Minted %d old RPL", rplAmount))
+	MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Minted %.6f old RPL", rplAmount))
 
 	// Approve old RPL for swap
 	rplContract, err := rp.GetContract(rocketpool.ContractName_RocketTokenRPL)
@@ -164,18 +196,107 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Swapped old RPL for new RPL")
 
-	// Send it to the Supernode
-	txInfo, err = rpl.Transfer(supernodeAddress, rplAmountWei, deployerOpts)
+	// Deposit RPL into the RPL vault
+	txInfo, err = rpl.Approve(rplVaultAddress, rplAmountWei, deployerOpts)
 	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Sent new RPL to Supernode")
-	var supernodeRplBalance *big.Int
+	MineTx(t, txInfo, deployerOpts, "Approved RPL for deposit")
+	txInfo, err = rplVault.Deposit(rplAmountWei, deployerPubkey, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Deposited RPL into the RPL vault")
+
+	// Mint some WETH
+	ethAmountWei := eth.EthToWei(90)
+	//ethAmount := eth.WeiToEth(ethAmountWei)
+	wethOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: big.NewInt(0).Set(ethAmountWei),
+	}
+	txInfo, err = weth.Deposit(wethOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Minted WETH")
+	var wethBalance *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		rpl.BalanceOf(mc, &supernodeRplBalance, supernodeAddress)
+		weth.BalanceOf(mc, &wethBalance, deployerPubkey)
 		return nil
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, 0, rplAmountWei.Cmp(supernodeRplBalance))
-	t.Logf("Supernode RPL balance is now %d", supernodeRplBalance)
+	require.Equal(t, 0, ethAmountWei.Cmp(wethBalance))
+	t.Logf("Deployer's WETH balance is now %.6f (%s wei)", eth.WeiToEth(wethBalance), wethBalance.String())
+
+	// Deposit WETH into the WETH vault
+	txInfo, err = weth.Approve(wethVaultAddress, ethAmountWei, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Approved WETH for deposit")
+	txInfo, err = wethVault.Deposit(ethAmountWei, deployerPubkey, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Deposited WETH into the WETH vault")
+
+	/*
+		// Provision liquidity???
+		txInfo, err = csMgr.OperatorDistributor.ProvisionLiquiditiesForMinipoolCreation(leb8BondInWei, deployerOpts)
+		require.NoError(t, err)
+		MineTx(t, txInfo, deployerOpts, "Provisioned liquidity for minipool creation I guess?")
+
+			// Rebalance the Supernode stake
+			txInfo, err = csMgr.OperatorDistributor.RebalanceRplStake(leb8BondInWei, deployerOpts)
+			require.NoError(t, err)
+			MineTx(t, txInfo, deployerOpts, "Rebalanced Supernode stake")
+	*/
+
+	// Check if the node is registered
+	cs := testMgr.GetApiClient()
+	statusResponse, err := cs.Node.GetRegistrationStatus()
+	require.NoError(t, err)
+	require.False(t, statusResponse.Data.Registered)
+	t.Log("Node is not registered with Constellation yet, as expected")
+
+	// Set up the NodeSet mock server
+	hd := testMgr.HyperdriveTestManager.GetApiClient()
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
+	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
+	t.Log("Set up the NodeSet mock server")
+
+	// Make the registration tx
+	response, err := cs.Node.Register()
+	require.NoError(t, err)
+	require.False(t, response.Data.NotAuthorized)
+	require.False(t, response.Data.NotRegisteredWithNodeSet)
+	t.Log("Generated registration tx")
+
+	// Submit the tx
+	submission, _ := eth.CreateTxSubmissionFromInfo(response.Data.TxInfo, nil)
+	txResponse, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+	require.NoError(t, err)
+	t.Logf("Submitted registration tx: %s", txResponse.Data.TxHash)
+
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined registration tx")
+
+	// Wait for the tx
+	_, err = hd.Tx.WaitForTransaction(txResponse.Data.TxHash)
+	require.NoError(t, err)
+	t.Log("Waiting for registration tx complete")
+
+	// Check if the node is registered
+	statusResponse, err = cs.Node.GetRegistrationStatus()
+	require.NoError(t, err)
+	require.True(t, statusResponse.Data.Registered)
+	t.Log("Node is now registered with Constellation")
+
+	txInfo, err = csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Processed next minipool")
+
+	// Check the Supernode staked RPL amount
+	err = qMgr.Query(nil, nil,
+		rpSuperNode.RplStake,
+	)
+	require.NoError(t, err)
+	t.Logf("Supernode staked RPL amount is now %d", rpSuperNode.RplStake.Get())
+	require.Equal(t, 0, rplAmountWei.Cmp(rpSuperNode.RplStake.Get()))
 }
 
 // Mint old RPL for unit testing
