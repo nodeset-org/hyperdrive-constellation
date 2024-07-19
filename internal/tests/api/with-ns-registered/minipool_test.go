@@ -256,6 +256,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
+	nsMgr.SetConstellationSupernodeAddress(supernodeAddress)
 	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
 	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 	t.Log("Set up the NodeSet mock server")
