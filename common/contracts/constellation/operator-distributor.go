@@ -19,7 +19,7 @@ const (
 
 // ABI cache
 var operatorDistributorAbi abi.ABI
-var operatorDistributortOnce sync.Once
+var operatorDistributorOnce sync.Once
 
 type OperatorDistributor struct {
 	Address  common.Address
@@ -31,7 +31,7 @@ type OperatorDistributor struct {
 func NewOperatorDistributor(address common.Address, ec eth.IExecutionClient, txMgr *eth.TransactionManager) (*OperatorDistributor, error) {
 	// Parse the ABI
 	var err error
-	operatorDistributortOnce.Do(func() {
+	operatorDistributorOnce.Do(func() {
 		var parsedAbi abi.ABI
 		parsedAbi, err = abi.JSON(strings.NewReader(operatorDistributorAbiString))
 		if err == nil {
@@ -39,7 +39,7 @@ func NewOperatorDistributor(address common.Address, ec eth.IExecutionClient, txM
 		}
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error parsing Whitelist ABI: %w", err)
+		return nil, fmt.Errorf("error parsing OperatorDistributor ABI: %w", err)
 	}
 
 	// Create the contract
@@ -68,3 +68,18 @@ func (c *OperatorDistributor) CalculateRplStakeShortfall(mc *batch.MultiCaller, 
 // ====================
 // === Transactions ===
 // ====================
+
+// TODO: description
+func (c *OperatorDistributor) ProcessNextMinipool(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "processNextMinipool", opts)
+}
+
+// Adjusts the Supernode's RPL stake to make sure it's in line with the target stake ratio
+func (c *OperatorDistributor) RebalanceRplStake(ethStaked *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "rebalanceRplStake", opts, ethStaked)
+}
+
+// Allocates the necessary liquidity for the creation of a new minipool.
+func (c *OperatorDistributor) ProvisionLiquiditiesForMinipoolCreation(newMinipoolBond *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "provisionLiquiditiesForMinipoolCreation", opts, newMinipoolBond)
+}

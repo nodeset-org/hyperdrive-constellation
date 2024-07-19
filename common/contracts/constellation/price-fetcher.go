@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	priceFetcherAbiString string = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint8","name":"version","type":"uint8"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"disableFallback","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"getDirectory","outputs":[{"internalType":"contract Directory","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getImplementation","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getPriceFromODAO","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getPriceFromUniswap","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_directory","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"}],"name":"upgradeTo","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"},{"inputs":[],"name":"useFallback","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"usingFallback","outputs":[{"internalType":"bool","name":"","type":"bool"}],"stateMutability":"view","type":"function"}]`
+	priceFetcherAbiString string = `[{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint8","name":"version","type":"uint8"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"getDirectory","outputs":[{"internalType":"contract Directory","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getImplementation","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getPrice","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"_directory","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"}],"name":"upgradeTo","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]`
 )
 
 // ABI cache
 var priceFetcherAbi abi.ABI
-var priceFetchertOnce sync.Once
+var priceFetcherOnce sync.Once
 
 type PriceFetcher struct {
 	Address  common.Address
@@ -31,7 +31,7 @@ type PriceFetcher struct {
 func NewPriceFetcher(address common.Address, ec eth.IExecutionClient, txMgr *eth.TransactionManager) (*PriceFetcher, error) {
 	// Parse the ABI
 	var err error
-	priceFetchertOnce.Do(func() {
+	priceFetcherOnce.Do(func() {
 		var parsedAbi abi.ABI
 		parsedAbi, err = abi.JSON(strings.NewReader(priceFetcherAbiString))
 		if err == nil {
@@ -39,7 +39,7 @@ func NewPriceFetcher(address common.Address, ec eth.IExecutionClient, txMgr *eth
 		}
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error parsing Whitelist ABI: %w", err)
+		return nil, fmt.Errorf("error parsing PriceFetcher ABI: %w", err)
 	}
 
 	// Create the contract
@@ -68,8 +68,3 @@ func (c *PriceFetcher) GetRplPrice(mc *batch.MultiCaller, out **big.Int) {
 // ====================
 // === Transactions ===
 // ====================
-
-// Enable the fallback for RPL price querying
-func (c *PriceFetcher) UseFallback(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "useFallback", opts)
-}

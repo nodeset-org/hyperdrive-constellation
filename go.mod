@@ -11,7 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240718212929-be24a38aa4a4
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240719024810-825b5dc5e3b0
 	github.com/nodeset-org/osha v0.2.0
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.2-0.20240711200335-f1075a55d8b0
@@ -128,7 +128,7 @@ require (
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/nodeset-org/nodeset-client-go v0.0.0-20240709204602-d660ec1e19ad // indirect
+	github.com/nodeset-org/nodeset-client-go v0.0.0-20240719023618-ffcec6b39ee4 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect

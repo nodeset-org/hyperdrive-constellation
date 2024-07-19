@@ -3,10 +3,12 @@ package csnode
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/types"
+	"github.com/rocket-pool/node-manager-core/utils"
 	"github.com/rocket-pool/node-manager-core/wallet"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -84,8 +86,16 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 		return types.ResponseStatus_Success, nil
 	}
 
+	// Print the signature
+	logger := c.handler.logger
+	sigHex := utils.EncodeHexWithPrefix(sigResponse.Data.Signature)
+	logger.Info("Registration signature",
+		slog.String("signature", sigHex),
+		slog.Time("time", sigResponse.Data.Time),
+	)
+
 	// Get the registration TX
-	data.TxInfo, err = csMgr.Whitelist.AddOperator(walletStatus.Wallet.WalletAddress, sigResponse.Data.Signature, opts)
+	data.TxInfo, err = csMgr.Whitelist.AddOperator(walletStatus.Wallet.WalletAddress, sigResponse.Data.Time, sigResponse.Data.Signature, opts)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating registration TX: %w", err)
 	}
