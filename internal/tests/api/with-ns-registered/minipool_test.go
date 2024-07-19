@@ -294,16 +294,29 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Provisioned liquidities for minipool creation")
 
-	depositResponse, err := cs.Minipool.Deposit(nodeAddress, big.NewInt(0xff))
+	depositResponse, err := cs.Minipool.Deposit(big.NewInt(0xff))
 	require.NoError(t, err)
 	require.False(t, depositResponse.Data.InsufficientLiquidity)
 	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
 	require.False(t, depositResponse.Data.NotWhitelisted)
 	require.NotNil(t, depositResponse.Data.TxInfo)
 
-	// Mine the deposit tx
-	MineTx(t, depositResponse.Data.TxInfo, deployerOpts, "Deposited into minipool")
+	// Submit the tx
+	submission, _ = eth.CreateTxSubmissionFromInfo(depositResponse.Data.TxInfo, nil)
+	t.Logf("Simulation message: %s", depositResponse.Data.TxInfo.SimulationResult.SimulationError)
+	txResponse, err = hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+	require.NoError(t, err)
+	t.Logf("Submitted deposited tx: %s", txResponse.Data.TxHash)
 
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined deposited tx")
+
+	// Wait for the tx
+	_, err = hd.Tx.WaitForTransaction(txResponse.Data.TxHash)
+	require.NoError(t, err)
+	t.Log("Waiting for deposited tx complete")
 }
 
 // Mint old RPL for unit testing
