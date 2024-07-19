@@ -139,10 +139,15 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		data.NotWhitelisted = true
 		return types.ResponseStatus_Success, nil
 	}
-	if !c.hasSufficientLiquidity {
-		data.InsufficientLiquidity = true
-		return types.ResponseStatus_Success, nil
-	}
+
+	// TODO: Implement our own InsufficientLiquidity check
+	//      1. [CONST] Is there enough WETH in the Constellation WETH vault to cover bond?
+	// 		2. [RP] Is there enough RPL staked to cover creating minipool?
+
+	// if !c.hasSufficientLiquidity {
+	// 	data.InsufficientLiquidity = true
+	// 	return types.ResponseStatus_Success, nil
+	// }
 
 	availableResponse, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
 	if err != nil {
@@ -181,18 +186,27 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	}
 	validatorPubkey := beacon.ValidatorPubkey(validatorKey.PublicKey().Marshal())
 	data.ValidatorPubKey = validatorPubkey
+
+	depositDataRootBytes := [32]byte{}
+	copy(depositDataRootBytes[:], depositData.DepositDataRoot)
+
 	validatorConfig := constellation.ValidatorConfig{
 		TimezoneLocation:        "",
 		BondAmount:              big.NewInt(0),
 		MinimumNodeFee:          big.NewInt(0),
 		ValidatorPubkey:         validatorPubkey[:],
 		ValidatorSignature:      depositData.Signature,
-		DepositDataRoot:         depositData.DepositDataRoot,
+		DepositDataRoot:         depositDataRootBytes,
 		Salt:                    c.salt,
 		ExpectedMinipoolAddress: c.expectedMinipoolAddress,
 	}
 
-	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(validatorConfig, response.Data.Signature, opts)
+	newOpts := &bind.TransactOpts{
+		From:  opts.From,
+		Value: big.NewInt(0).Set(eth.EthToWei(1)),
+	}
+
+	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(validatorConfig, response.Data.Signature, response.Data.Time, newOpts)
 	if err != nil {
 		return types.ResponseStatus_Error, err
 	}

@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -35,7 +36,7 @@ type ValidatorConfig struct {
 	MinimumNodeFee          *big.Int       `json:"minimumNodeFee"`
 	ValidatorPubkey         []byte         `json:"validatorPubkey"`
 	ValidatorSignature      []byte         `json:"validatorSignature"`
-	DepositDataRoot         []byte         `json:"depositDataRoot"`
+	DepositDataRoot         [32]byte       `json:"depositDataRoot"`
 	Salt                    *big.Int       `json:"salt"`
 	ExpectedMinipoolAddress common.Address `json:"expectedMinipoolAddress"`
 }
@@ -87,7 +88,7 @@ func (c *SuperNodeAccount) GetSubNodeMinipoolAt(mc *batch.MultiCaller, out *comm
 }
 
 func (c *SuperNodeAccount) HasSufficientLiquidity(mc *batch.MultiCaller, out *bool, bondAmount *big.Int) {
-	eth.AddCallToMulticaller(mc, c.contract, out, "hasSufficentLiquidity", bondAmount)
+	eth.AddCallToMulticaller(mc, c.contract, out, "hasSufficientLiquidity", bondAmount)
 }
 
 // ====================
@@ -114,8 +115,11 @@ func (c *SuperNodeAccount) SetUseLatestDelegate(setting bool, minipool common.Ad
 	return c.txMgr.CreateTransactionInfo(c.contract, "setUseLatestDelegate", opts, setting, minipool)
 }
 
-func (c *SuperNodeAccount) CreateMinipool(config ValidatorConfig, sig []byte, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "createMinipool", opts, config, sig)
+func (c *SuperNodeAccount) CreateMinipool(config ValidatorConfig, sig []byte, signatureGenesisTime time.Time, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	timestamp := signatureGenesisTime.UTC().Unix()
+	timestampBig := big.NewInt(timestamp)
+
+	return c.txMgr.CreateTransactionInfo(c.contract, "createMinipool", opts, config, timestampBig, sig)
 }
 
 func (c *SuperNodeAccount) Stake(minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {

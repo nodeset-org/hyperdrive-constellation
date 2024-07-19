@@ -257,6 +257,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
 	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
+	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx
@@ -287,6 +288,17 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
+
+	depositResponse, err := cs.Minipool.Deposit(nodeAddress, big.NewInt(0xff))
+	require.NoError(t, err)
+	require.False(t, depositResponse.Data.InsufficientLiquidity)
+	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
+	require.False(t, depositResponse.Data.NotWhitelisted)
+	require.NotNil(t, depositResponse.Data.TxInfo)
+
+	// Mine the deposit tx
+	MineTx(t, depositResponse.Data.TxInfo, deployerOpts, "Deposited into minipool")
+
 }
 
 // Mint old RPL for unit testing
