@@ -231,17 +231,19 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Deposited WETH into the WETH vault")
 
-	/*
-		// Provision liquidity???
-		txInfo, err = csMgr.OperatorDistributor.ProvisionLiquiditiesForMinipoolCreation(leb8BondInWei, deployerOpts)
-		require.NoError(t, err)
-		MineTx(t, txInfo, deployerOpts, "Provisioned liquidity for minipool creation I guess?")
+	// Rebalance the Supernode stake
+	txInfo, err = csMgr.OperatorDistributor.RebalanceRplStake(leb8BondInWei, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Rebalanced Supernode stake")
 
-			// Rebalance the Supernode stake
-			txInfo, err = csMgr.OperatorDistributor.RebalanceRplStake(leb8BondInWei, deployerOpts)
-			require.NoError(t, err)
-			MineTx(t, txInfo, deployerOpts, "Rebalanced Supernode stake")
-	*/
+	// Check the Supernode staked RPL amount
+	err = qMgr.Query(nil, nil,
+		rpSuperNode.RplStake,
+	)
+	require.NoError(t, err)
+	rplStake := rpSuperNode.RplStake.Get()
+	t.Logf("Supernode staked RPL amount is now %.6f (%s wei)", eth.WeiToEth(rplStake), rplStake.String())
+	require.Equal(t, 1, rplStake.Cmp(common.Big0))
 
 	// Check if the node is registered
 	cs := testMgr.GetApiClient()
@@ -285,18 +287,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
-
-	txInfo, err = csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Processed next minipool")
-
-	// Check the Supernode staked RPL amount
-	err = qMgr.Query(nil, nil,
-		rpSuperNode.RplStake,
-	)
-	require.NoError(t, err)
-	t.Logf("Supernode staked RPL amount is now %d", rpSuperNode.RplStake.Get())
-	require.Equal(t, 0, rplAmountWei.Cmp(rpSuperNode.RplStake.Get()))
 }
 
 // Mint old RPL for unit testing

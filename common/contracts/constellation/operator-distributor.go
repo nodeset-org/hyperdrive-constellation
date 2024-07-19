@@ -69,7 +69,7 @@ func (c *OperatorDistributor) CalculateRplStakeShortfall(mc *batch.MultiCaller, 
 // === Transactions ===
 // ====================
 
-// Yolo
+// TODO: description
 func (c *OperatorDistributor) ProcessNextMinipool(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "processNextMinipool", opts)
 }
