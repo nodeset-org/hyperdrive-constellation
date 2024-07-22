@@ -1,6 +1,7 @@
 package csapi
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/rocket-pool/node-manager-core/beacon"
 
 	"github.com/rocket-pool/node-manager-core/eth"
@@ -17,6 +18,7 @@ type MinipoolGetAvailableMinipoolCountData struct {
 
 type MinipoolDepositMinipoolData struct {
 	TxInfo                    *eth.TransactionInfo   `json:"txInfo"`
+	MinipoolAddress           common.Address         `json:"minipoolAddress"`
 	ValidatorPubKey           beacon.ValidatorPubkey `json:"validatorPubKey"`
 	InsufficientLiquidity     bool                   `json:"insufficientLiquidity"`
 	NotWhitelisted            bool                   `json:"notWhitelisted"`

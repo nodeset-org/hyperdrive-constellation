@@ -250,8 +250,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
-	nsMgr.SetConstellationSupernodeAddress(supernodeAddress)
-	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
 	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 	t.Log("Set up the NodeSet mock server")
 
@@ -290,7 +288,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	MineTx(t, txInfo, deployerOpts, "Provisioned liquidities for minipool creation")
 
 	// Make a Deposit TX
-	depositResponse, err := cs.Minipool.Deposit(big.NewInt(0xff))
+	salt := big.NewInt(0x90de5e7)
+	depositResponse, err := cs.Minipool.Deposit(salt)
 	require.NoError(t, err)
 	require.False(t, depositResponse.Data.InsufficientLiquidity)
 	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
@@ -301,6 +300,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	submission, _ = eth.CreateTxSubmissionFromInfo(depositResponse.Data.TxInfo, nil)
 	txResponse, err = hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
 	require.NoError(t, err)
+	t.Logf("Using salt %s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
 	t.Logf("Submitted deposit tx: %s", txResponse.Data.TxHash)
 
 	// Mine the tx

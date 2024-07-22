@@ -157,7 +157,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		return types.ResponseStatus_Success, nil
 	}
 
-	response, err := hd.NodeSet_Constellation.GetDepositSignature(c.expectedMinipoolAddress, c.salt)
+	response, err := hd.NodeSet_Constellation.GetDepositSignature(c.expectedMinipoolAddress, c.salt, c.csMgr.SuperNodeAccount.Address)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
 	}
@@ -185,6 +185,7 @@ func (c *minipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	}
 	validatorPubkey := beacon.ValidatorPubkey(validatorKey.PublicKey().Marshal())
 	data.ValidatorPubKey = validatorPubkey
+	data.MinipoolAddress = c.expectedMinipoolAddress
 
 	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
 	newOpts := &bind.TransactOpts{
