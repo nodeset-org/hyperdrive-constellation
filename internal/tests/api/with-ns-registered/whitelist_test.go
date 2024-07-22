@@ -4,24 +4,12 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/osha/keys"
 	batchquery "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/stretchr/testify/require"
-)
-
-const (
-	whitelistString string = "0x1E3b98102e19D3a164d239BdD190913C2F02E756"
-	directoryString string = "0x71C95911E9a5D330f4D621842EC243EE1343292e"
-)
-
-var (
-	whitelistAddress common.Address = common.HexToAddress(whitelistString)
-	directoryAddress common.Address = common.HexToAddress(directoryString)
 )
 
 // Test registration with Constellation using a good signature
@@ -40,16 +28,15 @@ func TestConstellationRegistration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Assert the admin has the right role
+	csMgr := testMgr.GetConstellationServiceProvider().GetConstellationManager()
 	adminAddress := crypto.PubkeyToAddress(adminKey.PublicKey)
 	t.Logf("Admin address: %s", adminAddress.Hex())
 	roleHash := crypto.Keccak256Hash([]byte("ADMIN_SERVER_ROLE"))
 	sp := testMgr.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
-	directory, err := constellation.NewDirectory(directoryAddress, sp.GetEthClient(), sp.GetTransactionManager())
-	require.NoError(t, err)
 	var isAdmin bool
 	err = qMgr.Query(func(mc *batchquery.MultiCaller) error {
-		directory.HasRole(mc, &isAdmin, roleHash, adminAddress)
+		csMgr.Directory.HasRole(mc, &isAdmin, roleHash, adminAddress)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -74,7 +61,6 @@ func TestConstellationRegistration(t *testing.T) {
 	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(adminKey)
-	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
 	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx
@@ -82,6 +68,8 @@ func TestConstellationRegistration(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, response.Data.NotAuthorized)
 	require.False(t, response.Data.NotRegisteredWithNodeSet)
+	require.True(t, response.Data.TxInfo.SimulationResult.IsSimulated)
+	require.Empty(t, response.Data.TxInfo.SimulationResult.SimulationError)
 	t.Log("Generated registration tx")
 
 	// Submit the tx

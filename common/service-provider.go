@@ -31,6 +31,12 @@ type IConstellationManagerProvider interface {
 	GetConstellationManager() *ConstellationManager
 }
 
+// Provides the Constellation daemon wallet
+type IConstellationWalletProvider interface {
+	// Gets the wallet
+	GetWallet() *Wallet
+}
+
 // Provides the services used for Rocket Pool and Smart Node interaction
 type ISmartNodeServiceProvider interface {
 	// Gets the Rocket Pool manager
@@ -60,6 +66,7 @@ type IConstellationServiceProvider interface {
 	IConstellationConfigProvider
 	IConstellationManagerProvider
 	IConstellationRequirementsProvider
+	IConstellationWalletProvider
 	ISmartNodeServiceProvider
 
 	services.IModuleServiceProvider
@@ -76,6 +83,7 @@ type constellationServiceProvider struct {
 	csMgr     *ConstellationManager
 	rpMgr     *RocketPoolManager
 	snSp      *smartNodeServiceProvider
+	wallet    *Wallet
 }
 
 // Create a new service provider with Constellation daemon-specific features
@@ -106,6 +114,12 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		return nil, fmt.Errorf("error creating Rocket Pool manager: %w", err)
 	}
 
+	// Create the wallet
+	wallet, err := NewWallet(sp)
+	if err != nil {
+		return nil, fmt.Errorf("error creating wallet: %w", err)
+	}
+
 	// Make the provider
 	constellationSp := &constellationServiceProvider{
 		IModuleServiceProvider: sp,
@@ -113,6 +127,7 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		resources:              csresources,
 		csMgr:                  csMgr,
 		rpMgr:                  rpMgr,
+		wallet:                 wallet,
 	}
 
 	// Create the Smart Node service provider
@@ -139,4 +154,8 @@ func (s *constellationServiceProvider) GetRocketPoolManager() *RocketPoolManager
 
 func (s *constellationServiceProvider) GetSmartNodeServiceProvider() snservices.ISmartNodeServiceProvider {
 	return s.snSp
+}
+
+func (s *constellationServiceProvider) GetWallet() *Wallet {
+	return s.wallet
 }

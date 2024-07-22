@@ -15,9 +15,11 @@ import (
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
+	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
+	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,16 +83,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	deployerOpts, err := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
 	require.NoError(t, err)
 
-	// Get the admin key for Constellation
-	/*
-		adminKey, err := keygen.GetEthPrivateKey(1)
-		require.NoError(t, err)
-		adminPubkey := crypto.PubkeyToAddress(adminKey.PublicKey)
-		t.Logf("Admin key: %s\n", adminPubkey.Hex())
-		adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
-		require.NoError(t, err)
-	*/
-
 	// Set up the services
 	sp := testMgr.GetConstellationServiceProvider()
 	ec := sp.GetEthClient()
@@ -112,6 +104,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	rpl, err := tokens.NewTokenRpl(rp)
 	require.NoError(t, err)
 	pdaoMgr, err := protocol.NewProtocolDaoManager(rp)
+	require.NoError(t, err)
+	mpMgr, err := minipool.NewMinipoolManager(rp)
 	require.NoError(t, err)
 	//nodeMgr, err := node.NewNodeManager(rp)
 	t.Log("Created Rocket Pool bindings")
@@ -256,7 +250,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	hd := testMgr.HyperdriveTestManager.GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
-	nsMgr.SetConstellationWhitelistAddress(whitelistAddress)
+	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
 	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx
@@ -287,6 +281,88 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
+
+	// Set Constellation's liquidity up so it can deposit
+	txInfo, err = csMgr.OperatorDistributor.ProvisionLiquiditiesForMinipoolCreation(leb8BondInWei, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Provisioned liquidities for minipool creation")
+
+	// Make a Deposit TX
+	salt := big.NewInt(0x90de5e7)
+	depositResponse, err := cs.Minipool.Deposit(salt)
+	require.NoError(t, err)
+	require.False(t, depositResponse.Data.InsufficientLiquidity)
+	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
+	require.False(t, depositResponse.Data.NotWhitelisted)
+	require.NotNil(t, depositResponse.Data.TxInfo)
+
+	// Submit the tx
+	submission, _ = eth.CreateTxSubmissionFromInfo(depositResponse.Data.TxInfo, nil)
+	txResponse, err = hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+	require.NoError(t, err)
+	t.Logf("Using salt %s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
+	t.Logf("Submitted deposit tx: %s", txResponse.Data.TxHash)
+
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined deposit tx")
+
+	// Wait for the tx
+	_, err = hd.Tx.WaitForTransaction(txResponse.Data.TxHash)
+	require.NoError(t, err)
+	t.Log("Waiting for deposit tx complete")
+
+	err = qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), rpSuperNode.MinipoolCount.Formatted())
+	t.Log("Supernode has one minipool")
+
+	// Make sure it's in prelaunch
+	var mpAddress common.Address
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		rpSuperNode.GetMinipoolAddress(mc, &mpAddress, 0)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	mp, err := mpMgr.CreateMinipoolFromAddress(mpAddress, false, nil)
+	require.NoError(t, err)
+	err = qMgr.Query(nil, nil, mp.Common().Status)
+	require.NoError(t, err)
+	require.Equal(t, types.MinipoolStatus_Prelaunch, mp.Common().Status.Formatted())
+	t.Log("Minipool is in prelaunch")
+
+	// Fast forward time
+	slotsToAdvance := 12 * 60 * 60 / 12 // 1 hour
+	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
+
+	// Make a Stake TX
+	stakeResponse, err := cs.Minipool.Stake(mpAddress)
+	require.NoError(t, err)
+	require.NotNil(t, stakeResponse.Data.TxInfo)
+
+	// Submit the tx
+	submission, _ = eth.CreateTxSubmissionFromInfo(stakeResponse.Data.TxInfo, nil)
+	txResponse, err = hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+	require.NoError(t, err)
+	t.Logf("Submitted stake tx: %s", txResponse.Data.TxHash)
+
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined stake tx")
+
+	// Wait for the tx
+	_, err = hd.Tx.WaitForTransaction(txResponse.Data.TxHash)
+	require.NoError(t, err)
+	t.Log("Waiting for stake tx complete")
+
+	err = qMgr.Query(nil, nil, mp.Common().Status)
+	require.NoError(t, err)
+	require.Equal(t, types.MinipoolStatus_Staking, mp.Common().Status.Formatted())
+	t.Log("Minipool is in staking")
 }
 
 // Mint old RPL for unit testing

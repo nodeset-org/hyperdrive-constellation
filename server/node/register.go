@@ -73,7 +73,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	}
 
 	// Request a registration signature - note this will use the wallet address, not the node address
-	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature()
+	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature(csMgr.Whitelist.Address)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting registration signature: %w", err)
 	}

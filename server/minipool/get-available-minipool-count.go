@@ -31,7 +31,7 @@ func (f *minipoolGetAvailableMinipoolCountContextFactory) Create(args url.Values
 }
 
 func (f *minipoolGetAvailableMinipoolCountContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterQuerylessGet[*minipoolGetAvailableMinipoolCountContext, csapi.MinipoolGetAvailableMinipoolCount](
+	server.RegisterQuerylessGet[*minipoolGetAvailableMinipoolCountContext, csapi.MinipoolGetAvailableMinipoolCountData](
 		router, "get-available-minipool-count", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
@@ -44,7 +44,7 @@ type minipoolGetAvailableMinipoolCountContext struct {
 	handler *MinipoolHandler
 }
 
-func (c *minipoolGetAvailableMinipoolCountContext) PrepareData(data *csapi.MinipoolGetAvailableMinipoolCount, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *minipoolGetAvailableMinipoolCountContext) PrepareData(data *csapi.MinipoolGetAvailableMinipoolCountData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.handler.serviceProvider
 	hd := sp.GetHyperdriveClient()
 

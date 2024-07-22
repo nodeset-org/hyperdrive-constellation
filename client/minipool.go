@@ -1,6 +1,8 @@
 package csclient
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/rocket-pool/node-manager-core/api/client"
@@ -27,7 +29,7 @@ func (r *MinipoolRequester) GetContext() client.IRequesterContext {
 	return r.context
 }
 
-// Get close details
+// Close
 func (r *MinipoolRequester) Close(addresses []common.Address) (*types.ApiResponse[types.BatchTxInfoData], error) {
 	return sendMultiMinipoolRequest[types.BatchTxInfoData](r, "close", "Close", addresses, nil)
 }
@@ -38,9 +40,25 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 }
 
 // Get the number of minipools that can currently be created by the node
-func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCount], error) {
+func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCountData], error) {
 	args := map[string]string{}
-	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCount](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
+	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCountData](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
+}
+
+// Deposit minipool
+func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositMinipoolData], error) {
+	args := map[string]string{
+		"salt": salt.String(),
+	}
+	return client.SendGetRequest[csapi.MinipoolDepositMinipoolData](r, "deposit-minipool", "DepositMinipool", args)
+}
+
+// Stake minipool
+func (r *MinipoolRequester) Stake(minipoolAddress common.Address) (*types.ApiResponse[csapi.MinipoolStakeMinipoolData], error) {
+	args := map[string]string{
+		"minipoolAddress": minipoolAddress.Hex(),
+	}
+	return client.SendGetRequest[csapi.MinipoolStakeMinipoolData](r, "stake", "Stake", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

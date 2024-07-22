@@ -8,9 +8,10 @@ require (
 	github.com/docker/docker v26.1.0+incompatible
 	github.com/ethereum/go-ethereum v1.14.3
 	github.com/fatih/color v1.16.0
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240719024810-825b5dc5e3b0
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240722161121-345f959c0ec2
 	github.com/nodeset-org/osha v0.2.0
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.2-0.20240711200335-f1075a55d8b0
@@ -18,6 +19,8 @@ require (
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.1
+	github.com/wealdtech/go-eth2-types/v2 v2.8.2
+	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1
 )
 
 require (
@@ -84,7 +87,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
@@ -126,7 +128,7 @@ require (
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multihash v0.2.3 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
-	github.com/nodeset-org/nodeset-client-go v0.0.0-20240719023618-ffcec6b39ee4 // indirect
+	github.com/nodeset-org/nodeset-client-go v0.0.0-20240722155242-3deafab3b9f5 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
@@ -157,9 +159,7 @@ require (
 	github.com/vbatts/tar-split v0.11.5 // indirect
 	github.com/wealdtech/go-bytesutil v1.2.1 // indirect
 	github.com/wealdtech/go-ens/v3 v3.6.0 // indirect
-	github.com/wealdtech/go-eth2-types/v2 v2.8.2 // indirect
 	github.com/wealdtech/go-eth2-util v1.8.2 // indirect
-	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 // indirect
 	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a // indirect
 	github.com/wealdtech/go-multicodec v1.4.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
