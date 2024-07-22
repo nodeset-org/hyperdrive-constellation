@@ -115,7 +115,7 @@ func (w *Wallet) saveData() error {
 // Generate a new validator key and save it
 func (w *Wallet) GenerateNewValidatorKey() (*eth2types.BLSPrivateKey, error) {
 	// Get the path for the next validator key
-	path := fmt.Sprintf(shared.StakeWiseValidatorPath, w.data.NextAccount)
+	path := fmt.Sprintf(shared.ConstellationValidatorPath, w.data.NextAccount)
 
 	// Ask the HD daemon to generate the key
 	client := w.sp.GetHyperdriveClient()
