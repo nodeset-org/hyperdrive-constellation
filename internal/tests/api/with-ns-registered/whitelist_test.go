@@ -4,21 +4,12 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/osha/keys"
 	batchquery "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/stretchr/testify/require"
-)
-
-const (
-	directoryString string = "0x71C95911E9a5D330f4D621842EC243EE1343292e"
-)
-
-var (
-	directoryAddress common.Address = common.HexToAddress(directoryString)
 )
 
 // Test registration with Constellation using a good signature

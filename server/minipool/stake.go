@@ -56,11 +56,9 @@ func (f *minipoolStakeMinipoolContextFactory) RegisterRoute(router *mux.Router) 
 type minipoolStakeMinipoolContext struct {
 	handler *MinipoolHandler
 
-	rpSuperNodeBinding     *node.Node
-	minipoolAddress        common.Address
-	hasSufficientLiquidity bool
-	isWhitelisted          bool
-	nodeAddress            common.Address
+	rpSuperNodeBinding *node.Node
+	minipoolAddress    common.Address
+	nodeAddress        common.Address
 
 	rpMgr *cscommon.RocketPoolManager
 	csMgr *cscommon.ConstellationManager
