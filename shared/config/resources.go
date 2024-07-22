@@ -1,12 +1,46 @@
 package csconfig
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/rocket-pool/node-manager-core/config"
+	"gopkg.in/yaml.v2"
 )
+
+var (
+	// Mainnet resources for reference in testing
+	MainnetResourcesReference *ConstellationResources = &ConstellationResources{
+		Directory:     nil,
+		RocketStorage: config.HexToAddressPtr("0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46"),
+		FeeRecipient:  config.HexToAddressPtr("0xd4E96eF8eee8678dBFf4d535E033Ed1a4F7605b7"),
+	}
+
+	// Holesky resources for reference in testing
+	HoleskyResourcesReference *ConstellationResources = &ConstellationResources{
+		Directory:     nil,
+		RocketStorage: config.HexToAddressPtr("0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1"),
+		FeeRecipient:  config.HexToAddressPtr("0xA347C391bc8f740CAbA37672157c8aAcD08Ac567"),
+	}
+)
+
+// Network settings with a field for Constellation-specific settings
+type ConstellationSettings struct {
+	// The unique key used to identify the network in the configuration
+	Key config.Network `yaml:"key" json:"key"`
+
+	// Hyperdrive resources for the network
+	ConstellationResources *ConstellationResources `yaml:"constellationResources" json:"constellationResources"`
+
+	// A collection of default configuration settings to use for the network, which will override
+	// the standard "general-purpose" default value for the setting
+	DefaultConfigSettings map[string]any `yaml:"defaultConfigSettings,omitempty" json:"defaultConfigSettings,omitempty"`
+}
 
 // A collection of network-specific resources and getters for them
 type ConstellationResources struct {
@@ -23,40 +57,56 @@ type ConstellationResources struct {
 	FeeRecipient *common.Address
 }
 
-// Creates a new resource collection for the given network
-func NewConstellationResources(network config.Network) *ConstellationResources {
-	// Mainnet
-	mainnetResources := &ConstellationResources{
-		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Mainnet),
-		Directory:           nil,
-		RocketStorage:       config.HexToAddressPtr("0x1d8f8f00cfa6758d7bE78336684788Fb0ee0Fa46"),
-		FeeRecipient:        config.HexToAddressPtr("0xd4E96eF8eee8678dBFf4d535E033Ed1a4F7605b7"),
+// A merged set of general resources and Constellation-specific resources for the selected network
+type MergedResources struct {
+	// General resources
+	*hdconfig.MergedResources
+
+	// Constellation-specific resources
+	*ConstellationResources
+}
+
+// Load network settings from a folder
+func LoadSettingsFiles(sourceDir string) ([]*ConstellationSettings, error) {
+	// Make sure the folder exists
+	_, err := os.Stat(sourceDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("network settings folder [%s] does not exist", sourceDir)
 	}
 
-	// Holesky
-	holeskyResources := &ConstellationResources{
-		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Holesky),
-		Directory:           nil,
-		RocketStorage:       config.HexToAddressPtr("0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1"),
-		FeeRecipient:        config.HexToAddressPtr("0xA347C391bc8f740CAbA37672157c8aAcD08Ac567"),
+	// Enumerate the dir
+	files, err := os.ReadDir(sourceDir)
+	if err != nil {
+		return nil, fmt.Errorf("error enumerating network settings source folder: %w", err)
 	}
 
-	// Holesky Dev
-	holeskyDevResources := &ConstellationResources{
-		HyperdriveResources: hdconfig.NewHyperdriveResources(config.Network_Holesky),
-		Directory:           nil,
-		RocketStorage:       config.HexToAddressPtr("0x594Fb75D3dc2DFa0150Ad03F99F97817747dd4E1"),
-		FeeRecipient:        config.HexToAddressPtr("0xA347C391bc8f740CAbA37672157c8aAcD08Ac567"),
-	}
+	settingsList := []*ConstellationSettings{}
+	for _, file := range files {
+		// Ignore dirs and nonstandard files
+		if file.IsDir() || !file.Type().IsRegular() {
+			continue
+		}
 
-	switch network {
-	case config.Network_Mainnet:
-		return mainnetResources
-	case config.Network_Holesky:
-		return holeskyResources
-	case hdconfig.Network_HoleskyDev:
-		return holeskyDevResources
-	}
+		// Load the file
+		filename := file.Name()
+		ext := filepath.Ext(filename)
+		if ext != ".yaml" && ext != ".yml" {
+			// Only load YAML files
+			continue
+		}
+		settingsFilePath := filepath.Join(sourceDir, filename)
+		bytes, err := os.ReadFile(settingsFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("error reading network settings file [%s]: %w", settingsFilePath, err)
+		}
 
-	panic(fmt.Sprintf("network %s is not supported", network))
+		// Unmarshal the settings
+		settings := new(ConstellationSettings)
+		err = yaml.Unmarshal(bytes, settings)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshalling network settings file [%s]: %w", settingsFilePath, err)
+		}
+		settingsList = append(settingsList, settings)
+	}
+	return settingsList, nil
 }

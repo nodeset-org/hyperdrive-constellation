@@ -26,12 +26,14 @@ const (
 )
 
 // GetTestResources returns a new ConstellationResources instance with test network values
-func GetTestResources(hdResources *hdconfig.HyperdriveResources) (*csconfig.ConstellationResources, *snconfig.RocketPoolResources) {
-	csRes := &csconfig.ConstellationResources{
-		HyperdriveResources: hdResources,
-		Directory:           config.HexToAddressPtr(DirectoryAddress),
-		RocketStorage:       config.HexToAddressPtr(RocketStorageAddress),
-		FeeRecipient:        config.HexToAddressPtr(SmoothingPoolAddress),
+func GetTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedResources, *snconfig.RocketPoolResources) {
+	csRes := &csconfig.MergedResources{
+		MergedResources: hdResources,
+		ConstellationResources: &csconfig.ConstellationResources{
+			Directory:     config.HexToAddressPtr(DirectoryAddress),
+			RocketStorage: config.HexToAddressPtr(RocketStorageAddress),
+			FeeRecipient:  config.HexToAddressPtr(SmoothingPoolAddress),
+		},
 	}
 	snRes := &snconfig.RocketPoolResources{
 		NetworkResources: hdResources.NetworkResources,

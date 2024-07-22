@@ -51,7 +51,11 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 
 	// Make Constellation resources
 	csResources, snResources := GetTestResources(hdSp.GetResources())
-	csCfg := csconfig.NewConstellationConfig(hdCfg)
+	csCfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
+	if err != nil {
+		closeTestManager(tm)
+		return nil, fmt.Errorf("error creating Constellation config: %v", err)
+	}
 
 	// Make the module directory
 	moduleDir := filepath.Join(hdCfg.UserDataPath.Value, hdconfig.ModulesName, csconfig.ModuleName)

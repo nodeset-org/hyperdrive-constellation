@@ -22,7 +22,7 @@ type IConstellationConfigProvider interface {
 	GetConfig() *csconfig.ConstellationConfig
 
 	// Gets the Constellation resources
-	GetResources() *csconfig.ConstellationResources
+	GetResources() *csconfig.MergedResources
 }
 
 // Provides the Constellation manager
@@ -79,7 +79,7 @@ type IConstellationServiceProvider interface {
 type constellationServiceProvider struct {
 	services.IModuleServiceProvider
 	csCfg     *csconfig.ConstellationConfig
-	resources *csconfig.ConstellationResources
+	resources *csconfig.MergedResources
 	csMgr     *ConstellationManager
 	rpMgr     *RocketPoolManager
 	snSp      *smartNodeServiceProvider
@@ -87,23 +87,42 @@ type constellationServiceProvider struct {
 }
 
 // Create a new service provider with Constellation daemon-specific features
-func NewConstellationServiceProvider(sp services.IModuleServiceProvider) (IConstellationServiceProvider, error) {
+func NewConstellationServiceProvider(sp services.IModuleServiceProvider, settingsList []*csconfig.ConstellationSettings) (IConstellationServiceProvider, error) {
 	// Create the resources
 	csCfg, ok := sp.GetModuleConfig().(*csconfig.ConstellationConfig)
 	if !ok {
 		return nil, fmt.Errorf("constellation config is not the correct type, it's a %s", reflect.TypeOf(csCfg))
 	}
 	hdCfg := sp.GetHyperdriveConfig()
-	csRes := csconfig.NewConstellationResources(hdCfg.Network.Value)
-	snRes := snconfig.NewRocketPoolResources(hdCfg.Network.Value)
+	hdRes := sp.GetHyperdriveResources()
 
-	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, csRes, snRes)
+	// Get the resources from the selected network
+	var selectedResources *csconfig.MergedResources
+	var snResources *snconfig.RocketPoolResources
+	for _, network := range settingsList {
+		if network.Key == hdCfg.Network.Value {
+			selectedResources = &csconfig.MergedResources{
+				MergedResources:        hdRes,
+				ConstellationResources: network.ConstellationResources,
+			}
+			snResources = snconfig.NewRocketPoolResources(network.Key)
+			break
+		}
+	}
+	if selectedResources == nil {
+		return nil, fmt.Errorf("no stakewise resources found for selected network [%s]", hdCfg.Network.Value)
+	}
+	if snResources == nil {
+		return nil, fmt.Errorf("no smart node resources found for selected network [%s]", hdCfg.Network.Value)
+	}
+
+	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, selectedResources, snResources)
 }
 
 // Create a new service provider with Constellation daemon-specific features, using custom services instead of loading them from the module service provider.
-func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.ConstellationResources, snresources *snconfig.RocketPoolResources) (IConstellationServiceProvider, error) {
+func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.MergedResources, snresources *snconfig.RocketPoolResources) (IConstellationServiceProvider, error) {
 	// Create the Constellation manager
-	csMgr, err := NewConstellationManager(csresources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
+	csMgr, err := NewConstellationManager(csresources.ConstellationResources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
 	if err != nil {
 		return nil, fmt.Errorf("error creating Constellation manager: %w", err)
 	}
@@ -140,7 +159,7 @@ func (s *constellationServiceProvider) GetConfig() *csconfig.ConstellationConfig
 	return s.csCfg
 }
 
-func (s *constellationServiceProvider) GetResources() *csconfig.ConstellationResources {
+func (s *constellationServiceProvider) GetResources() *csconfig.MergedResources {
 	return s.resources
 }
 
