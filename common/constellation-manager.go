@@ -17,6 +17,7 @@ type ConstellationManager struct {
 	SuperNodeAccount    *constellation.SuperNodeAccount
 	PriceFetcher        *constellation.PriceFetcher
 	OperatorDistributor *constellation.OperatorDistributor
+	YieldDistributor    *constellation.YieldDistributor
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -52,11 +53,13 @@ func (m *ConstellationManager) LoadContracts() error {
 	var superNodeAccountAddress common.Address
 	var priceFetcherAddress common.Address
 	var operatorDistributorAddress common.Address
+	var yieldDistributorAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
 		m.Directory.GetPriceFetcherAddress(mc, &priceFetcherAddress)
 		m.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
+		m.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -80,12 +83,17 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating operator distributor binding: %w", err)
 	}
+	yieldDistributor, err := constellation.NewYieldDistributor(yieldDistributorAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating yield distributor binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
 	m.SuperNodeAccount = superNodeAccount
 	m.PriceFetcher = priceFetcher
 	m.OperatorDistributor = operatorDistributor
+	m.YieldDistributor = yieldDistributor
 	m.isLoaded = true
 	return nil
 }
