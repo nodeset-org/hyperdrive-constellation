@@ -422,22 +422,20 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Log("Minipool is in staking")
 
 	// Send WETH to the YieldDistributor
-	// txInfo, err = weth.Transfer(csMgr.YieldDistributor.Address, eth.EthToWei(1), deployerOpts)
-	// require.NoError(t, err)
+	txInfo, err = weth.Transfer(csMgr.YieldDistributor.Address, common.Big1, deployerOpts)
+	require.NoError(t, err)
 
-	// // Fast forward time
-	// slotsToAdvance = 12 * 60 * 60 / 12 // 1 hour
-	// err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
-	// require.NoError(t, err)
-	// t.Logf("Advanced %d slots", slotsToAdvance)
+	// Fast forward time
+	slotsToAdvance = 12 * 60 * 60 / 12 // 1 hour
+	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
 
-	// // Make a harvest TX for the minipool
-	// currentBlockHeader, err = ec.HeaderByNumber(context.Background(), nil)
-	// require.NoError(t, err)
-
-	// harvestTxInfo, err := csMgr.YieldDistributor.Harvest(mpAddress, common.Big0, currentBlockHeader.Number, deployerOpts)
-	// require.NoError(t, err)
-	// require.NotNil(t, harvestTxInfo)
+	// Make a harvest TX for the minipool
+	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(mpAddress, common.Big0, common.Big0, deployerOpts)
+	require.NoError(t, err)
+	require.NotNil(t, harvestTxInfo)
+	MineTx(t, harvestTxInfo, deployerOpts, "Harvested minipool")
 
 }
 

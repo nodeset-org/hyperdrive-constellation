@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -58,6 +59,10 @@ func NewYieldDistributor(address common.Address, ec eth.IExecutionClient, txMgr 
 // =============
 // === Calls ===
 // =============
+
+func (c *YieldDistributor) CurrentInterval(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "currentInterval")
+}
 
 // ====================
 // === Transactions ===
