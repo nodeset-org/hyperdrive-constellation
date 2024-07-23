@@ -83,3 +83,8 @@ func (c *OperatorDistributor) RebalanceRplStake(ethStaked *big.Int, opts *bind.T
 func (c *OperatorDistributor) ProvisionLiquiditiesForMinipoolCreation(newMinipoolBond *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "provisionLiquiditiesForMinipoolCreation", opts, newMinipoolBond)
 }
+
+// Sets Constellation's target stake ratio
+func (c *OperatorDistributor) SetTargetStakeRatio(ratio *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "setTargetStakeRatio", opts, ratio)
+}

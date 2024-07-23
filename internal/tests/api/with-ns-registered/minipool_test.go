@@ -1,6 +1,7 @@
 package with_ns_registered
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"testing"
@@ -13,9 +14,11 @@ import (
 	"github.com/nodeset-org/osha/keys"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
+	"github.com/rocket-pool/rocketpool-go/v2/network"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
@@ -107,6 +110,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	mpMgr, err := minipool.NewMinipoolManager(rp)
 	require.NoError(t, err)
+	netMgr, err := network.NewNetworkManager(rp)
+	require.NoError(t, err)
 	//nodeMgr, err := node.NewNodeManager(rp)
 	t.Log("Created Rocket Pool bindings")
 
@@ -135,6 +140,47 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Created Constellation bindings")
 
+	// Bootstrap the oDAO
+	odao1Key, err := keygen.GetEthPrivateKey(10)
+	require.NoError(t, err)
+	odao2Key, err := keygen.GetEthPrivateKey(11)
+	require.NoError(t, err)
+	odao3Key, err := keygen.GetEthPrivateKey(12)
+	require.NoError(t, err)
+	odao1Opts, err := bind.NewKeyedTransactorWithChainID(odao1Key, big.NewInt(int64(chainID)))
+	require.NoError(t, err)
+	odao2Opts, err := bind.NewKeyedTransactorWithChainID(odao2Key, big.NewInt(int64(chainID)))
+	require.NoError(t, err)
+	odao3Opts, err := bind.NewKeyedTransactorWithChainID(odao3Key, big.NewInt(int64(chainID)))
+	require.NoError(t, err)
+	_, err = BootstrapNodeToOdao(rp, deployerOpts, odao1Opts.From, odao1Opts, "Etc/UTC", "odao1", "https://odao1.com")
+	require.NoError(t, err)
+	_, err = BootstrapNodeToOdao(rp, deployerOpts, odao2Opts.From, odao2Opts, "Etc/UTC", "odao2", "https://odao2.com")
+	require.NoError(t, err)
+	_, err = BootstrapNodeToOdao(rp, deployerOpts, odao3Opts.From, odao3Opts, "Etc/UTC", "odao3", "https://odao3.com")
+	require.NoError(t, err)
+	t.Log("Bootstrapped oDAO nodes")
+
+	// Update the RPL price to 0.02
+	newPrice := big.NewInt(2e16)
+	currentBlockHeader, err := ec.HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	txInfo, err := netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao1Opts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, odao1Opts, "Updated RPL price from oDAO 1")
+	txInfo, err = netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao2Opts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, odao2Opts, "Updated RPL price from oDAO 2")
+
+	// Change the target stake ratio to 80%
+	adminKey, err := keygen.GetEthPrivateKey(1)
+	require.NoError(t, err)
+	adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
+	targetStakeRatio := eth.EthToWei(1.2) // Sub 100% will fail (contract bug)
+	txInfo, err = csMgr.OperatorDistributor.SetTargetStakeRatio(targetStakeRatio, adminOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, adminOpts, "Changed target stake ratio to 80%")
+
 	// Run a query
 	supernodeAddress := csMgr.SuperNodeAccount.Address
 	rpSuperNode, err := node.NewNode(rp, supernodeAddress)
@@ -159,7 +205,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.Equal(t, 0, dpMgr.Balance.Get().Cmp(common.Big0))
 	t.Log("Deposit pool balance is zero")
 	require.Equal(t, 1, rplPrice.Cmp(common.Big0))
-	t.Logf("RPL price is %.6f ETH (%s wei)", eth.WeiToEth(rplPrice), rplPrice.String())
+	t.Logf("RPL price is %.6f RPL/ETH (%s wei)", eth.WeiToEth(rplPrice), rplPrice.String())
 	t.Logf("RPL required for 8 ETH bond is %.6f RPL (%s wei)", eth.WeiToEth(rplRequired), rplRequired.String())
 
 	// Send ETH to the RP deposit pool
@@ -167,12 +213,12 @@ func TestMinipoolDeposit(t *testing.T) {
 		From:  deployerOpts.From,
 		Value: pdaoMgr.Settings.Deposit.MaximumDepositPoolSize.Get(), // Deposit the maximum amount
 	}
-	txInfo, err := dpMgr.Deposit(fundOpts)
+	txInfo, err = dpMgr.Deposit(fundOpts)
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Funded the deposit pool")
 
 	// Mint some old RPL
-	rplAmountWei := eth.EthToWei(3200) // rplRequired
+	rplAmountWei := eth.EthToWei(400) // rplRequired // 44 will fail (contract bug)
 	rplAmount := eth.WeiToEth(rplAmountWei)
 	txInfo, err = MintLegacyRpl(rp, deployerOpts, deployerPubkey, rplAmountWei)
 	require.NoError(t, err)
@@ -197,6 +243,20 @@ func TestMinipoolDeposit(t *testing.T) {
 	txInfo, err = rplVault.Deposit(rplAmountWei, deployerPubkey, deployerOpts)
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Deposited RPL into the RPL vault")
+
+	// Verify OperatorDistributor RPL balance has been updated
+	var odRplBalance *big.Int
+	var rvRplBalance *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		rpl.BalanceOf(mc, &odRplBalance, csMgr.OperatorDistributor.Address)
+		rpl.BalanceOf(mc, &rvRplBalance, rplVaultAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, odRplBalance.Cmp(common.Big0))
+	t.Logf("OperatorDistributor's RPL balance is now %.6f (%s wei)", eth.WeiToEth(odRplBalance), odRplBalance.String())
+	require.Equal(t, 1, rvRplBalance.Cmp(common.Big0))
+	t.Logf("RPL vault's RPL balance is now %.6f (%s wei)", eth.WeiToEth(rvRplBalance), rvRplBalance.String())
 
 	// Mint some WETH
 	ethAmountWei := eth.EthToWei(90)
@@ -225,19 +285,19 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Deposited WETH into the WETH vault")
 
-	// Rebalance the Supernode stake
-	txInfo, err = csMgr.OperatorDistributor.RebalanceRplStake(leb8BondInWei, deployerOpts)
+	// Verify OperatorDistributor WETH balance has been updated
+	odEthBalance, err := ec.BalanceAt(context.Background(), csMgr.OperatorDistributor.Address, nil)
 	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Rebalanced Supernode stake")
-
-	// Check the Supernode staked RPL amount
-	err = qMgr.Query(nil, nil,
-		rpSuperNode.RplStake,
-	)
+	var evWethBalance *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &evWethBalance, wethVaultAddress)
+		return nil
+	}, nil)
 	require.NoError(t, err)
-	rplStake := rpSuperNode.RplStake.Get()
-	t.Logf("Supernode staked RPL amount is now %.6f (%s wei)", eth.WeiToEth(rplStake), rplStake.String())
-	require.Equal(t, 1, rplStake.Cmp(common.Big0))
+	require.Equal(t, 1, odEthBalance.Cmp(common.Big0))
+	t.Logf("OperatorDistributor's ETH balance is now %.6f (%s wei)", eth.WeiToEth(odEthBalance), odEthBalance.String())
+	require.Equal(t, 1, evWethBalance.Cmp(common.Big0))
+	t.Logf("WETH vault's WETH balance is now %.6f (%s wei)", eth.WeiToEth(evWethBalance), evWethBalance.String())
 
 	// Check if the node is registered
 	cs := testMgr.GetApiClient()
@@ -282,11 +342,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.True(t, statusResponse.Data.Registered)
 	t.Log("Node is now registered with Constellation")
 
-	// Set Constellation's liquidity up so it can deposit
-	txInfo, err = csMgr.OperatorDistributor.ProvisionLiquiditiesForMinipoolCreation(leb8BondInWei, deployerOpts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Provisioned liquidities for minipool creation")
-
 	// Make a Deposit TX
 	salt := big.NewInt(0x90de5e7)
 	depositResponse, err := cs.Minipool.Deposit(salt)
@@ -294,7 +349,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.False(t, depositResponse.Data.InsufficientLiquidity)
 	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
 	require.False(t, depositResponse.Data.NotWhitelisted)
-	require.NotNil(t, depositResponse.Data.TxInfo)
+	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
+	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
 
 	// Submit the tx
 	submission, _ = eth.CreateTxSubmissionFromInfo(depositResponse.Data.TxInfo, nil)
@@ -407,4 +463,96 @@ func MineTx(t *testing.T, txInfo *eth.TransactionInfo, opts *bind.TransactOpts, 
 	err = txMgr.WaitForTransaction(tx)
 	require.NoError(t, err)
 	t.Log(logMessage)
+}
+
+// Bootstraps a node into the Oracle DAO, taking care of all of the details involved
+func BootstrapNodeToOdao(rp *rocketpool.RocketPool, deployerOpts *bind.TransactOpts, nodeAccount common.Address, nodeOpts *bind.TransactOpts, timezone string, id string, url string) (*node.Node, error) {
+	// Get some contract bindings
+	odaoMgr, err := oracle.NewOracleDaoManager(rp)
+	if err != nil {
+		return nil, fmt.Errorf("error getting oDAO manager binding: %w", err)
+	}
+	oma, err := rp.GetContract(rocketpool.ContractName_RocketDAONodeTrustedActions)
+	if err != nil {
+		return nil, fmt.Errorf("error getting OMA contract: %w", err)
+	}
+	fsrpl, err := tokens.NewTokenRplFixedSupply(rp)
+	if err != nil {
+		return nil, fmt.Errorf("error getting FSRPL binding: %w", err)
+	}
+	rpl, err := tokens.NewTokenRpl(rp)
+	if err != nil {
+		return nil, fmt.Errorf("error getting RPL binding: %w", err)
+	}
+	rplContract, err := rp.GetContract(rocketpool.ContractName_RocketTokenRPL)
+	if err != nil {
+		return nil, fmt.Errorf("error getting RPL contract: %w", err)
+	}
+
+	// Register the node
+	node, err := RegisterNode(rp, nodeAccount, nodeOpts, timezone)
+	if err != nil {
+		return nil, fmt.Errorf("error registering node: %w", err)
+	}
+
+	// Get the amount of RPL to mint
+	oSettings := odaoMgr.Settings
+	err = rp.Query(nil, nil, odaoMgr.MemberCount, oSettings.Member.RplBond)
+	if err != nil {
+		return nil, fmt.Errorf("error getting network info: %w", err)
+	}
+	rplBond := oSettings.Member.RplBond.Get()
+
+	// Bootstrap it and mint RPL for it
+	err = rp.BatchCreateAndWaitForTransactions([]func() (*eth.TransactionSubmission, error){
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(odaoMgr.BootstrapMember(id, url, nodeAccount, deployerOpts))
+		},
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(MintLegacyRpl(rp, deployerOpts, nodeAccount, rplBond))
+		},
+	}, true, deployerOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error bootstrapping node and minting RPL: %w", err)
+	}
+
+	// Swap RPL and Join the oDAO
+	err = rp.BatchCreateAndWaitForTransactions([]func() (*eth.TransactionSubmission, error){
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(fsrpl.Approve(rplContract.Address, rplBond, nodeOpts))
+		},
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(rpl.SwapFixedSupplyRplForRpl(rplBond, nodeOpts))
+		},
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(rpl.Approve(oma.Address, rplBond, nodeOpts))
+		},
+		func() (*eth.TransactionSubmission, error) {
+			return eth.CreateTxSubmissionFromInfo(odaoMgr.Join(nodeOpts))
+		},
+	}, false, nodeOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error joining oDAO: %w", err)
+	}
+
+	return node, nil
+}
+
+// Registers a new Rocket Pool node
+func RegisterNode(rp *rocketpool.RocketPool, accountAddress common.Address, accountOpts *bind.TransactOpts, timezone string) (*node.Node, error) {
+	// Create the node
+	node, err := node.NewNode(rp, accountAddress)
+	if err != nil {
+		return nil, fmt.Errorf("error creating node %s: %w", accountAddress.Hex(), err)
+	}
+
+	// Register the node
+	err = rp.CreateAndWaitForTransaction(func() (*eth.TransactionInfo, error) {
+		return node.Register(timezone, accountOpts)
+	}, true, accountOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error registering node %s: %w", accountAddress.Hex(), err)
+	}
+
+	return node, nil
 }
