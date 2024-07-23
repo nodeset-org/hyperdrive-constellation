@@ -24,16 +24,19 @@ import (
 type smartNodeServiceProvider struct {
 	csSp *constellationServiceProvider
 	cfg  *snconfig.SmartNodeConfig
-	res  *snconfig.RocketPoolResources
+	res  *snconfig.MergedResources
 }
 
-func newSmartNodeServiceProvider(csSp *constellationServiceProvider, hdCfg *hdconfig.HyperdriveConfig, csCfg *csconfig.ConstellationConfig, snRes *snconfig.RocketPoolResources) *smartNodeServiceProvider {
-	snCfg := createSmartNodeConfig(hdCfg, csCfg)
+func newSmartNodeServiceProvider(csSp *constellationServiceProvider, hdCfg *hdconfig.HyperdriveConfig, csCfg *csconfig.ConstellationConfig, snRes *snconfig.MergedResources) (*smartNodeServiceProvider, error) {
+	snCfg, err := createSmartNodeConfig(hdCfg, csCfg, snRes)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Smart Node config: %w", err)
+	}
 	return &smartNodeServiceProvider{
 		csSp: csSp,
 		cfg:  snCfg,
 		res:  snRes,
-	}
+	}, nil
 }
 
 // ============================
@@ -54,7 +57,7 @@ func (p *smartNodeServiceProvider) GetConfig() *snconfig.SmartNodeConfig {
 	return p.cfg
 }
 
-func (p *smartNodeServiceProvider) GetResources() *snconfig.RocketPoolResources {
+func (p *smartNodeServiceProvider) GetResources() *snconfig.MergedResources {
 	return p.res
 }
 
@@ -220,9 +223,30 @@ func (p *smartNodeServiceProvider) getWalletStatus() (wallet.WalletStatus, error
 }
 
 // This is a binding for the Smart Node's config that carries over as much as possible from the Hyperdrive and Constellation configs.
-func createSmartNodeConfig(hdCfg *hdconfig.HyperdriveConfig, csCfg *csconfig.ConstellationConfig) *snconfig.SmartNodeConfig {
+func createSmartNodeConfig(hdCfg *hdconfig.HyperdriveConfig, csCfg *csconfig.ConstellationConfig, res *snconfig.MergedResources) (*snconfig.SmartNodeConfig, error) {
+	// Get the network settings
 	network := hdCfg.Network.Value
-	snCfg := snconfig.NewSmartNodeConfig("", false)
+	var settings *config.NetworkSettings
+	for _, hdSettings := range hdCfg.GetNetworkSettings() {
+		if hdSettings.Key == network {
+			settings = hdSettings.NetworkSettings
+			break
+		}
+	}
+	if settings == nil {
+		return nil, fmt.Errorf("no network settings found for network [%s]", network)
+	}
+
+	// Make a new Smart Node config
+	snCfg, err := snconfig.NewSmartNodeConfigForNetwork("", false, []*snconfig.SmartNodeSettings{
+		{
+			NetworkSettings:    settings,
+			SmartNodeResources: res.SmartNodeResources,
+		},
+	}, network)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Smart Node config: %w", err)
+	}
 
 	// Root params
 	snCfg.Network.Value = network
@@ -249,5 +273,5 @@ func createSmartNodeConfig(hdCfg *hdconfig.HyperdriveConfig, csCfg *csconfig.Con
 
 	// Metrics
 	config.Clone(hdCfg.Metrics, snCfg.Metrics.MetricsConfig, network)
-	return snCfg
+	return snCfg, nil
 }

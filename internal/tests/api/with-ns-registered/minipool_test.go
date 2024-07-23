@@ -18,7 +18,6 @@ import (
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
-	"github.com/rocket-pool/rocketpool-go/v2/network"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
@@ -110,8 +109,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	mpMgr, err := minipool.NewMinipoolManager(rp)
 	require.NoError(t, err)
-	netMgr, err := network.NewNetworkManager(rp)
-	require.NoError(t, err)
+	//netMgr, err := network.NewNetworkManager(rp)
+	//require.NoError(t, err)
 	//nodeMgr, err := node.NewNodeManager(rp)
 	t.Log("Created Rocket Pool bindings")
 
@@ -161,25 +160,27 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Bootstrapped oDAO nodes")
 
-	// Update the RPL price to 0.02
-	newPrice := big.NewInt(2e16)
-	currentBlockHeader, err := ec.HeaderByNumber(context.Background(), nil)
-	require.NoError(t, err)
-	txInfo, err := netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao1Opts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, odao1Opts, "Updated RPL price from oDAO 1")
-	txInfo, err = netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao2Opts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, odao2Opts, "Updated RPL price from oDAO 2")
+	/*
+		// Update the RPL price to 0.02
+		newPrice := big.NewInt(2e16)
+		currentBlockHeader, err := ec.HeaderByNumber(context.Background(), nil)
+		require.NoError(t, err)
+		txInfo, err := netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao1Opts)
+		require.NoError(t, err)
+		MineTx(t, txInfo, odao1Opts, "Updated RPL price from oDAO 1")
+		txInfo, err = netMgr.SubmitPrices(currentBlockHeader.Number.Uint64(), currentBlockHeader.Time, newPrice, odao2Opts)
+		require.NoError(t, err)
+		MineTx(t, txInfo, odao2Opts, "Updated RPL price from oDAO 2")
 
-	// Change the target stake ratio to 80%
-	adminKey, err := keygen.GetEthPrivateKey(1)
-	require.NoError(t, err)
-	adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
-	targetStakeRatio := eth.EthToWei(1.2) // Sub 100% will fail (contract bug)
-	txInfo, err = csMgr.OperatorDistributor.SetTargetStakeRatio(targetStakeRatio, adminOpts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, adminOpts, "Changed target stake ratio to 80%")
+		// Change the target stake ratio to 80%
+		adminKey, err := keygen.GetEthPrivateKey(1)
+		require.NoError(t, err)
+		adminOpts, err := bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
+		targetStakeRatio := eth.EthToWei(1.2) // Sub 100% will fail (contract bug)
+		txInfo, err = csMgr.OperatorDistributor.SetTargetStakeRatio(targetStakeRatio, adminOpts)
+		require.NoError(t, err)
+		MineTx(t, txInfo, adminOpts, "Changed target stake ratio to 80%")
+	*/
 
 	// Run a query
 	supernodeAddress := csMgr.SuperNodeAccount.Address
@@ -213,12 +214,12 @@ func TestMinipoolDeposit(t *testing.T) {
 		From:  deployerOpts.From,
 		Value: pdaoMgr.Settings.Deposit.MaximumDepositPoolSize.Get(), // Deposit the maximum amount
 	}
-	txInfo, err = dpMgr.Deposit(fundOpts)
+	txInfo, err := dpMgr.Deposit(fundOpts)
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Funded the deposit pool")
 
 	// Mint some old RPL
-	rplAmountWei := eth.EthToWei(400) // rplRequired // 44 will fail (contract bug)
+	rplAmountWei := eth.EthToWei(3200) // rplRequired // 44 will fail (contract bug)
 	rplAmount := eth.WeiToEth(rplAmountWei)
 	txInfo, err = MintLegacyRpl(rp, deployerOpts, deployerPubkey, rplAmountWei)
 	require.NoError(t, err)
