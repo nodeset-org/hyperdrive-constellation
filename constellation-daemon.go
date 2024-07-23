@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"os/signal"
@@ -16,6 +18,7 @@ import (
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	"github.com/nodeset-org/hyperdrive-daemon/shared"
 	"github.com/nodeset-org/hyperdrive-daemon/shared/config"
+	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/urfave/cli/v2"
 )
 
@@ -54,6 +57,12 @@ func main() {
 		Usage:   "The URL of the Hyperdrive API",
 		Value:   "http://127.0.0.1:" + strconv.FormatUint(uint64(config.DefaultApiPort), 10),
 	}
+	settingsFolderFlag := &cli.StringFlag{
+		Name:     "settings-folder",
+		Aliases:  []string{"s"},
+		Usage:    "The path to the folder containing the network settings files",
+		Required: true,
+	}
 	ipFlag := &cli.StringFlag{
 		Name:    "ip",
 		Aliases: []string{"i"},
@@ -70,6 +79,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		moduleDirFlag,
 		hyperdriveUrlFlag,
+		settingsFolderFlag,
 		ipFlag,
 		portFlag,
 	}
@@ -82,15 +92,37 @@ func main() {
 			return fmt.Errorf("error parsing Hyperdrive URL [%s]: %w", hdUrlString, err)
 		}
 
+		// Get the settings file path
+		settingsFolder := c.String(settingsFolderFlag.Name)
+		if settingsFolder == "" {
+			fmt.Println("No settings folder provided.")
+			os.Exit(1)
+		}
+		_, err = os.Stat(settingsFolder)
+		if errors.Is(err, fs.ErrNotExist) {
+			fmt.Printf("Settings folder not found at [%s].", settingsFolder)
+			os.Exit(1)
+		}
+
+		// Load the network settings
+		settingsList, err := csconfig.LoadSettingsFiles(settingsFolder)
+		if err != nil {
+			fmt.Printf("Error loading network settings: %s", err)
+			os.Exit(1)
+		}
+
 		// Wait group to handle the API server (separate because of error handling)
 		stopWg := new(sync.WaitGroup)
 
 		// Create the service provider
-		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, csconfig.NewConstellationConfig, config.ClientTimeout)
+		configFactory := func(hdCfg *hdconfig.HyperdriveConfig) (*csconfig.ConstellationConfig, error) {
+			return csconfig.NewConstellationConfig(hdCfg, settingsList)
+		}
+		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, configFactory, config.ClientTimeout)
 		if err != nil {
 			return fmt.Errorf("error creating service provider: %w", err)
 		}
-		constellationSp, err := cscommon.NewConstellationServiceProvider(sp)
+		constellationSp, err := cscommon.NewConstellationServiceProvider(sp, settingsList)
 		if err != nil {
 			return fmt.Errorf("error creating Constellation service provider: %w", err)
 		}

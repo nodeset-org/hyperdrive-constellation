@@ -20,7 +20,7 @@ type RocketPoolManager struct {
 }
 
 // Creates a new RocketPoolManager instance
-func NewRocketPoolManager(res *csconfig.ConstellationResources, ec eth.IExecutionClient, qMgr *eth.QueryManager, txMgr *eth.TransactionManager) (*RocketPoolManager, error) {
+func NewRocketPoolManager(res *csconfig.MergedResources, ec eth.IExecutionClient, qMgr *eth.QueryManager, txMgr *eth.TransactionManager) (*RocketPoolManager, error) {
 	// Create the Rocket Pool binding
 	rp, err := rocketpool.NewRocketPool(ec, *res.RocketStorage, res.MulticallAddress, res.BalanceBatcherAddress)
 	if err != nil {

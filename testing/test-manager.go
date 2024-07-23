@@ -39,7 +39,7 @@ type ConstellationTestManager struct {
 // `csAddress` is the address to bind the Constellation daemon to.
 // `nsAddress` is the address to bind the nodeset.io mock server to.
 func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress string) (*ConstellationTestManager, error) {
-	tm, err := hdtesting.NewHyperdriveTestManagerWithDefaults(hdAddress, nsAddress)
+	tm, err := hdtesting.NewHyperdriveTestManagerWithDefaults(hdAddress, nsAddress, provisionNetworkSettings)
 	if err != nil {
 		return nil, fmt.Errorf("error creating test manager: %w", err)
 	}
@@ -50,8 +50,12 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	hdClient := tm.GetApiClient()
 
 	// Make Constellation resources
-	csResources, snResources := GetTestResources(hdSp.GetResources())
-	csCfg := csconfig.NewConstellationConfig(hdCfg)
+	csResources, snResources := getTestResources(hdSp.GetResources())
+	csCfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
+	if err != nil {
+		closeTestManager(tm)
+		return nil, fmt.Errorf("error creating Constellation config: %v", err)
+	}
 
 	// Make the module directory
 	moduleDir := filepath.Join(hdCfg.UserDataPath.Value, hdconfig.ModulesName, csconfig.ModuleName)
