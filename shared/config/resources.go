@@ -47,14 +47,14 @@ type ConstellationResources struct {
 	*hdconfig.HyperdriveResources
 
 	// The Constellation directory contract address, which houses all of the other contract addresses
-	Directory *common.Address
+	Directory *common.Address `yaml:"directory" json:"directory"`
 
 	// Address of the RocketStorage contract, the master contract for all of Rocket Pool
-	RocketStorage *common.Address
+	RocketStorage *common.Address `yaml:"rocketStorage" json:"rocketStorage"`
 
 	// The fee recipient to use for the Constellation VC. This must ALWAYS be set to the Rocket Pool Smoothing Pool contract address.
 	// Technically this should come from Directory (or RocketStorage within Directory) but it needs to be set here for templating to use it.
-	FeeRecipient *common.Address
+	FeeRecipient *common.Address `yaml:"feeRecipient" json:"feeRecipient"`
 }
 
 // A merged set of general resources and Constellation-specific resources for the selected network

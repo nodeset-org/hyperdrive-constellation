@@ -7,6 +7,7 @@ import (
 
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
+	"github.com/rocket-pool/node-manager-core/config"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	snservices "github.com/rocket-pool/smartnode/v2/rocketpool-daemon/common/services"
 	snconfig "github.com/rocket-pool/smartnode/v2/shared/config"
@@ -97,30 +98,43 @@ func NewConstellationServiceProvider(sp services.IModuleServiceProvider, setting
 	hdRes := sp.GetHyperdriveResources()
 
 	// Get the resources from the selected network
-	var selectedResources *csconfig.MergedResources
-	var snResources *snconfig.RocketPoolResources
+	var hdResources *csconfig.MergedResources
+	var snResources *snconfig.MergedResources
 	for _, network := range settingsList {
-		if network.Key == hdCfg.Network.Value {
-			selectedResources = &csconfig.MergedResources{
-				MergedResources:        hdRes,
-				ConstellationResources: network.ConstellationResources,
-			}
-			snResources = snconfig.NewRocketPoolResources(network.Key)
-			break
+		if network.Key != hdCfg.Network.Value {
+			continue
 		}
+		hdResources = &csconfig.MergedResources{
+			MergedResources:        hdRes,
+			ConstellationResources: network.ConstellationResources,
+		}
+		// TODO: this is fragile, no guarantee it stays updated
+		snResourceMap := map[string]*snconfig.SmartNodeResources{
+			config.MainnetResourcesReference.EthNetworkName: snconfig.MainnetResourcesReference,
+			config.HoleskyResourcesReference.EthNetworkName: snconfig.HoleskyResourcesReference,
+		}
+		selectedSnResources, exists := snResourceMap[hdCfg.GetEthNetworkName()]
+		if !exists {
+			return nil, fmt.Errorf("no smart node resources found for selected network [%s]", hdCfg.Network.Value)
+		}
+		snResources = &snconfig.MergedResources{
+			NetworkResources:   hdRes.NetworkResources,
+			SmartNodeResources: selectedSnResources,
+		}
+		break
 	}
-	if selectedResources == nil {
+	if hdResources == nil {
 		return nil, fmt.Errorf("no stakewise resources found for selected network [%s]", hdCfg.Network.Value)
 	}
 	if snResources == nil {
 		return nil, fmt.Errorf("no smart node resources found for selected network [%s]", hdCfg.Network.Value)
 	}
 
-	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, selectedResources, snResources)
+	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, hdResources, snResources)
 }
 
 // Create a new service provider with Constellation daemon-specific features, using custom services instead of loading them from the module service provider.
-func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.MergedResources, snresources *snconfig.RocketPoolResources) (IConstellationServiceProvider, error) {
+func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.MergedResources, snresources *snconfig.MergedResources) (IConstellationServiceProvider, error) {
 	// Create the Constellation manager
 	csMgr, err := NewConstellationManager(csresources.ConstellationResources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
 	if err != nil {
@@ -150,7 +164,10 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 	}
 
 	// Create the Smart Node service provider
-	snSp := newSmartNodeServiceProvider(constellationSp, sp.GetHyperdriveConfig(), cfg, snresources)
+	snSp, err := newSmartNodeServiceProvider(constellationSp, sp.GetHyperdriveConfig(), cfg, snresources)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Smart Node service provider: %w", err)
+	}
 	constellationSp.snSp = snSp
 	return constellationSp, nil
 }

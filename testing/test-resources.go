@@ -23,10 +23,16 @@ const (
 
 	// Address of the RPL token
 	RplAddress string = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+
+	// Multicall address
+	MulticallAddress string = "0x05Aa229Aec102f78CE0E852A812a388F076Aa555"
+
+	// Balance batcher address
+	BalanceBatcherAddressString string = "0x0b48aF34f4c854F5ae1A3D587da471FeA45bAD52"
 )
 
 // GetTestResources returns a new ConstellationResources instance with test network values
-func GetTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedResources, *snconfig.RocketPoolResources) {
+func getTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedResources, *snconfig.MergedResources) {
 	csRes := &csconfig.MergedResources{
 		MergedResources: hdResources,
 		ConstellationResources: &csconfig.ConstellationResources{
@@ -35,11 +41,20 @@ func GetTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedRe
 			FeeRecipient:  config.HexToAddressPtr(SmoothingPoolAddress),
 		},
 	}
-	snRes := &snconfig.RocketPoolResources{
+	snRes := &snconfig.MergedResources{
 		NetworkResources: hdResources.NetworkResources,
-		StorageAddress:   common.HexToAddress(RocketStorageAddress),
-		RethAddress:      common.HexToAddress(RethAddress),
-		RplTokenAddress:  common.HexToAddress(RplAddress),
+		SmartNodeResources: &snconfig.SmartNodeResources{
+			StorageAddress:  common.HexToAddress(RocketStorageAddress),
+			RethAddress:     common.HexToAddress(RethAddress),
+			RplTokenAddress: common.HexToAddress(RplAddress),
+		},
 	}
 	return csRes, snRes
+}
+
+// Provisions a NetworkSettings instance with updated addresses
+func provisionNetworkSettings(networkSettings *config.NetworkSettings) *config.NetworkSettings {
+	networkSettings.NetworkResources.MulticallAddress = common.HexToAddress(MulticallAddress)
+	networkSettings.NetworkResources.BalanceBatcherAddress = common.HexToAddress(BalanceBatcherAddressString)
+	return networkSettings
 }
