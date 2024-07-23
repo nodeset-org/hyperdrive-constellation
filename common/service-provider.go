@@ -98,13 +98,13 @@ func NewConstellationServiceProvider(sp services.IModuleServiceProvider, setting
 	hdRes := sp.GetHyperdriveResources()
 
 	// Get the resources from the selected network
-	var hdResources *csconfig.MergedResources
+	var csResources *csconfig.MergedResources
 	var snResources *snconfig.MergedResources
 	for _, network := range settingsList {
 		if network.Key != hdCfg.Network.Value {
 			continue
 		}
-		hdResources = &csconfig.MergedResources{
+		csResources = &csconfig.MergedResources{
 			MergedResources:        hdRes,
 			ConstellationResources: network.ConstellationResources,
 		}
@@ -123,14 +123,14 @@ func NewConstellationServiceProvider(sp services.IModuleServiceProvider, setting
 		}
 		break
 	}
-	if hdResources == nil {
-		return nil, fmt.Errorf("no stakewise resources found for selected network [%s]", hdCfg.Network.Value)
+	if csResources == nil {
+		return nil, fmt.Errorf("no constellation resources found for selected network [%s]", hdCfg.Network.Value)
 	}
 	if snResources == nil {
 		return nil, fmt.Errorf("no smart node resources found for selected network [%s]", hdCfg.Network.Value)
 	}
 
-	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, hdResources, snResources)
+	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, csResources, snResources)
 }
 
 // Create a new service provider with Constellation daemon-specific features, using custom services instead of loading them from the module service provider.

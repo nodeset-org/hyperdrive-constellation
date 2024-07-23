@@ -1,5 +1,5 @@
 package shared
 
 const (
-	ConstellationVersion string = "0.0.1-dev"
+	ConstellationVersion string = "0.1.0-dev"
 )
