@@ -427,8 +427,20 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Log("Minipool is in staking")
 
 	// Send WETH to the YieldDistributor
-	txInfo, err = weth.Transfer(csMgr.YieldDistributor.Address, common.Big1, deployerOpts)
+
+	// Mint some WETH
+	//ethAmount := eth.WeiToEth(ethAmountWei)
+	wethOpts = &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: big.NewInt(0).Set(eth.EthToWei(10)),
+	}
+	txInfo, err = weth.Deposit(wethOpts)
 	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Minted WETH")
+
+	txInfo, err = weth.Transfer(csMgr.YieldDistributor.Address, big.NewInt(0).Set(eth.EthToWei(10)), deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Sent WETH to the YieldDistributor")
 
 	// Fast forward time
 	slotsToAdvance = 12 * 60 * 60 / 12 // 1 hour
@@ -436,12 +448,34 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
+	// Get wrapped ETH balance of node pub key before harvest
+	var wethBalanceNodeBefore *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodePubkey)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
 	// Make a harvest TX for the minipool
 	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodePubkey, common.Big0, common.Big0, deployerOpts)
 	require.NoError(t, err)
 	require.NotNil(t, harvestTxInfo)
 	MineTx(t, harvestTxInfo, deployerOpts, "Harvested minipool")
 
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined stake tx")
+
+	// Get wrapped ETH balance of node pub key after harvest
+	var wethBalanceNodeAfter *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceNodeAfter, nodePubkey)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
 }
 
 // Mint old RPL for unit testing
