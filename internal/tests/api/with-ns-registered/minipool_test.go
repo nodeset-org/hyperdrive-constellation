@@ -85,11 +85,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	deployerOpts, err := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
 	require.NoError(t, err)
 
-	// Get the node address
-	nodeKey, err := keygen.GetEthPrivateKey(4)
-	require.NoError(t, err)
-	nodePubkey := crypto.PubkeyToAddress(nodeKey.PublicKey)
-
 	// Set up the services
 	sp := testMgr.GetConstellationServiceProvider()
 	ec := sp.GetEthClient()
@@ -426,8 +421,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.Equal(t, types.MinipoolStatus_Staking, mp.Common().Status.Formatted())
 	t.Log("Minipool is in staking")
 
-	// Send WETH to the YieldDistributor
-
 	// Mint some WETH
 	//ethAmount := eth.WeiToEth(ethAmountWei)
 	wethOpts = &bind.TransactOpts{
@@ -443,10 +436,41 @@ func TestMinipoolDeposit(t *testing.T) {
 	MineTx(t, txInfo, deployerOpts, "Sent WETH to the YieldDistributor")
 
 	// Fast forward time
-	slotsToAdvance = 12 * 60 * 60 / 12 // 1 hour
+	slotsToAdvance = 1200 * 60 * 60 / 12 // 1 hour
 	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
+
+	var wethBalanceYieldDistributorBefore *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, csMgr.YieldDistributor.Address)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	sendEthTx := eth.TransactionInfo{To: csMgr.YieldDistributor.Address, Value: eth.EthToWei(1)}
+	sendEthTx.SimulationResult.IsSimulated = true
+	sendEthOpts, _ := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
+	sendEthOpts.Value = eth.EthToWei(1)
+	MineTx(t, &sendEthTx, sendEthOpts, "Sent ETH to the YieldDistributor")
+
+	// Mine the tx
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+
+	var wethBalanceYieldDistributorAfter *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceYieldDistributorAfter, csMgr.YieldDistributor.Address)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, wethBalanceYieldDistributorAfter.Cmp(wethBalanceYieldDistributorBefore))
+
+	// Get the node address
+	nodeKey, err := keygen.GetEthPrivateKey(4)
+	require.NoError(t, err)
+	nodePubkey := crypto.PubkeyToAddress(nodeKey.PublicKey)
 
 	// Get wrapped ETH balance of node pub key before harvest
 	var wethBalanceNodeBefore *big.Int
@@ -457,15 +481,10 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make a harvest TX for the minipool
-	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodePubkey, common.Big0, common.Big0, deployerOpts)
+	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodePubkey, common.Big0, common.Big1, deployerOpts)
 	require.NoError(t, err)
 	require.NotNil(t, harvestTxInfo)
 	MineTx(t, harvestTxInfo, deployerOpts, "Harvested minipool")
-
-	// Mine the tx
-	err = testMgr.CommitBlock()
-	require.NoError(t, err)
-	t.Log("Mined stake tx")
 
 	// Get wrapped ETH balance of node pub key after harvest
 	var wethBalanceNodeAfter *big.Int
