@@ -421,22 +421,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.Equal(t, types.MinipoolStatus_Staking, mp.Common().Status.Formatted())
 	t.Log("Minipool is in staking")
 
-	// Mint some WETH
-	//ethAmount := eth.WeiToEth(ethAmountWei)
-	wethOpts = &bind.TransactOpts{
-		From:  deployerOpts.From,
-		Value: big.NewInt(0).Set(eth.EthToWei(10)),
-	}
-	txInfo, err = weth.Deposit(wethOpts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Minted WETH")
-
-	txInfo, err = weth.Transfer(csMgr.YieldDistributor.Address, big.NewInt(0).Set(eth.EthToWei(10)), deployerOpts)
-	require.NoError(t, err)
-	MineTx(t, txInfo, deployerOpts, "Sent WETH to the YieldDistributor")
-
 	// Fast forward time
-	slotsToAdvance = 1200 * 60 * 60 / 12 // 1 hour
+	slotsToAdvance = 1200 * 60 * 60 / 12
 	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
@@ -448,6 +434,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
+	// Send ETH to YieldDistributor to trigger finalizeInterval
 	sendEthTx := eth.TransactionInfo{To: csMgr.YieldDistributor.Address, Value: eth.EthToWei(1)}
 	sendEthTx.SimulationResult.IsSimulated = true
 	sendEthOpts, _ := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))

@@ -82,8 +82,3 @@ func (c *Weth) Approve(spender common.Address, amount *big.Int, opts *bind.Trans
 func (c *Weth) Deposit(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "deposit", opts)
 }
-
-// Transfer an amount of wETH to another address
-func (c *Weth) Transfer(to common.Address, amount *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "transfer", opts, to, amount)
-}

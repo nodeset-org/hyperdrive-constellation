@@ -71,7 +71,3 @@ func (c *YieldDistributor) CurrentInterval(mc *batch.MultiCaller, out **big.Int)
 func (c *YieldDistributor) Harvest(_rewardee common.Address, _startInterval *big.Int, _endInterval *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "harvest", opts, _rewardee, _startInterval, _endInterval)
 }
-
-func (c *YieldDistributor) FinalizeInterval(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "finalizeInterval", opts)
-}
