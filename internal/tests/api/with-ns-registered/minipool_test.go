@@ -85,6 +85,11 @@ func TestMinipoolDeposit(t *testing.T) {
 	deployerOpts, err := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
 	require.NoError(t, err)
 
+	// Get the node address
+	nodeKey, err := keygen.GetEthPrivateKey(4)
+	require.NoError(t, err)
+	nodePubkey := crypto.PubkeyToAddress(nodeKey.PublicKey)
+
 	// Set up the services
 	sp := testMgr.GetConstellationServiceProvider()
 	ec := sp.GetEthClient()
@@ -432,7 +437,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
 	// Make a harvest TX for the minipool
-	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(mpAddress, common.Big0, common.Big0, deployerOpts)
+	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodePubkey, common.Big0, common.Big0, deployerOpts)
 	require.NoError(t, err)
 	require.NotNil(t, harvestTxInfo)
 	MineTx(t, harvestTxInfo, deployerOpts, "Harvested minipool")
