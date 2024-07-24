@@ -185,7 +185,7 @@ func (c *minipoolStakeMinipoolContext) PrepareData(data *csapi.MinipoolStakeMini
 	}
 	validatorPubkey := mp.Common().Pubkey.Get()
 	w := sp.GetWallet()
-	validatorKey, err := w.GetPrivateKeyForPubkey(validatorPubkey)
+	validatorKey, err := w.LoadValidatorKey(validatorPubkey)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting private key for pubkey %s: %w", validatorPubkey.Hex(), err)
 	}

@@ -79,6 +79,10 @@ func (c *SuperNodeAccount) HasSufficientLiquidity(mc *batch.MultiCaller, out *bo
 	eth.AddCallToMulticaller(mc, c.contract, out, "hasSufficientLiquidity", bondAmount)
 }
 
+func (c *SuperNodeAccount) TotalEthStaking(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "totalEthStaking")
+}
+
 // ====================
 // === Transactions ===
 // ====================

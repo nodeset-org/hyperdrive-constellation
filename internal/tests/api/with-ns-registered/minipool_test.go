@@ -278,7 +278,14 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.Equal(t, 0, ethAmountWei.Cmp(wethBalance))
 	t.Logf("Deployer's WETH balance is now %.6f (%s wei)", eth.WeiToEth(wethBalance), wethBalance.String())
 
+	// Send ETH to the WETHVault to fix the stuckness
+	fixAmount := eth.EthToWei(70)
+	txInfo, err = weth.Transfer(wethVaultAddress, fixAmount, deployerOpts)
+	require.NoError(t, err)
+	MineTx(t, txInfo, deployerOpts, "Sent WETH to WETHVault")
+
 	// Deposit WETH into the WETH vault
+	ethAmountWei.Sub(ethAmountWei, fixAmount)
 	txInfo, err = weth.Approve(wethVaultAddress, ethAmountWei, deployerOpts)
 	require.NoError(t, err)
 	MineTx(t, txInfo, deployerOpts, "Approved WETH for deposit")
@@ -347,9 +354,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	salt := big.NewInt(0x90de5e7)
 	depositResponse, err := cs.Minipool.Deposit(salt)
 	require.NoError(t, err)
-	require.False(t, depositResponse.Data.InsufficientLiquidity)
-	require.False(t, depositResponse.Data.InsufficientMinipoolCount)
-	require.False(t, depositResponse.Data.NotWhitelisted)
+	require.True(t, depositResponse.Data.CanDeposit)
 	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
 	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
 

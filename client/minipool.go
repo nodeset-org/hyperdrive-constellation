@@ -46,11 +46,11 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 }
 
 // Deposit minipool
-func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositMinipoolData], error) {
+func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositData], error) {
 	args := map[string]string{
 		"salt": salt.String(),
 	}
-	return client.SendGetRequest[csapi.MinipoolDepositMinipoolData](r, "deposit-minipool", "DepositMinipool", args)
+	return client.SendGetRequest[csapi.MinipoolDepositData](r, "deposit-minipool", "DepositMinipool", args)
 }
 
 // Stake minipool
