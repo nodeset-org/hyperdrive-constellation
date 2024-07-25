@@ -429,10 +429,8 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
 	var wethBalanceYieldDistributorBefore *big.Int
-	var wethBalanceTreasuryBefore *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, csMgr.YieldDistributor.Address)
-		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -453,16 +451,13 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	var wethBalanceYieldDistributorAfter *big.Int
-	var wethBalanceTreasuryAfter *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceYieldDistributorAfter, csMgr.YieldDistributor.Address)
-		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, wethBalanceYieldDistributorAfter.Cmp(wethBalanceYieldDistributorBefore))
-	// require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 
 	// Get the node address
 	nodeKey, err := keygen.GetEthPrivateKey(4)
@@ -471,8 +466,11 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	// Get wrapped ETH balance of node pub key before harvest
 	var wethBalanceNodeBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
+
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodePubkey)
+		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -485,13 +483,17 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	// Get wrapped ETH balance of node pub key after harvest
 	var wethBalanceNodeAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
+
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceNodeAfter, nodePubkey)
+		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 }
 
 // Mint old RPL for unit testing
