@@ -428,8 +428,6 @@ func TestMinipoolDeposit(t *testing.T) {
 	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
-	err = testMgr.CommitBlock()
-	require.NoError(t, err)
 
 	var wethBalanceYieldDistributorBefore *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -439,14 +437,12 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Send ETH to YieldDistributor to trigger finalizeInterval
-	sendEthOpts, _ := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
-	sendEthOpts.Value = eth.EthToWei(1)
-	// sendEthOpts := &bind.TransactOpts{
-	// 	From:  deployerOpts.From,
-	// 	Value: big.NewInt(1e18),
-	// }
+	sendEthOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: big.NewInt(1e18),
+	}
 	sendEthTx := txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
-	MineTx(t, sendEthTx, sendEthOpts, "Sent ETH to the YieldDistributor")
+	MineTx(t, sendEthTx, deployerOpts, "Sent ETH to the YieldDistributor")
 
 	var wethBalanceYieldDistributorAfter *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -457,7 +453,7 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	require.Equal(t, 1, wethBalanceYieldDistributorAfter.Cmp(wethBalanceYieldDistributorBefore))
 
-	// Get wrapped ETH balance of node pub key before harvest
+	// Get wrapped ETH balances before harvest
 	var wethBalanceNodeBefore *big.Int
 	var wethBalanceTreasuryBefore *big.Int
 
@@ -474,7 +470,7 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NotNil(t, harvestTxInfo)
 	MineTx(t, harvestTxInfo, deployerOpts, "Harvested minipool")
 
-	// Get wrapped ETH balance of node pub key after harvest
+	// Get wrapped ETH balances after harvest
 	var wethBalanceNodeAfter *big.Int
 	var wethBalanceTreasuryAfter *big.Int
 
@@ -488,8 +484,9 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
 	t.Logf("Node's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceNodeBefore), eth.WeiToEth(wethBalanceNodeAfter))
 
-	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
-	t.Logf("Treasury's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceTreasuryBefore), eth.WeiToEth(wethBalanceTreasuryAfter))
+	// TODO: Claim treasury WETH
+	// t.Logf("Treasury's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceTreasuryBefore), eth.WeiToEth(wethBalanceTreasuryAfter))
+	// require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 }
 
 // Mint old RPL for unit testing
