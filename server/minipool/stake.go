@@ -1,51 +1,57 @@
 package csminipool
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math/big"
 	"net/url"
+	"time"
 
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
+	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/gorilla/mux"
-	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
-	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	batch "github.com/rocket-pool/batch-query"
-	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
+	"github.com/rocket-pool/node-manager-core/beacon"
+	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
-	"github.com/rocket-pool/node-manager-core/utils/input"
 	"github.com/rocket-pool/node-manager-core/wallet"
 
+	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
+	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
 )
 
 // ===============
 // === Factory ===
 // ===============
 
-type minipoolStakeMinipoolContextFactory struct {
+type minipoolStakeContextFactory struct {
 	handler *MinipoolHandler
 }
 
-func (f *minipoolStakeMinipoolContextFactory) Create(args url.Values) (*minipoolStakeMinipoolContext, error) {
-	c := &minipoolStakeMinipoolContext{
-		handler: f.handler,
+func (f *minipoolStakeContextFactory) Create(args url.Values) (*MinipoolStakeContext, error) {
+	c := &MinipoolStakeContext{
+		ServiceProvider: f.handler.serviceProvider,
+		Logger:          f.handler.logger.Logger,
+		Context:         f.handler.ctx,
 	}
-	inputErrs := []error{
-		nmcserver.ValidateArg("minipoolAddress", args, input.ValidateAddress, &c.minipoolAddress),
-	}
+	inputErrs := []error{}
 	return c, errors.Join(inputErrs...)
 }
 
-func (f *minipoolStakeMinipoolContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterSingleStageRoute[*minipoolStakeMinipoolContext, csapi.MinipoolStakeMinipoolData](
-		router, "stake", f, f.handler.logger.Logger, f.handler.serviceProvider,
+func (f *minipoolStakeContextFactory) RegisterRoute(router *mux.Router) {
+	RegisterMinipoolRoute[*MinipoolStakeContext, csapi.MinipoolStakeData](
+		router, "stake", f, f.handler.ctx, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -53,160 +59,170 @@ func (f *minipoolStakeMinipoolContextFactory) RegisterRoute(router *mux.Router) 
 // === Context ===
 // ===============
 
-type minipoolStakeMinipoolContext struct {
-	handler *MinipoolHandler
+type MinipoolStakeContext struct {
+	// Dependencies
+	ServiceProvider cscommon.IConstellationServiceProvider
+	Logger          *slog.Logger
+	Context         context.Context
 
-	rpSuperNodeBinding *node.Node
-	minipoolAddress    common.Address
-	nodeAddress        common.Address
+	// Services
+	nodeAddress common.Address
+	res         *csconfig.MergedResources
+	wallet      *cscommon.Wallet
+	rpMgr       *cscommon.RocketPoolManager
+	csMgr       *cscommon.ConstellationManager
+	odaoMgr     *oracle.OracleDaoManager
+	mpMgr       *minipool.MinipoolManager
 
-	rpMgr *cscommon.RocketPoolManager
-	csMgr *cscommon.ConstellationManager
+	// On-chain vars
+	isWhitelisted  bool
+	currentTime    time.Time
+	scrubPeriod    time.Duration
+	stakeValueGwei uint64
 }
 
-func (c *minipoolStakeMinipoolContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
-	sp := c.handler.serviceProvider
+func (c *MinipoolStakeContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
+	sp := c.ServiceProvider
 	c.rpMgr = sp.GetRocketPoolManager()
 	c.csMgr = sp.GetConstellationManager()
-	ctx := c.handler.ctx
+	c.res = sp.GetResources()
+	c.wallet = sp.GetWallet()
 
-	// Requirements
-	err := sp.RequireWalletReady(walletStatus)
+	// Bindings
+	var err error
+	c.odaoMgr, err = oracle.NewOracleDaoManager(c.rpMgr.RocketPool)
 	if err != nil {
-		return types.ResponseStatus_WalletNotReady, err
+		return types.ResponseStatus_Error, fmt.Errorf("error creating oDAO manager binding: %w", err)
 	}
-
-	err = sp.RequireEthClientSynced(ctx)
+	c.mpMgr, err = minipool.NewMinipoolManager(c.rpMgr.RocketPool)
 	if err != nil {
-		if errors.Is(err, services.ErrExecutionClientNotSynced) {
-			return types.ResponseStatus_ClientsNotSynced, err
-		}
-		return types.ResponseStatus_Error, err
-	}
-
-	err = sp.RequireBeaconClientSynced(ctx)
-	if err != nil {
-		if errors.Is(err, services.ErrBeaconNodeNotSynced) {
-			return types.ResponseStatus_ClientsNotSynced, err
-		}
-		return types.ResponseStatus_Error, err
-	}
-
-	// Refresh RP
-	err = c.rpMgr.RefreshRocketPoolContracts()
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error refreshing Rocket Pool contracts: %w", err)
-	}
-
-	// Refresh constellation contracts
-	err = c.csMgr.LoadContracts()
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error loading Constellation contracts: %w", err)
-	}
-
-	// Create the bindings
-	superNodeAddress := c.csMgr.SuperNodeAccount.Address
-	c.rpSuperNodeBinding, err = node.NewNode(c.rpMgr.RocketPool, superNodeAddress)
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error creating node %s binding: %w", superNodeAddress.Hex(), err)
+		return types.ResponseStatus_Error, fmt.Errorf("error creating minipool manager binding: %w", err)
 	}
 
 	c.nodeAddress = walletStatus.Wallet.WalletAddress
-
 	return types.ResponseStatus_Success, nil
 }
 
-func (c *minipoolStakeMinipoolContext) GetState(mc *batch.MultiCaller) {
-	/*
-		c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.expectedMinipoolAddress, c.salt)
-		c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &c.hasSufficientLiquidity, eth.EthToWei(8))
-		c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
-	*/
+func (c *MinipoolStakeContext) GetState(node *node.Node, mc *batch.MultiCaller) {
+	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
+	eth.AddQueryablesToMulticall(mc,
+		c.odaoMgr.Settings.Minipool.ScrubPeriod,
+		c.mpMgr.StakeValue,
+	)
 }
 
-func (c *minipoolStakeMinipoolContext) PrepareData(data *csapi.MinipoolStakeMinipoolData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
-	sp := c.handler.serviceProvider
-	//hd := sp.GetHyperdriveClient()
-	resources := sp.GetResources()
-
-	/*
-		// Validations
-		if !c.isWhitelisted {
-			data.NotWhitelisted = true
-			return types.ResponseStatus_Success, nil
-		}
-
-		// TODO: Implement our own InsufficientLiquidity check
-		//      1. [CONST] Is there enough WETH in the Constellation WETH vault to cover bond?
-		// 		2. [RP] Is there enough RPL staked to cover creating minipool?
-
-		// if !c.hasSufficientLiquidity {
-		// 	data.InsufficientLiquidity = true
-		// 	return types.ResponseStatus_Success, nil
-		// }
-
-		availableResponse, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
-		if err != nil {
-			return types.ResponseStatus_Error, fmt.Errorf("error getting available minipool count: %w", err)
-		}
-		if availableResponse.Data.Count < 1 {
-			data.InsufficientMinipoolCount = true
-			return types.ResponseStatus_Success, nil
-		}
-
-		response, err := hd.NodeSet_Constellation.GetDepositSignature(c.expectedMinipoolAddress, c.salt)
-		if err != nil {
-			return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
-		}
-
-		w, err := cscommon.NewWallet(sp)
-		if err != nil {
-			return types.ResponseStatus_Error, fmt.Errorf("error creating wallet: %w", err)
-		}
-		validatorKey, err := w.GenerateNewValidatorKey()
-		if err != nil {
-			return types.ResponseStatus_Error, fmt.Errorf("error generating new validator key: %w", err)
-		}
-
-	*/
-
-	mpMgr, err := minipool.NewMinipoolManager(c.rpMgr.RocketPool)
-	if err != nil {
-		return types.ResponseStatus_Error, err
+func (c *MinipoolStakeContext) CheckState(node *node.Node, data *csapi.MinipoolStakeData) bool {
+	if !c.isWhitelisted {
+		data.NotWhitelistedWithConstellation = true
+		return false
 	}
-	mp, err := mpMgr.CreateMinipoolFromAddress(c.minipoolAddress, false, nil)
-	if err != nil {
-		return types.ResponseStatus_Error, err
-	}
+	return true
+}
 
-	err = sp.GetQueryManager().Query(nil, nil, mp.Common().Pubkey)
-	if err != nil {
-		return types.ResponseStatus_Error, err
+func (c *MinipoolStakeContext) GetMinipoolDetails(mc *batch.MultiCaller, mp minipool.IMinipool, index int) {
+	mpCommon := mp.Common()
+	eth.AddQueryablesToMulticall(mc,
+		mpCommon.Exists,
+		mpCommon.Status,
+		mpCommon.StatusTime,
+		mpCommon.NodeAddress,
+		mpCommon.Pubkey,
+		mpCommon.WithdrawalCredentials,
+	)
+}
+
+func (c *MinipoolStakeContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolStakeData, blockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+	// Prep some data
+	c.currentTime = time.Unix(int64(blockHeader.Time), 0)
+	c.scrubPeriod = c.odaoMgr.Settings.Minipool.ScrubPeriod.Formatted()
+	stakeValueWei := c.mpMgr.StakeValue.Get()
+	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei)
+	c.stakeValueGwei = stakeValueGwei.Uint64()
+
+	// Process each minipool
+	for _, mp := range mps {
+		details, err := c.getMinipoolStakeDetails(mp, opts)
+		if err != nil {
+			return types.ResponseStatus_Error, fmt.Errorf("error getting stake details for minipool [%s]: %w", mp.Common().Address.Hex(), err)
+		}
+		if details != nil {
+			c.Logger.Debug("Added minipool stake details",
+				"address", details.Address.Hex(),
+				"canStake", details.CanStake,
+			)
+			data.Details = append(data.Details, *details)
+		}
 	}
-	validatorPubkey := mp.Common().Pubkey.Get()
-	w := sp.GetWallet()
-	validatorKey, err := w.LoadValidatorKey(validatorPubkey)
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error getting private key for pubkey %s: %w", validatorPubkey.Hex(), err)
+	return types.ResponseStatus_Success, nil
+}
+
+func (c *MinipoolStakeContext) getMinipoolStakeDetails(mp minipool.IMinipool, opts *bind.TransactOpts) (*csapi.MinipoolStakeDetails, error) {
+	mpCommon := mp.Common()
+	if !mpCommon.Exists.Get() {
+		// Should never happen, indicates a problem with Constellation where it's returning minipool addresses for the
+		// subnode operator that aren't actually registered with Rocket Pool
+		c.Logger.Warn("Attempted a stake check on a minipool that is not part of Rocket Pool",
+			"address", mpCommon.Address.Hex(),
+			"pubkey", mpCommon.Pubkey.Get(),
+		)
+		return nil, nil
 	}
 
-	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(c.minipoolAddress)
+	// Prepare the details
+	mpDetails := csapi.MinipoolStakeDetails{
+		Address: mpCommon.Address,
+		Pubkey:  mpCommon.Pubkey.Get(),
+	}
+
+	// Make sure it's in prelaunch
+	mpStatus := mpCommon.Status.Formatted()
+	if mpStatus != rptypes.MinipoolStatus_Prelaunch {
+		c.Logger.Debug("Ignoring stake check on minipool",
+			"address", mpCommon.Address.Hex(),
+			"state", mpStatus,
+		)
+		return nil, nil
+	}
+
+	// Check if enough time has passed for it to be stakeable
+	creationTime := mpCommon.StatusTime.Formatted()
+	remainingTime := creationTime.Add(c.scrubPeriod).Sub(c.currentTime)
+	if remainingTime > 0 {
+		mpDetails.RemainingTime = remainingTime
+		mpDetails.StillInScrubPeriod = true
+	}
+	mpDetails.CanStake = !(mpDetails.StillInScrubPeriod)
+	if !mpDetails.CanStake {
+		return &mpDetails, nil
+	}
+
+	// Load the private key
+	pubkey := mpCommon.Pubkey.Get()
+	validatorPrivateKey, err := c.wallet.LoadValidatorKey(pubkey)
+	if err != nil {
+		return nil, fmt.Errorf("error getting validator %s (minipool %s) key: %w", pubkey.Hex(), mpCommon.Address.Hex(), err)
+	}
+
+	// Make the deposit data
+	withdrawalCredentials := mpCommon.WithdrawalCredentials.Get()
 	depositData, err := validator.GetDepositData(
-		validatorKey,
+		validatorPrivateKey,
 		withdrawalCredentials,
-		resources.GenesisForkVersion,
-		31e9, // TODO: Get this the right way by calling the RP contracts or something instead of hardcoding
-		resources.EthNetworkName,
+		c.res.GenesisForkVersion,
+		c.stakeValueGwei,
+		c.res.EthNetworkName,
 	)
 	if err != nil {
-		return types.ResponseStatus_Error, err
+		return nil, fmt.Errorf("error getting deposit data for validator %s: %w", pubkey.Hex(), err)
 	}
 
+	// Make the stake TX
+	signature := beacon.ValidatorSignature(depositData.Signature)
 	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
-
-	data.TxInfo, err = c.csMgr.SuperNodeAccount.Stake(depositData.Signature, depositDataRoot, c.minipoolAddress, opts)
+	txInfo, err := c.csMgr.SuperNodeAccount.Stake(signature, depositDataRoot, mpCommon.Address, opts)
 	if err != nil {
-		return types.ResponseStatus_Error, err
+		return nil, fmt.Errorf("error creating stake transaction for minipool %s: %w", mpCommon.Address.Hex(), err)
 	}
-	return types.ResponseStatus_Success, nil
+	mpDetails.TxInfo = txInfo
+	return &mpDetails, nil
 }

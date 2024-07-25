@@ -36,9 +36,16 @@ type MinipoolDepositData struct {
 	TxInfo                          *eth.TransactionInfo   `json:"txInfo"`
 }
 
-type MinipoolStakeMinipoolData struct {
-	TxInfo                    *eth.TransactionInfo `json:"txInfo"`
-	InsufficientLiquidity     bool                 `json:"insufficientLiquidity"`
-	NotWhitelisted            bool                 `json:"notWhitelisted"`
-	InsufficientMinipoolCount bool                 `json:"insufficientMinipoolCount"`
+type MinipoolStakeDetails struct {
+	CanStake           bool                   `json:"canStake"`
+	RemainingTime      time.Duration          `json:"remainingTime"`
+	StillInScrubPeriod bool                   `json:"stillInScrubPeriod"`
+	Address            common.Address         `json:"address"`
+	Pubkey             beacon.ValidatorPubkey `json:"pubkey"`
+	TxInfo             *eth.TransactionInfo   `json:"txInfo"`
+}
+
+type MinipoolStakeData struct {
+	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
+	Details                         []MinipoolStakeDetails `json:"details"`
 }

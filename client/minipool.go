@@ -45,20 +45,18 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCountData](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
 }
 
-// Deposit minipool
+// Deposit to make a new minipool
 func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositData], error) {
 	args := map[string]string{
 		"salt": salt.String(),
 	}
-	return client.SendGetRequest[csapi.MinipoolDepositData](r, "deposit-minipool", "DepositMinipool", args)
+	return client.SendGetRequest[csapi.MinipoolDepositData](r, "deposit", "Deposit", args)
 }
 
-// Stake minipool
-func (r *MinipoolRequester) Stake(minipoolAddress common.Address) (*types.ApiResponse[csapi.MinipoolStakeMinipoolData], error) {
-	args := map[string]string{
-		"minipoolAddress": minipoolAddress.Hex(),
-	}
-	return client.SendGetRequest[csapi.MinipoolStakeMinipoolData](r, "stake", "Stake", args)
+// Get details and transaction info of minipools that are eligible for staking
+func (r *MinipoolRequester) Stake() (*types.ApiResponse[csapi.MinipoolStakeData], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.MinipoolStakeData](r, "stake", "Stake", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

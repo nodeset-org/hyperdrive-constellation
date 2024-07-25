@@ -375,6 +375,13 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Waiting for deposit tx complete")
 
+	// Save the key
+	pubkey := depositResponse.Data.ValidatorPubkey
+	index := depositResponse.Data.Index
+	_, err = cs.Wallet.CreateValidatorKey(pubkey, index, 1)
+	require.NoError(t, err)
+	t.Logf("Saved validator key for pubkey %s, index %d", pubkey.Hex(), index)
+
 	err = qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), rpSuperNode.MinipoolCount.Formatted())
@@ -395,18 +402,23 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Log("Minipool is in prelaunch")
 
 	// Fast forward time
-	slotsToAdvance := 12 * 60 * 60 / 12 // 1 hour
+	slotsToAdvance := 12 * 60 * 60 / 12 // 12 hours
 	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
 	// Make a Stake TX
-	stakeResponse, err := cs.Minipool.Stake(mpAddress)
+	stakeResponse, err := cs.Minipool.Stake()
 	require.NoError(t, err)
-	require.NotNil(t, stakeResponse.Data.TxInfo)
+	require.False(t, stakeResponse.Data.NotWhitelistedWithConstellation)
+	require.Len(t, stakeResponse.Data.Details, 1)
+	stakeDetails := stakeResponse.Data.Details[0]
+	require.NotNil(t, stakeDetails.TxInfo)
 
 	// Submit the tx
-	submission, _ = eth.CreateTxSubmissionFromInfo(stakeResponse.Data.TxInfo, nil)
+	submission, _ = eth.CreateTxSubmissionFromInfo(stakeDetails.TxInfo, nil)
 	txResponse, err = hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
 	require.NoError(t, err)
 	t.Logf("Submitted stake tx: %s", txResponse.Data.TxHash)

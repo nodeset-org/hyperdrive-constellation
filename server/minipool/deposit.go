@@ -12,8 +12,6 @@ import (
 	"github.com/gorilla/mux"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
-	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
-	hdclient "github.com/nodeset-org/hyperdrive-daemon/client"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	hdapi "github.com/nodeset-org/hyperdrive-daemon/shared/types/api"
@@ -27,24 +25,20 @@ import (
 	"github.com/rocket-pool/node-manager-core/wallet"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
+	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
-)
-
-const (
-	minipoolPrelaunchAmountGwei uint64 = 1e9                               // 1 gwei, the amount to specify in deposit data
-	minipoolPrelaunchAmountWei  uint64 = minipoolPrelaunchAmountGwei * 1e9 // The minipool prelaunch amount in wei
 )
 
 // ===============
 // === Factory ===
 // ===============
 
-type minipoolDepositMinipoolContextFactory struct {
+type minipoolDepositContextFactory struct {
 	handler *MinipoolHandler
 }
 
-func (f *minipoolDepositMinipoolContextFactory) Create(args url.Values) (*MinipoolDepositMinipoolContext, error) {
-	c := &MinipoolDepositMinipoolContext{
+func (f *minipoolDepositContextFactory) Create(args url.Values) (*MinipoolDepositContext, error) {
+	c := &MinipoolDepositContext{
 		ServiceProvider: f.handler.serviceProvider,
 		Context:         f.handler.ctx,
 	}
@@ -54,9 +48,9 @@ func (f *minipoolDepositMinipoolContextFactory) Create(args url.Values) (*Minipo
 	return c, errors.Join(inputErrs...)
 }
 
-func (f *minipoolDepositMinipoolContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterSingleStageRoute[*MinipoolDepositMinipoolContext, csapi.MinipoolDepositData](
-		router, "deposit-minipool", f, f.handler.logger.Logger, f.handler.serviceProvider,
+func (f *minipoolDepositContextFactory) RegisterRoute(router *mux.Router) {
+	server.RegisterSingleStageRoute[*MinipoolDepositContext, csapi.MinipoolDepositData](
+		router, "deposit", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -64,7 +58,7 @@ func (f *minipoolDepositMinipoolContextFactory) RegisterRoute(router *mux.Router
 // === Context ===
 // ===============
 
-type MinipoolDepositMinipoolContext struct {
+type MinipoolDepositContext struct {
 	// Dependencies
 	ServiceProvider cscommon.IConstellationServiceProvider
 	Context         context.Context
@@ -75,8 +69,6 @@ type MinipoolDepositMinipoolContext struct {
 
 	// Services
 	nodeAddress        common.Address
-	res                *csconfig.MergedResources
-	hd                 *hdclient.ApiClient
 	ec                 eth.IExecutionClient
 	bn                 beacon.IBeaconClient
 	wallet             *cscommon.Wallet
@@ -85,19 +77,19 @@ type MinipoolDepositMinipoolContext struct {
 	rpSuperNodeBinding *node.Node
 	pdaoMgr            *protocol.ProtocolDaoManager
 	odaoMgr            *oracle.OracleDaoManager
+	mpMgr              *minipool.MinipoolManager
 
 	// On-chain vars
-	hasSufficientLiquidity bool
-	isWhitelisted          bool
+	lockThreshold      *big.Int
+	minipoolBondAmount *big.Int
+	isWhitelisted      bool
 }
 
-func (c *MinipoolDepositMinipoolContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
+func (c *MinipoolDepositContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
 	sp := c.ServiceProvider
 	ctx := c.Context
 	c.rpMgr = sp.GetRocketPoolManager()
 	c.csMgr = sp.GetConstellationManager()
-	c.res = sp.GetResources()
-	c.hd = sp.GetHyperdriveClient()
 	c.ec = sp.GetEthClient()
 	c.bn = sp.GetBeaconClient()
 	c.wallet = sp.GetWallet()
@@ -115,7 +107,6 @@ func (c *MinipoolDepositMinipoolContext) Initialize(walletStatus wallet.WalletSt
 		}
 		return types.ResponseStatus_Error, err
 	}
-
 	err = sp.RequireBeaconClientSynced(ctx)
 	if err != nil {
 		if errors.Is(err, services.ErrBeaconNodeNotSynced) {
@@ -144,30 +135,38 @@ func (c *MinipoolDepositMinipoolContext) Initialize(walletStatus wallet.WalletSt
 	}
 	c.pdaoMgr, err = protocol.NewProtocolDaoManager(c.rpMgr.RocketPool)
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error creating protocol dao manager: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error creating protocol dao manager binding: %w", err)
 	}
 	c.odaoMgr, err = oracle.NewOracleDaoManager(c.rpMgr.RocketPool)
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error creating oracle dao manager: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error creating oracle dao manager binding: %w", err)
+	}
+	c.mpMgr, err = minipool.NewMinipoolManager(c.rpMgr.RocketPool)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error creating minipool manager binding: %w", err)
 	}
 
 	c.nodeAddress = walletStatus.Wallet.WalletAddress
 	return types.ResponseStatus_Success, nil
 }
 
-func (c *MinipoolDepositMinipoolContext) GetState(mc *batch.MultiCaller) {
+func (c *MinipoolDepositContext) GetState(mc *batch.MultiCaller) {
 	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.ExpectedMinipoolAddress, c.Salt)
-	c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &c.hasSufficientLiquidity, eth.EthToWei(8))
+	c.csMgr.SuperNodeAccount.LockThreshold(mc, &c.lockThreshold)
+	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 	eth.AddQueryablesToMulticall(mc,
 		c.pdaoMgr.Settings.Node.IsDepositingEnabled,
 		c.odaoMgr.Settings.Minipool.ScrubPeriod,
+		c.mpMgr.PrelaunchValue,
 	)
 }
 
-func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDepositData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
-	hd := c.hd
-	resources := c.res
+func (c *MinipoolDepositContext) PrepareData(data *csapi.MinipoolDepositData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+	sp := c.ServiceProvider
+	hd := sp.GetHyperdriveClient()
+	resources := sp.GetHyperdriveResources()
+	qMgr := sp.GetQueryManager()
 
 	// Make sure the node's registered
 	regResponse, err := hd.NodeSet.GetRegistrationStatus()
@@ -193,14 +192,14 @@ func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 		return types.ResponseStatus_InvalidChainState, fmt.Errorf("something already exists at expected minipool address [%s]", c.ExpectedMinipoolAddress.Hex())
 	}
 
-	// Check the node's balance (must have 1 ETH for temporary depositing)
+	// Check the node's balance (must have enough ETH for the lockup)
 	data.EthBalance, err = c.ec.BalanceAt(c.Context, c.nodeAddress, nil)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting node balance: %w", err)
 	}
-	prelaunchRequirement := new(big.Int).SetUint64(minipoolPrelaunchAmountWei)
-	data.InsufficientBalance = data.EthBalance.Cmp(prelaunchRequirement) < 0
+	data.InsufficientBalance = data.EthBalance.Cmp(c.lockThreshold) < 0
 
+	// Check how many minipools can be deposited
 	availableResponse, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting available minipool count: %w", err)
@@ -208,6 +207,17 @@ func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	if availableResponse.Data.Count < 1 {
 		data.InsufficientMinipoolCount = true
 	}
+
+	// Check for sufficient liquidity
+	var hasSufficientLiquidity bool
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &hasSufficientLiquidity, c.minipoolBondAmount)
+		return nil
+	}, nil)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error checking for sufficient liquidity: %w", err)
+	}
+	data.InsufficientLiquidity = !hasSufficientLiquidity
 
 	// Get a deposit signature
 	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt, c.csMgr.SuperNodeAccount.Address)
@@ -218,7 +228,6 @@ func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 
 	// Check if we can deposit
 	data.NotWhitelistedWithConstellation = !c.isWhitelisted
-	data.InsufficientLiquidity = !c.hasSufficientLiquidity
 	data.RocketPoolDepositingDisabled = !c.pdaoMgr.Settings.Node.IsDepositingEnabled.Get()
 	data.CanDeposit = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled)
 	if !data.CanDeposit {
@@ -243,12 +252,14 @@ func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	}
 
 	// Create deposit data
+	prelaunchValueWei := c.mpMgr.PrelaunchValue.Get()
+	prelaunchValueGwei := new(big.Int).Div(prelaunchValueWei, oneGwei)
 	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(c.ExpectedMinipoolAddress)
 	depositData, err := validator.GetDepositData(
 		validatorKey.PrivateKey,
 		withdrawalCredentials,
 		resources.GenesisForkVersion,
-		minipoolPrelaunchAmountGwei,
+		prelaunchValueGwei.Uint64(),
 		resources.EthNetworkName,
 	)
 	if err != nil {
@@ -262,7 +273,7 @@ func (c *MinipoolDepositMinipoolContext) PrepareData(data *csapi.MinipoolDeposit
 	// Make the TX
 	newOpts := &bind.TransactOpts{
 		From:  opts.From,
-		Value: prelaunchRequirement,
+		Value: prelaunchValueWei,
 	}
 	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
 	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(
