@@ -28,6 +28,7 @@ import (
 const (
 	expectedMinipoolCount int     = 1
 	ethBondPerLeb8        float64 = 8
+	treasuryAddress       string  = "0x9849832a1d8274aaeDb1112ad9686413461e7101"
 )
 
 // Test getting the available minipool count when there are no minipools available
@@ -428,8 +429,10 @@ func TestMinipoolDeposit(t *testing.T) {
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
 	var wethBalanceYieldDistributorBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, csMgr.YieldDistributor.Address)
+		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -450,13 +453,16 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	var wethBalanceYieldDistributorAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceYieldDistributorAfter, csMgr.YieldDistributor.Address)
+		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, common.HexToAddress(treasuryAddress))
 		return nil
 	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, wethBalanceYieldDistributorAfter.Cmp(wethBalanceYieldDistributorBefore))
+	// require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 
 	// Get the node address
 	nodeKey, err := keygen.GetEthPrivateKey(4)
