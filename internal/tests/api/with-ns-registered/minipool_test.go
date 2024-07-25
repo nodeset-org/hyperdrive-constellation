@@ -28,7 +28,6 @@ import (
 const (
 	expectedMinipoolCount int     = 1
 	ethBondPerLeb8        float64 = 8
-	treasuryAddress       string  = "0x9849832a1d8274aaeDb1112ad9686413461e7101"
 )
 
 // Test getting the available minipool count when there are no minipools available
@@ -125,10 +124,12 @@ func TestMinipoolDeposit(t *testing.T) {
 	var rplVaultAddress common.Address
 	var wethVaultAddress common.Address
 	var wethAddress common.Address
+	var treasuryAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
+		csMgr.Directory.GetTreasuryAddress(mc, &treasuryAddress)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -470,7 +471,7 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodePubkey)
-		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, common.HexToAddress(treasuryAddress))
+		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, treasuryAddress)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -487,7 +488,7 @@ func TestMinipoolDeposit(t *testing.T) {
 
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		weth.BalanceOf(mc, &wethBalanceNodeAfter, nodePubkey)
-		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, common.HexToAddress(treasuryAddress))
+		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, treasuryAddress)
 		return nil
 	}, nil)
 	require.NoError(t, err)

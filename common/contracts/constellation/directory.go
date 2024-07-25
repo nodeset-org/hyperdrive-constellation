@@ -98,3 +98,7 @@ func (c *Directory) GetRplVaultAddress(mc *batch.MultiCaller, out *common.Addres
 func (c *Directory) GetWethAddress(mc *batch.MultiCaller, out *common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getWETHAddress")
 }
+
+func (c *Directory) GetTreasuryAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getTreasuryAddress")
+}
