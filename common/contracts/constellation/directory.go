@@ -75,6 +75,10 @@ func (c *Directory) GetWhitelistAddress(mc *batch.MultiCaller, out *common.Addre
 	eth.AddCallToMulticaller(mc, c.contract, out, "getWhitelistAddress")
 }
 
+func (c *Directory) GetYieldDistributorAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getYieldDistributorAddress")
+}
+
 func (c *Directory) GetOperatorDistributorAddress(mc *batch.MultiCaller, out *common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getOperatorDistributorAddress")
 }
@@ -93,4 +97,8 @@ func (c *Directory) GetRplVaultAddress(mc *batch.MultiCaller, out *common.Addres
 
 func (c *Directory) GetWethAddress(mc *batch.MultiCaller, out *common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getWETHAddress")
+}
+
+func (c *Directory) GetTreasuryAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getTreasuryAddress")
 }
