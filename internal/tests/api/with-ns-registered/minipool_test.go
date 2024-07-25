@@ -435,6 +435,10 @@ func TestMinipoolDeposit(t *testing.T) {
 	require.NoError(t, err)
 
 	// Send ETH to YieldDistributor to trigger finalizeInterval
+	// sendResponse, err := hd.Wallet.Send(eth.EthToWei(1), "eth", csMgr.YieldDistributor.Address)
+	// require.NoError(t, err)
+	// MineTx(t, sendResponse.Data.TxInfo, sendEthOpts, "Sent ETH to the YieldDistributor")
+
 	sendEthTx := eth.TransactionInfo{To: csMgr.YieldDistributor.Address, Value: eth.EthToWei(1)}
 	sendEthTx.SimulationResult.IsSimulated = true
 	sendEthOpts, _ := bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
