@@ -99,7 +99,7 @@ func (c *MinipoolStakeContext) Initialize(walletStatus wallet.WalletStatus) (typ
 		return types.ResponseStatus_Error, fmt.Errorf("error creating minipool manager binding: %w", err)
 	}
 
-	c.nodeAddress = walletStatus.Wallet.WalletAddress
+	c.nodeAddress = walletStatus.Address.NodeAddress
 	return types.ResponseStatus_Success, nil
 }
 
