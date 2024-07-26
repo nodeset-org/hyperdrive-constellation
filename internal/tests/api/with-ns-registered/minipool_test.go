@@ -59,6 +59,11 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
+	depositAndStakeMinipool(t)
+}
+
+// Makes a minipool and stakes it
+func depositAndStakeMinipool(t *testing.T) {
 	// Get some services
 	sp := testMgr.GetConstellationServiceProvider()
 	csMgr := sp.GetConstellationManager()
@@ -117,8 +122,7 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	t.Logf("RPL shortfall for %.2f ETH bond is %.6f RPL (%s wei)", eth.WeiToEth(minipoolBond), eth.WeiToEth(rplShortfall), rplShortfall.String())
 
 	// Deposit RPL to the RPL vault
-	var rplRequired *big.Int
-	rplRequired = new(big.Int).Mul(rplShortfall, big.NewInt(1e18))
+	rplRequired := new(big.Int).Mul(rplShortfall, big.NewInt(1e18))
 	rplRequired.Div(rplRequired, eth.EthToWei(0.98)) // TEMP: Add 2%, the required collateral - get this from the contracts later
 	rplRequired.Add(rplRequired, common.Big1)        // Add 1 wei to the required amount to make it pass the greater check
 	//t.Logf("RPL required for 8 ETH bond is %.6f RPL (%s wei)", eth.WeiToEth(rplShortfall), rplShortfall.String())
@@ -126,8 +130,7 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
-	var ethRequired *big.Int
-	ethRequired = new(big.Int).Mul(minipoolBond, big.NewInt(1e18))
+	ethRequired := new(big.Int).Mul(minipoolBond, big.NewInt(1e18))
 	ethRequired.Div(ethRequired, eth.EthToWei(0.9)) // TEMP: Add 10%, the required collateral - get this from the contracts later
 	ethRequired.Add(ethRequired, common.Big1)       // Add 1 wei to the required amount to make it pass the greater check
 	wethAmount := ethRequired                       // eth.EthToWei(90)

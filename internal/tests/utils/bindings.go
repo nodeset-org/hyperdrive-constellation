@@ -16,6 +16,7 @@ import (
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
 )
 
+// Common contract bindings that are used across tests
 type ContractBindings struct {
 	// Rocket Pool bindings
 	DepositPoolManager *deposit.DepositPoolManager
@@ -27,12 +28,14 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 
 	// Constellation bindings
-	RplVault    contracts.IErc4626Token
-	WethVault   contracts.IErc4626Token
-	Weth        *contracts.Weth
-	RpSuperNode *node.Node
+	RplVault        contracts.IErc4626Token
+	WethVault       contracts.IErc4626Token
+	Weth            *contracts.Weth
+	RpSuperNode     *node.Node
+	TreasuryAddress common.Address
 }
 
+// Create a new contract bindings instance
 func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBindings, error) {
 	// Services
 	rp := sp.GetRocketPoolManager().RocketPool
@@ -115,9 +118,10 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		NodeManager:        nodeMgr,
 
 		// Constellation
-		RplVault:    rplVault,
-		WethVault:   wethVault,
-		Weth:        weth,
-		RpSuperNode: rpSuperNode,
+		RplVault:        rplVault,
+		WethVault:       wethVault,
+		Weth:            weth,
+		TreasuryAddress: treasuryAddress,
+		RpSuperNode:     rpSuperNode,
 	}, nil
 }

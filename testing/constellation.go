@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
@@ -75,7 +76,7 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 	}
 
 	// Submit the TX's
-	txs, err = txMgr.BatchExecuteTransactions(submissions, &bind.TransactOpts{
+	newTxs, err := txMgr.BatchExecuteTransactions(submissions, &bind.TransactOpts{
 		From:      depositOpts.From,
 		Signer:    depositOpts.Signer,
 		Nonce:     nil,
@@ -86,6 +87,7 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 	if err != nil {
 		return fmt.Errorf("error submitting deposit transactions: %w", err)
 	}
+	txs = append(txs, newTxs...)
 
 	// Mine the block
 	err = m.CommitBlock()
@@ -148,6 +150,61 @@ func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contra
 	err = txMgr.WaitForTransactions(txs)
 	if err != nil {
 		return fmt.Errorf("error waiting for deposit transactions: %w", err)
+	}
+	return nil
+}
+
+// Sends ETH to the YieldDistributor, which should trigger the finalizeInterval function
+func (m *ConstellationTestManager) Constellation_FundYieldDistributor(weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) error {
+	// Services
+	qMgr := m.sp.GetQueryManager()
+	txMgr := m.sp.GetTransactionManager()
+	csMgr := m.sp.GetConstellationManager()
+
+	// Get the balance of the YieldDistributor before
+	var wethBalanceYieldDistributorBefore *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, csMgr.YieldDistributor.Address)
+		return nil
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("error querying WETH balance of YieldDistributor: %w", err)
+	}
+
+	// Send ETH to YieldDistributor to trigger finalizeInterval
+	sendEthOpts := &bind.TransactOpts{
+		From:  opts.From,
+		Value: big.NewInt(1e18),
+	}
+	sendEthTx := txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
+	tx, err := txMgr.ExecuteTransaction(sendEthTx, opts)
+	if err != nil {
+		return fmt.Errorf("error sending ETH to YieldDistributor: %w", err)
+	}
+
+	// Mine the block
+	err = m.CommitBlock()
+	if err != nil {
+		return fmt.Errorf("error committing block: %w", err)
+	}
+	err = txMgr.WaitForTransaction(tx)
+	if err != nil {
+		return fmt.Errorf("error waiting for send TX: %w", err)
+	}
+
+	// Get the balance after
+	var wethBalanceYieldDistributorAfter *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceYieldDistributorAfter, csMgr.YieldDistributor.Address)
+		return nil
+	}, nil)
+	if err != nil {
+		return fmt.Errorf("error querying WETH balance of YieldDistributor: %w", err)
+	}
+
+	// Verify the balance increased
+	if wethBalanceYieldDistributorAfter.Cmp(wethBalanceYieldDistributorBefore) <= 0 {
+		return fmt.Errorf("YieldDistributor WETH balance did not increase after sending ETH")
 	}
 	return nil
 }

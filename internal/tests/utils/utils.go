@@ -190,3 +190,46 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, mp
 	require.Equal(t, types.MinipoolStatus_Staking, mp.Common().Status.Formatted())
 	t.Logf("Minipool %s is in staking", mp.Common().Address.Hex())
 }
+
+// Harvest rewards from the yield distributor and assert the node's WETH balance increased
+// Note that a node must have a minipool staking for this to succeed
+func HarvestRewards(t *testing.T, testMgr *cstesting.ConstellationTestManager, weth *contracts.Weth, treasuryAddress common.Address, nodeAddress common.Address, opts *bind.TransactOpts) {
+	// Bindings
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
+	// Get wrapped ETH balances before harvest
+	var wethBalanceNodeBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, treasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Make a harvest TX for the minipool
+	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, opts)
+	require.NoError(t, err)
+	require.NotNil(t, harvestTxInfo)
+	testMgr.MineTx(t, harvestTxInfo, opts, "Harvested minipool")
+
+	// Get wrapped ETH balances after harvest
+	var wethBalanceNodeAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
+		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, treasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Verify the node's WETH balance increased
+	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+	t.Logf("Node's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceNodeBefore), eth.WeiToEth(wethBalanceNodeAfter))
+
+	// TODO: Claim treasury WETH
+	// t.Logf("Treasury's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceTreasuryBefore), eth.WeiToEth(wethBalanceTreasuryAfter))
+	// require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
+}

@@ -225,6 +225,9 @@ func (m *ConstellationTestManager) RocketPool_CreateOracleDaoNodes(details []Ora
 				return fmt.Sprintf("join oDAO for %s", node.Address), txInfo, err
 			},
 		}, false)
+		if err != nil {
+			return nil, err
+		}
 
 		// Submit the TX's
 		nodeTxs, err := txMgr.BatchExecuteTransactions(submissions, &bind.TransactOpts{
