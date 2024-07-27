@@ -26,6 +26,7 @@ var (
 	nsEmail      string = "test@nodeset.io"
 	keygen       *keys.KeyGenerator
 	deployerOpts *bind.TransactOpts
+	adminOpts    *bind.TransactOpts
 
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
@@ -89,6 +90,16 @@ func TestMain(m *testing.M) {
 	deployerOpts, err = bind.NewKeyedTransactorWithChainID(deployerKey, big.NewInt(int64(chainID)))
 	if err != nil {
 		fail("error creating deployer transactor: %v", err)
+	}
+
+	// Get the private key for the Constellation admin
+	adminKey, err := keygen.GetEthPrivateKey(1)
+	if err != nil {
+		fail("error getting admin key: %v", err)
+	}
+	adminOpts, err = bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
+	if err != nil {
+		fail("error creating admin transactor: %v", err)
 	}
 
 	// Set up the services

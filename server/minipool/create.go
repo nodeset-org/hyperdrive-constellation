@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -33,12 +34,12 @@ import (
 // === Factory ===
 // ===============
 
-type minipoolDepositContextFactory struct {
+type minipoolCreateContextFactory struct {
 	handler *MinipoolHandler
 }
 
-func (f *minipoolDepositContextFactory) Create(args url.Values) (*MinipoolDepositContext, error) {
-	c := &MinipoolDepositContext{
+func (f *minipoolCreateContextFactory) Create(args url.Values) (*MinipoolCreateContext, error) {
+	c := &MinipoolCreateContext{
 		ServiceProvider: f.handler.serviceProvider,
 		Context:         f.handler.ctx,
 	}
@@ -48,9 +49,9 @@ func (f *minipoolDepositContextFactory) Create(args url.Values) (*MinipoolDeposi
 	return c, errors.Join(inputErrs...)
 }
 
-func (f *minipoolDepositContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterSingleStageRoute[*MinipoolDepositContext, csapi.MinipoolDepositData](
-		router, "deposit", f, f.handler.logger.Logger, f.handler.serviceProvider,
+func (f *minipoolCreateContextFactory) RegisterRoute(router *mux.Router) {
+	server.RegisterSingleStageRoute[*MinipoolCreateContext, csapi.MinipoolCreateData](
+		router, "create", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -58,7 +59,7 @@ func (f *minipoolDepositContextFactory) RegisterRoute(router *mux.Router) {
 // === Context ===
 // ===============
 
-type MinipoolDepositContext struct {
+type MinipoolCreateContext struct {
 	// Dependencies
 	ServiceProvider cscommon.IConstellationServiceProvider
 	Context         context.Context
@@ -81,11 +82,12 @@ type MinipoolDepositContext struct {
 
 	// On-chain vars
 	lockThreshold      *big.Int
+	lockupTime         *big.Int
 	minipoolBondAmount *big.Int
 	isWhitelisted      bool
 }
 
-func (c *MinipoolDepositContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
+func (c *MinipoolCreateContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
 	sp := c.ServiceProvider
 	ctx := c.Context
 	c.rpMgr = sp.GetRocketPoolManager()
@@ -150,9 +152,10 @@ func (c *MinipoolDepositContext) Initialize(walletStatus wallet.WalletStatus) (t
 	return types.ResponseStatus_Success, nil
 }
 
-func (c *MinipoolDepositContext) GetState(mc *batch.MultiCaller) {
+func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
 	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.ExpectedMinipoolAddress, c.Salt)
 	c.csMgr.SuperNodeAccount.LockThreshold(mc, &c.lockThreshold)
+	c.csMgr.SuperNodeAccount.LockupTime(mc, &c.lockupTime)
 	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 	eth.AddQueryablesToMulticall(mc,
@@ -162,7 +165,7 @@ func (c *MinipoolDepositContext) GetState(mc *batch.MultiCaller) {
 	)
 }
 
-func (c *MinipoolDepositContext) PrepareData(data *csapi.MinipoolDepositData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.ServiceProvider
 	hd := sp.GetHyperdriveClient()
 	resources := sp.GetHyperdriveResources()
@@ -193,11 +196,13 @@ func (c *MinipoolDepositContext) PrepareData(data *csapi.MinipoolDepositData, op
 	}
 
 	// Check the node's balance (must have enough ETH for the lockup)
-	data.EthBalance, err = c.ec.BalanceAt(c.Context, c.nodeAddress, nil)
+	data.LockupTime = time.Duration(c.lockupTime.Uint64()) * time.Second
+	data.LockupAmount = c.lockThreshold
+	data.NodeBalance, err = c.ec.BalanceAt(c.Context, c.nodeAddress, nil)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting node balance: %w", err)
 	}
-	data.InsufficientBalance = data.EthBalance.Cmp(c.lockThreshold) < 0
+	data.InsufficientBalance = c.lockThreshold.Cmp(data.NodeBalance) > 0
 
 	// Check how many minipools can be deposited
 	availableResponse, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
@@ -229,8 +234,8 @@ func (c *MinipoolDepositContext) PrepareData(data *csapi.MinipoolDepositData, op
 	// Check if we can deposit
 	data.NotWhitelistedWithConstellation = !c.isWhitelisted
 	data.RocketPoolDepositingDisabled = !c.pdaoMgr.Settings.Node.IsDepositingEnabled.Get()
-	data.CanDeposit = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled)
-	if !data.CanDeposit {
+	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled)
+	if !data.CanCreate {
 		return types.ResponseStatus_Success, nil
 	}
 

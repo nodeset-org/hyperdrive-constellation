@@ -24,7 +24,7 @@ func TestHarvest(t *testing.T) {
 	t.Log("Created contract bindings")
 
 	// Make a minipool
-	depositAndStakeMinipool(t)
+	depositAndStakeMinipool(t, bindings)
 
 	// Fast forward time for reward interval to increment
 	slotsToAdvance := 1200 * 60 * 60 / 12

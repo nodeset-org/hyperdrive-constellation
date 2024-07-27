@@ -19,16 +19,18 @@ type MinipoolGetAvailableMinipoolCountData struct {
 	Count int `json:"count"`
 }
 
-type MinipoolDepositData struct {
-	CanDeposit                      bool                   `json:"canDeposit"`
+type MinipoolCreateData struct {
+	CanCreate                       bool                   `json:"canCreate"`
 	InsufficientBalance             bool                   `json:"insufficientBalance"`
-	EthBalance                      *big.Int               `json:"balance"`
 	InsufficientLiquidity           bool                   `json:"insufficientLiquidity"`
 	NotRegisteredWithNodeSet        bool                   `json:"notRegisteredWithNodeSet"`
 	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
 	InsufficientMinipoolCount       bool                   `json:"insufficientMinipoolCount"`
 	RocketPoolDepositingDisabled    bool                   `json:"rocketPoolDepositingDisabled"`
 	NodeSetDepositingDisabled       bool                   `json:"noteSetDepositingDisabled"`
+	NodeBalance                     *big.Int               `json:"nodeBalance"`
+	LockupAmount                    *big.Int               `json:"lockupAmount"`
+	LockupTime                      time.Duration          `json:"lockupTime"`
 	MinipoolAddress                 common.Address         `json:"minipoolAddress"`
 	ValidatorPubkey                 beacon.ValidatorPubkey `json:"validatorPubkey"`
 	Index                           uint64                 `json:"index"`
