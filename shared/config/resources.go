@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/rocket-pool/node-manager-core/config"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var (
