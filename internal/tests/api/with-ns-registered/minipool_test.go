@@ -1,7 +1,6 @@
 package with_ns_registered
 
 import (
-	"context"
 	"math/big"
 	"testing"
 
@@ -69,20 +68,23 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	sp := testMgr.GetConstellationServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	txMgr := sp.GetTransactionManager()
+	qMgr := sp.GetQueryManager()
+	// ec := sp.GetEthClient()
+
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 
 	// Get balances before harvest
 	var wethBalanceNodeBefore *big.Int
 	var wethBalanceYieldDistributorBefore *big.Int
 	var wethBalanceTreasuryBefore *big.Int
-	ethBalanceNodeBefore := ec.BalanceAt(context.Background(), "", nil)
-	ethBalanceYieldDistributorBefore := ec.BalanceAt(context.Background(), "", nil)
-	ethBalanceTreasuryBefore := ec.BalanceAt(context.Background(), "", nil)
+	// ethBalanceNodeBefore, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	// ethBalanceYieldDistributorBefore, err := ec.BalanceAt(context.Background(), bindings.YieldDistributor.Address, nil)
+	// ethBalanceTreasuryBefore, err := ec.BalanceAt(context.Background(), bindings.TreasuryAddress, nil)
 
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
-		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, bindings.YieldDistributor.Address)
-		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, bindings.YieldDistributor.Address)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
 		return nil
 	}, nil)
 
@@ -113,6 +115,25 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	require.NoError(t, err)
 	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
 
+	// Get balances after harvest
+	var wethBalanceNodeAfter *big.Int
+	var wethBalanceYieldDistributorAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
+	// ethBalanceNodeAfter, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	// ethBalanceYieldDistributorAfter, err := ec.BalanceAt(context.Background(), bindings.YieldDistributor.Address, nil)
+	// ethBalanceTreasuryAfter, err := ec.BalanceAt(context.Background(), bindings.TreasuryAddress, nil)
+
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceYieldDistributorAfter, bindings.YieldDistributor.Address)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+
+	// Verify balances
+	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+	// require.Equal(t, 1, ethBalanceYieldDistributorAfter.Cmp(ethBalanceYieldDistributorBefore))
+	// require.Equal(t, 1, ethBalanceTreasuryAfter.Cmp(ethBalanceTreasuryBefore))
 }
 
 // Makes a minipool and stakes it
