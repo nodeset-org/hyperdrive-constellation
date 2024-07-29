@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	salt *big.Int = big.NewInt(0x90de5e7)
+)
+
 // Test getting the available minipool count when there are no minipools available
 func TestMinipoolGetAvailableMinipoolCount_Zero(t *testing.T) {
 	// Take a snapshot, revert at the end
@@ -59,26 +63,60 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
-	depositAndStakeMinipool(t)
+	// Make the bindings
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
+	t.Log("Created contract bindings")
+
+	depositAndStakeMinipool(t, bindings)
 }
 
-// Makes a minipool and stakes it
-func depositAndStakeMinipool(t *testing.T) {
-	// Get some services
-	sp := testMgr.GetConstellationServiceProvider()
-	csMgr := sp.GetConstellationManager()
-	qMgr := sp.GetQueryManager()
+// Run a check to make sure depositing with duplicate salts fails
+func TestDuplicateSalts(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
 
 	// Make the bindings
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
+	// Get some services
+	cs := testMgr.GetApiClient()
+
+	// Make a normal minipool
+	depositAndStakeMinipool(t, bindings)
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(3200)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(90)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Try making another one with the same salt, it should fail
+	_, err = cs.Minipool.Create(salt)
+	require.Error(t, err)
+	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
+}
+
+// Makes a minipool and stakes it
+func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings) {
+	// Get some services
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
 	// Query some details
 	var rplPrice *big.Int
 	var totalEthStaking *big.Int
 	var minipoolBond *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
 		csMgr.SuperNodeAccount.TotalEthStaking(mc, &totalEthStaking)
 		csMgr.SuperNodeAccount.Bond(mc, &minipoolBond)
@@ -110,6 +148,15 @@ func depositAndStakeMinipool(t *testing.T) {
 	txInfo, err := bindings.DepositPoolManager.Deposit(fundOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Funded the RP deposit pool")
+
+	// ===
+	/*
+		newLockThreshold := eth.EthToWei(2)
+		txInfo, err = csMgr.SuperNodeAccount.SetLockAmount(newLockThreshold, adminOpts)
+		require.NoError(t, err)
+		testMgr.MineTx(t, txInfo, adminOpts, "Set the lock amount")
+	*/
+	// ===
 
 	// Get the RPL requirement
 	var rplShortfall *big.Int
@@ -145,9 +192,8 @@ func depositAndStakeMinipool(t *testing.T) {
 	t.Log("Set up the NodeSet mock server")
 
 	// Deposit to make a minipool
-	salt := big.NewInt(0x90de5e7)
 	mp := cstestutils.CreateMinipoolViaDeposit(t, testMgr, salt, bindings.RpSuperNode, bindings.MinipoolManager)
 
 	// Stake the minipool
-	cstestutils.StakeMinipool(t, testMgr, mp, bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted())
+	cstestutils.StakeMinipool(t, testMgr, nodeAddress, mp, bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted())
 }

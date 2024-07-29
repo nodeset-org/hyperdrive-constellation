@@ -32,7 +32,7 @@ const (
 )
 
 // GetTestResources returns a new ConstellationResources instance with test network values
-func getTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedResources, *snconfig.MergedResources) {
+func getTestResources(hdResources *hdconfig.MergedResources) *csconfig.MergedResources {
 	csRes := &csconfig.MergedResources{
 		MergedResources: hdResources,
 		ConstellationResources: &csconfig.ConstellationResources{
@@ -40,16 +40,13 @@ func getTestResources(hdResources *hdconfig.MergedResources) (*csconfig.MergedRe
 			RocketStorage: config.HexToAddressPtr(RocketStorageAddress),
 			FeeRecipient:  config.HexToAddressPtr(SmoothingPoolAddress),
 		},
-	}
-	snRes := &snconfig.MergedResources{
-		NetworkResources: hdResources.NetworkResources,
 		SmartNodeResources: &snconfig.SmartNodeResources{
 			StorageAddress:  common.HexToAddress(RocketStorageAddress),
 			RethAddress:     common.HexToAddress(RethAddress),
 			RplTokenAddress: common.HexToAddress(RplAddress),
 		},
 	}
-	return csRes, snRes
+	return csRes
 }
 
 // Provisions a NetworkSettings instance with updated addresses
