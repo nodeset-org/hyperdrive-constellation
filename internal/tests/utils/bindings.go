@@ -28,11 +28,13 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 
 	// Constellation bindings
-	RplVault        contracts.IErc4626Token
-	WethVault       contracts.IErc4626Token
-	Weth            *contracts.Weth
-	RpSuperNode     *node.Node
-	TreasuryAddress common.Address
+	RplVault                   contracts.IErc4626Token
+	WethVault                  contracts.IErc4626Token
+	Weth                       *contracts.Weth
+	RpSuperNode                *node.Node
+	TreasuryAddress            common.Address
+	DepositPoolAddress         common.Address
+	OperatorDistributorAddress common.Address
 }
 
 // Create a new contract bindings instance
@@ -80,11 +82,15 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	var wethVaultAddress common.Address
 	var wethAddress common.Address
 	var treasuryAddress common.Address
+	var depositPoolAddress common.Address
+	var operatorDistributorAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
 		csMgr.Directory.GetTreasuryAddress(mc, &treasuryAddress)
+		csMgr.Directory.GetDepositPoolAddress(mc, &depositPoolAddress)
+		csMgr.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -118,10 +124,12 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		NodeManager:        nodeMgr,
 
 		// Constellation
-		RplVault:        rplVault,
-		WethVault:       wethVault,
-		Weth:            weth,
-		TreasuryAddress: treasuryAddress,
-		RpSuperNode:     rpSuperNode,
+		RplVault:                   rplVault,
+		WethVault:                  wethVault,
+		Weth:                       weth,
+		TreasuryAddress:            treasuryAddress,
+		DepositPoolAddress:         depositPoolAddress,
+		OperatorDistributorAddress: operatorDistributorAddress,
+		RpSuperNode:                rpSuperNode,
 	}, nil
 }

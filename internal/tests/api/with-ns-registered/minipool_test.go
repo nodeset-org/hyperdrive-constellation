@@ -66,10 +66,21 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 // Simulate an ETH reward getting deposited to YieldDistributor
 func simulateEthRewardToYieldDistributor(t *testing.T) {
 	// Send ETH to deposit pool
-	txMgr := testMgr.GetTransactionManager()
-	sendEthTx := txMgr.CreateTransactionInfoRaw(depositPoolAddress, nil, sendEthOpts)
+	sp := testMgr.GetConstellationServiceProvider()
+	txMgr := sp.GetTransactionManager()
+	sendEthOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: big.NewInt(1e18),
+	}
+
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
+	t.Log("Created contract bindings")
+
+	sendEthTx := txMgr.CreateTransactionInfoRaw(bindings.DepositPoolAddress, nil, sendEthOpts)
 	MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
 
+	// Advance blockchain time
 	slotsToAdvance := 1200 * 60 * 60 / 12
 	err := testMgr.AdvanceSlots(uint(slotsToAdvance), false)
 	require.NoError(t, err)
