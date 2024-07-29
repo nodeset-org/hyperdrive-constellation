@@ -63,13 +63,31 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	simulateEthRewardToYieldDistributor(t)
 }
 
+// Utility function to send ETH and advance blockchain time
+func sendEthAndAdvanceTime(t *testing.T, address common.Address, slotsToAdvance int) {
+	sp := testMgr.GetConstellationServiceProvider()
+	txMgr := sp.GetTransactionManager()
+
+	sendEthOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: big.NewInt(1e18),
+	}
+
+	sendEthTx := txMgr.CreateTransactionInfoRaw(address, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH")
+
+	err := testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
+}
+
 // Simulate an ETH reward getting deposited to YieldDistributor
 func simulateEthRewardToYieldDistributor(t *testing.T) {
 	sp := testMgr.GetConstellationServiceProvider()
-	csMgr := sp.GetConstellationManager()
-	txMgr := sp.GetTransactionManager()
+	// csMgr := sp.GetConstellationManager()
+	// txMgr := sp.GetTransactionManager()
 	qMgr := sp.GetQueryManager()
-	// ec := sp.GetEthClient()
+	slotsToAdvance := 1200 * 60 * 60 / 12
 
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 
@@ -83,24 +101,11 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 		return nil
 	}, nil)
 
-	sendEthOpts := &bind.TransactOpts{
-		From:  deployerOpts.From,
-		Value: big.NewInt(1e18),
-	}
-
 	// Send 1 ETH to the deposit pool
-	sendEthTx := txMgr.CreateTransactionInfoRaw(bindings.DepositPoolAddress, nil, sendEthOpts)
-	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
-
-	// Advance blockchain time
-	slotsToAdvance := 1200 * 60 * 60 / 12
-	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
-	require.NoError(t, err)
-	t.Logf("Advanced %d slots", slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthTx = txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
-	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to yield distributor")
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, 0)
 
 	// Call harvest()
 	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(0), big.NewInt(1), deployerOpts)
@@ -110,18 +115,10 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	// Again - to simulate an interval tick for rewards to go to treasury
 
 	// Send 1 ETH to the deposit pool
-	sendEthTx = txMgr.CreateTransactionInfoRaw(bindings.DepositPoolAddress, nil, sendEthOpts)
-	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
-
-	// Advance blockchain time
-	slotsToAdvance = 1200 * 60 * 60 / 12
-	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
-	require.NoError(t, err)
-	t.Logf("Advanced %d slots", slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthTx = txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
-	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to yield distributor")
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, 0)
 
 	// Call harvest()
 	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(1), big.NewInt(2), deployerOpts)
