@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/rocket-pool/node-manager-core/config"
+	snconfig "github.com/rocket-pool/smartnode/v2/shared/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,6 +37,9 @@ type ConstellationSettings struct {
 
 	// Hyperdrive resources for the network
 	ConstellationResources *ConstellationResources `yaml:"constellationResources" json:"constellationResources"`
+
+	// Smart Node resources for the network
+	SmartNodeResources *snconfig.SmartNodeResources `yaml:"smartNodeResources" json:"smartNodeResources"`
 
 	// A collection of default configuration settings to use for the network, which will override
 	// the standard "general-purpose" default value for the setting
@@ -64,6 +68,9 @@ type MergedResources struct {
 
 	// Constellation-specific resources
 	*ConstellationResources
+
+	// Rocket Pool Smart Node resources
+	*snconfig.SmartNodeResources
 }
 
 // Load network settings from a folder

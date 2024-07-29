@@ -50,7 +50,7 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	hdClient := tm.GetApiClient()
 
 	// Make Constellation resources
-	csResources, snResources := getTestResources(hdSp.GetResources())
+	csResources := getTestResources(hdSp.GetResources())
 	csCfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
 	if err != nil {
 		closeTestManager(tm)
@@ -71,7 +71,7 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	constellationSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources, snResources)
+	constellationSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources)
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)

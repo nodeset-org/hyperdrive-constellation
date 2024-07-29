@@ -149,6 +149,15 @@ func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBinding
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Funded the RP deposit pool")
 
+	// ===
+	/*
+		newLockThreshold := eth.EthToWei(2)
+		txInfo, err = csMgr.SuperNodeAccount.SetLockAmount(newLockThreshold, adminOpts)
+		require.NoError(t, err)
+		testMgr.MineTx(t, txInfo, adminOpts, "Set the lock amount")
+	*/
+	// ===
+
 	// Get the RPL requirement
 	var rplShortfall *big.Int
 	ethAmount := new(big.Int).Add(totalEthStaking, minipoolBond)

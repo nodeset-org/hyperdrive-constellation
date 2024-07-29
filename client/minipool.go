@@ -59,6 +59,12 @@ func (r *MinipoolRequester) Stake() (*types.ApiResponse[csapi.MinipoolStakeData]
 	return client.SendGetRequest[csapi.MinipoolStakeData](r, "stake", "Stake", args)
 }
 
+// Get all status details for minipools
+func (r *MinipoolRequester) Status() (*types.ApiResponse[csapi.MinipoolStatusData], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.MinipoolStatusData](r, "status", "Status", args)
+}
+
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested
 func sendMultiMinipoolRequest[DataType any](r *MinipoolRequester, method string, requestName string, addresses []common.Address, args map[string]string) (*types.ApiResponse[DataType], error) {
 	if args == nil {
