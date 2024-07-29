@@ -1,6 +1,7 @@
 package with_ns_registered
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -65,26 +66,53 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 
 // Simulate an ETH reward getting deposited to YieldDistributor
 func simulateEthRewardToYieldDistributor(t *testing.T) {
-	// Send ETH to deposit pool
 	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	txMgr := sp.GetTransactionManager()
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+
+	// Get balances before harvest
+	var wethBalanceNodeBefore *big.Int
+	var wethBalanceYieldDistributorBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
+	ethBalanceNodeBefore := ec.BalanceAt(context.Background(), "", nil)
+	ethBalanceYieldDistributorBefore := ec.BalanceAt(context.Background(), "", nil)
+	ethBalanceTreasuryBefore := ec.BalanceAt(context.Background(), "", nil)
+
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+		weth.BalanceOf(mc, &wethBalanceYieldDistributorBefore, bindings.YieldDistributor.Address)
+		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+
 	sendEthOpts := &bind.TransactOpts{
 		From:  deployerOpts.From,
 		Value: big.NewInt(1e18),
 	}
 
-	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
-	require.NoError(t, err)
-	t.Log("Created contract bindings")
-
+	// Send 1 ETH to the deposit pool
 	sendEthTx := txMgr.CreateTransactionInfoRaw(bindings.DepositPoolAddress, nil, sendEthOpts)
-	MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
 
 	// Advance blockchain time
 	slotsToAdvance := 1200 * 60 * 60 / 12
-	err := testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
+
+	require.NoError(t, err)
+	t.Log("Created contract bindings")
+
+	// Send 1 ETH to the yield distributor
+	sendEthTx = txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
+
+	// Call harvest()
+	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(0), big.NewInt(1), deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
 }
 
 // Makes a minipool and stakes it
