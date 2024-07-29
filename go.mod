@@ -6,19 +6,17 @@ require (
 	github.com/docker/docker v27.0.3+incompatible
 	github.com/ethereum/go-ethereum v1.14.7
 	github.com/fatih/color v1.17.0
-	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
 	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240723155047-7acad1b84e2c
-	github.com/nodeset-org/osha v0.2.1-0.20240716181202-365d8870bd39
+	github.com/nodeset-org/osha v0.2.1-0.20240725195912-8bc75c30efa2
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20240722141309-0a3f0e72cf11
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20240726164639-fd383b1fc853
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.2
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
-	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -86,6 +84,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
@@ -158,6 +157,7 @@ require (
 	github.com/wealdtech/go-bytesutil v1.2.1 // indirect
 	github.com/wealdtech/go-ens/v3 v3.6.0 // indirect
 	github.com/wealdtech/go-eth2-util v1.8.2 // indirect
+	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 // indirect
 	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a // indirect
 	github.com/wealdtech/go-multicodec v1.4.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
@@ -190,6 +190,6 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20240717213627-75462b899b33
+replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20240725183249-ad7126840e08
 
 replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240723144459-3da89f8e794e

@@ -1,13 +1,13 @@
 package cscommon
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	"github.com/nodeset-org/hyperdrive-daemon/shared"
@@ -29,12 +29,19 @@ type constellationWalletData struct {
 	NextAccount uint64 `json:"nextAccount"`
 }
 
+// A validator private/public key pair
+type ValidatorKey struct {
+	PublicKey      beacon.ValidatorPubkey
+	PrivateKey     *eth2types.BLSPrivateKey
+	DerivationPath string
+	WalletIndex    uint64
+}
+
 // Wallet manager for the Constellation daemon
 type Wallet struct {
-	validatorManager             *validator.ValidatorManager
-	constellationKeystoreManager *constellationKeystoreManager
-	data                         constellationWalletData
-	sp                           services.IModuleServiceProvider
+	validatorManager *validator.ValidatorManager
+	data             constellationWalletData
+	sp               services.IModuleServiceProvider
 }
 
 // Create a new wallet
@@ -85,13 +92,6 @@ func (w *Wallet) Reload() error {
 		}
 		w.data = data
 	}
-
-	// Make the Constellation keystore manager
-	constellationKeystoreMgr, err := newConstellationKeystoreManager(moduleDir)
-	if err != nil {
-		return fmt.Errorf("error creating Constellation keystore manager: %w", err)
-	}
-	w.constellationKeystoreManager = constellationKeystoreMgr
 	return nil
 }
 
@@ -112,10 +112,12 @@ func (w *Wallet) saveData() error {
 	return nil
 }
 
-// Generate a new validator key and save it
-func (w *Wallet) GenerateNewValidatorKey() (*eth2types.BLSPrivateKey, error) {
+// Get the next validator key without saving it.
+// You are responsible for saving it before using it for actual validation duties.
+func (w *Wallet) GetNextValidatorKey() (*ValidatorKey, error) {
 	// Get the path for the next validator key
-	path := fmt.Sprintf(shared.ConstellationValidatorPath, w.data.NextAccount)
+	index := w.data.NextAccount
+	path := fmt.Sprintf(shared.ConstellationValidatorPath, index)
 
 	// Ask the HD daemon to generate the key
 	client := w.sp.GetHyperdriveClient()
@@ -124,67 +126,95 @@ func (w *Wallet) GenerateNewValidatorKey() (*eth2types.BLSPrivateKey, error) {
 		return nil, fmt.Errorf("error generating validator key for path [%s]: %w", path, err)
 	}
 
-	// Increment the next account index first for safety
-	w.data.NextAccount++
-	err = w.saveData()
-	if err != nil {
-		return nil, err
-	}
-
-	// Save the key to the VC stores
-	key, err := eth2types.BLSPrivateKeyFromBytes(response.Data.PrivateKey)
+	// Decode the key
+	privateKey, err := eth2types.BLSPrivateKeyFromBytes(response.Data.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("error converting BLS private key for path %s: %w", path, err)
 	}
-	err = w.validatorManager.StoreKey(key, path)
-	if err != nil {
-		return nil, fmt.Errorf("error saving validator key: %w", err)
-	}
-
-	// Save the key to the Constellation folder
-	err = w.constellationKeystoreManager.StoreValidatorKey(key, path)
-	if err != nil {
-		return nil, fmt.Errorf("error saving validator key to the Constellation store: %w", err)
-	}
-	return key, nil
+	pubkey := beacon.ValidatorPubkey(privateKey.PublicKey().Marshal())
+	return &ValidatorKey{
+		PublicKey:      pubkey,
+		PrivateKey:     privateKey,
+		DerivationPath: path,
+		WalletIndex:    index,
+	}, nil
 }
 
-// Gets all of the validator private keys that are stored in the Constellation keystore folder
-func (w *Wallet) GetAllPrivateKeys() ([]*eth2types.BLSPrivateKey, error) {
-	dir := w.constellationKeystoreManager.GetKeystoreDir()
-	files, err := os.ReadDir(dir)
+// Save a validator key
+func (w *Wallet) SaveValidatorKey(key *ValidatorKey) error {
+	// Save the key to the VC stores
+	err := w.validatorManager.StoreKey(key.PrivateKey, key.DerivationPath)
 	if err != nil {
-		return nil, fmt.Errorf("error enumerating Constellation keystore folder [%s]: %w", dir, err)
+		return fmt.Errorf("error saving validator key: %w", err)
 	}
 
-	// Go through each file
-	keys := []*eth2types.BLSPrivateKey{}
-	for _, file := range files {
-		filename := file.Name()
-		if !strings.HasPrefix(filename, keystorePrefix) || !strings.HasSuffix(filename, keystoreSuffix) {
-			continue
-		}
-
-		// Get the pubkey from the filename
-		trimmed := strings.TrimPrefix(filename, keystorePrefix)
-		trimmed = strings.TrimSuffix(trimmed, keystoreSuffix)
-		pubkey, err := beacon.HexToValidatorPubkey(trimmed)
-		if err != nil {
-			return nil, fmt.Errorf("error getting pubkey for keystore file [%s]: %w", filename, err)
-		}
-
-		// Load it
-		key, err := w.constellationKeystoreManager.LoadValidatorKey(pubkey)
-		if err != nil {
-			return nil, fmt.Errorf("error loading validator keystore file [%s]: %w", filename, err)
-		}
-		keys = append(keys, key)
+	// Update the wallet data
+	nextIndex := key.WalletIndex + 1
+	if nextIndex > w.data.NextAccount {
+		w.data.NextAccount = nextIndex
 	}
-
-	return keys, nil
+	err = w.saveData()
+	if err != nil {
+		return fmt.Errorf("error saving wallet data: %w", err)
+	}
+	return nil
 }
 
 // Get the private validator key with the corresponding pubkey
-func (w *Wallet) GetPrivateKeyForPubkey(pubkey beacon.ValidatorPubkey) (*eth2types.BLSPrivateKey, error) {
-	return w.constellationKeystoreManager.LoadValidatorKey(pubkey)
+func (w *Wallet) LoadValidatorKey(pubkey beacon.ValidatorPubkey) (*eth2types.BLSPrivateKey, error) {
+	return w.validatorManager.LoadKey(pubkey)
+}
+
+// Recover a validator key by public key
+func (w *Wallet) RecoverValidatorKey(pubkey beacon.ValidatorPubkey, startIndex uint64, maxAttempts uint64) (uint64, error) {
+	client := w.sp.GetHyperdriveClient()
+
+	// Find matching validator key
+	var index uint64
+	var validatorKey *eth2types.BLSPrivateKey
+	var derivationPath string
+	for index = 0; index < maxAttempts; index++ {
+		// Get the key from the HD daemon
+		path := fmt.Sprintf(shared.ConstellationValidatorPath, index+startIndex)
+		response, err := client.Wallet.GenerateValidatorKey(path)
+		if err != nil {
+			return 0, fmt.Errorf("error generating validator key for path [%s]: %w", path, err)
+		}
+
+		// Decode the key
+		key, err := eth2types.BLSPrivateKeyFromBytes(response.Data.PrivateKey)
+		if err != nil {
+			return 0, fmt.Errorf("error converting BLS private key for path %s: %w", path, err)
+		}
+
+		if bytes.Equal(pubkey[:], key.PublicKey().Marshal()) {
+			validatorKey = key
+			derivationPath = path
+			break
+		}
+	}
+
+	// Check validator key
+	if validatorKey == nil {
+		return 0, fmt.Errorf("validator %s key not found", pubkey.Hex())
+	}
+
+	// Update account index
+	nextIndex := index + startIndex + 1
+	if nextIndex > w.data.NextAccount {
+		w.data.NextAccount = nextIndex
+	}
+
+	// Update keystores
+	err := w.validatorManager.StoreKey(validatorKey, derivationPath)
+	if err != nil {
+		return 0, fmt.Errorf("error storing validator %s key: %w", pubkey.HexWithPrefix(), err)
+	}
+	err = w.saveData()
+	if err != nil {
+		return 0, fmt.Errorf("error storing wallet data: %w", err)
+	}
+
+	// Return
+	return index + startIndex, nil
 }

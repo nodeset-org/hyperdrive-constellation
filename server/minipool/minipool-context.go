@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/gorilla/mux"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
@@ -18,6 +19,7 @@ import (
 	"github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
 	"github.com/rocket-pool/node-manager-core/log"
+	"github.com/rocket-pool/node-manager-core/wallet"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 )
@@ -28,7 +30,7 @@ import (
 // Structs implementing this will handle the caller-specific functionality.
 type IMinipoolCallContext[DataType any] interface {
 	// Initialize the context with any bootstrapping, requirements checks, or bindings it needs to set up
-	Initialize() (types.ResponseStatus, error)
+	Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error)
 
 	// Used to get any supplemental state required during initialization - anything in here will be fed into an rp.Query() multicall
 	GetState(node *node.Node, mc *batch.MultiCaller)
@@ -42,7 +44,7 @@ type IMinipoolCallContext[DataType any] interface {
 	GetMinipoolDetails(mc *batch.MultiCaller, mp minipool.IMinipool, index int)
 
 	// Prepare the response data using all of the provided artifacts
-	PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *DataType) (types.ResponseStatus, error)
+	PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *DataType, blockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error)
 }
 
 // Interface for minipool call context factories - these will be invoked during route handling to create the
@@ -94,6 +96,7 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	csMgr := serviceProvider.GetConstellationManager()
 	rpMgr := serviceProvider.GetRocketPoolManager()
 	qMgr := serviceProvider.GetQueryManager()
+	signer := serviceProvider.GetSigner()
 
 	// Get the wallet status
 	walletResponse, err := hd.Wallet.Status()
@@ -101,6 +104,12 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 		return types.ResponseStatus_Error, nil, fmt.Errorf("error getting wallet status: %w", err)
 	}
 	walletStatus := walletResponse.Data.WalletStatus
+
+	// Get the transact txOpts if this node is ready for transaction
+	var txOpts *bind.TransactOpts
+	if wallet.IsWalletReady(walletStatus) {
+		txOpts = signer.GetTransactor(walletStatus.Wallet.WalletAddress)
+	}
 
 	// Common requirements
 	err = serviceProvider.RequireNodeAddress(walletStatus)
@@ -127,12 +136,12 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	rp := rpMgr.RocketPool
 
 	// Get the latest block for consistency
-	latestBlock, err := serviceProvider.GetEthClient().BlockNumber(ctx)
+	latestBlockHeader, err := serviceProvider.GetEthClient().HeaderByNumber(ctx, nil)
 	if err != nil {
 		return types.ResponseStatus_Error, nil, fmt.Errorf("error getting latest block number: %w", err)
 	}
 	callOpts := &bind.CallOpts{
-		BlockNumber: big.NewInt(int64(latestBlock)),
+		BlockNumber: latestBlockHeader.Number,
 	}
 
 	// Create the bindings
@@ -143,7 +152,7 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	}
 
 	// Supplemental function-specific bindings
-	status, err := mpContext.Initialize()
+	status, err := mpContext.Initialize(walletStatus)
 	if err != nil {
 		return status, nil, err
 	}
@@ -201,6 +210,6 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	}
 
 	// Supplemental function-specific response construction
-	status, err = mpContext.PrepareData(addresses, mps, data)
+	status, err = mpContext.PrepareData(addresses, mps, data, latestBlockHeader, txOpts)
 	return status, response, err
 }

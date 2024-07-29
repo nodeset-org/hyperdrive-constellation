@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	batch "github.com/rocket-pool/batch-query"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -79,6 +80,20 @@ func (c *SuperNodeAccount) HasSufficientLiquidity(mc *batch.MultiCaller, out *bo
 	eth.AddCallToMulticaller(mc, c.contract, out, "hasSufficientLiquidity", bondAmount)
 }
 
+func (c *SuperNodeAccount) TotalEthStaking(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "totalEthStaking")
+}
+
+// The total amount of ETH that will be bonded by both your lockup and Constellation as part of minipool creation
+func (c *SuperNodeAccount) Bond(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "bond")
+}
+
+// The amount of ETH required to be sent by the subnode operator during a minipool deposit
+func (c *SuperNodeAccount) LockThreshold(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "lockThreshhold")
+}
+
 // ====================
 // === Transactions ===
 // ====================
@@ -118,6 +133,6 @@ func (c *SuperNodeAccount) CreateMinipool(
 	return c.txMgr.CreateTransactionInfo(c.contract, "createMinipool", opts, validatorPubkey, validatorSignature, depositDataRoot, salt, expectedMinipoolAddress, timestampBig, sig)
 }
 
-func (c *SuperNodeAccount) Stake(validatorSignature []byte, depositDataRoot common.Hash, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "stake", opts, validatorSignature, depositDataRoot, minipool)
+func (c *SuperNodeAccount) Stake(validatorSignature beacon.ValidatorSignature, depositDataRoot common.Hash, minipool common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "stake", opts, validatorSignature[:], depositDataRoot, minipool)
 }
