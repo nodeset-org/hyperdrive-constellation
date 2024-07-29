@@ -1,6 +1,7 @@
 package with_ns_registered
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -69,7 +70,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	csMgr := sp.GetConstellationManager()
 	txMgr := sp.GetTransactionManager()
 	qMgr := sp.GetQueryManager()
-	// ec := sp.GetEthClient()
+	ec := sp.GetEthClient()
 
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 
@@ -80,6 +81,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	// ethBalanceNodeBefore, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
 	// ethBalanceYieldDistributorBefore, err := ec.BalanceAt(context.Background(), bindings.YieldDistributor.Address, nil)
 	// ethBalanceTreasuryBefore, err := ec.BalanceAt(context.Background(), bindings.TreasuryAddress, nil)
+	ethBalanceOperatorDistributorBefore, err := ec.BalanceAt(context.Background(), bindings.OperatorDistributorAddress, nil)
 
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		bindings.Weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
@@ -103,15 +105,33 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
-	require.NoError(t, err)
-	t.Log("Created contract bindings")
-
 	// Send 1 ETH to the yield distributor
 	sendEthTx = txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
-	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to yield distributor")
 
 	// Call harvest()
 	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(0), big.NewInt(1), deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
+	// Again
+
+	// Send 1 ETH to the deposit pool
+	sendEthTx = txMgr.CreateTransactionInfoRaw(bindings.DepositPoolAddress, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to deposit pool")
+
+	// Advance blockchain time
+	slotsToAdvance = 1200 * 60 * 60 / 12
+	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
+
+	// Send 1 ETH to the yield distributor
+	sendEthTx = txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH to yield distributor")
+
+	// Call harvest()
+	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(1), big.NewInt(2), deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
 
@@ -119,6 +139,8 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	var wethBalanceNodeAfter *big.Int
 	var wethBalanceYieldDistributorAfter *big.Int
 	var wethBalanceTreasuryAfter *big.Int
+
+	ethBalanceOperatorDistributorAfter, err := ec.BalanceAt(context.Background(), bindings.OperatorDistributorAddress, nil)
 	// ethBalanceNodeAfter, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
 	// ethBalanceYieldDistributorAfter, err := ec.BalanceAt(context.Background(), bindings.YieldDistributor.Address, nil)
 	// ethBalanceTreasuryAfter, err := ec.BalanceAt(context.Background(), bindings.TreasuryAddress, nil)
@@ -132,7 +154,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 
 	// Verify balances
 	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
-	// require.Equal(t, 1, ethBalanceYieldDistributorAfter.Cmp(ethBalanceYieldDistributorBefore))
+	require.Equal(t, 1, ethBalanceOperatorDistributorAfter.Cmp(ethBalanceOperatorDistributorBefore))
 	// require.Equal(t, 1, ethBalanceTreasuryAfter.Cmp(ethBalanceTreasuryBefore))
 }
 
