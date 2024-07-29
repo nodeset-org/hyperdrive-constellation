@@ -84,8 +84,6 @@ func sendEthAndAdvanceTime(t *testing.T, address common.Address, slotsToAdvance 
 // Simulate an ETH reward getting deposited to YieldDistributor
 func simulateEthRewardToYieldDistributor(t *testing.T) {
 	sp := testMgr.GetConstellationServiceProvider()
-	// csMgr := sp.GetConstellationManager()
-	// txMgr := sp.GetTransactionManager()
 	qMgr := sp.GetQueryManager()
 	slotsToAdvance := 1200 * 60 * 60 / 12
 
