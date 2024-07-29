@@ -26,6 +26,7 @@ import (
 	"github.com/rocket-pool/node-manager-core/wallet"
 
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
+	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
@@ -72,12 +73,14 @@ type MinipoolStakeContext struct {
 	rpMgr       *cscommon.RocketPoolManager
 	csMgr       *cscommon.ConstellationManager
 	odaoMgr     *oracle.OracleDaoManager
+	pdaoMgr     *protocol.ProtocolDaoManager
 	mpMgr       *minipool.MinipoolManager
 
 	// On-chain vars
 	isWhitelisted  bool
 	currentTime    time.Time
 	scrubPeriod    time.Duration
+	launchTimeout  time.Duration
 	stakeValueGwei uint64
 }
 
@@ -94,6 +97,10 @@ func (c *MinipoolStakeContext) Initialize(walletStatus wallet.WalletStatus) (typ
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating oDAO manager binding: %w", err)
 	}
+	c.pdaoMgr, err = protocol.NewProtocolDaoManager(c.rpMgr.RocketPool)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error creating pDAO manager binding: %w", err)
+	}
 	c.mpMgr, err = minipool.NewMinipoolManager(c.rpMgr.RocketPool)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating minipool manager binding: %w", err)
@@ -107,6 +114,7 @@ func (c *MinipoolStakeContext) GetState(node *node.Node, mc *batch.MultiCaller) 
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 	eth.AddQueryablesToMulticall(mc,
 		c.odaoMgr.Settings.Minipool.ScrubPeriod,
+		c.pdaoMgr.Settings.Minipool.LaunchTimeout,
 		c.mpMgr.StakeValue,
 	)
 }
@@ -135,6 +143,7 @@ func (c *MinipoolStakeContext) PrepareData(addresses []common.Address, mps []min
 	// Prep some data
 	c.currentTime = time.Unix(int64(blockHeader.Time), 0)
 	c.scrubPeriod = c.odaoMgr.Settings.Minipool.ScrubPeriod.Formatted()
+	c.launchTimeout = c.pdaoMgr.Settings.Minipool.LaunchTimeout.Formatted()
 	stakeValueWei := c.mpMgr.StakeValue.Get()
 	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei)
 	c.stakeValueGwei = stakeValueGwei.Uint64()
@@ -195,6 +204,10 @@ func (c *MinipoolStakeContext) getMinipoolStakeDetails(mp minipool.IMinipool, op
 	if !mpDetails.CanStake {
 		return &mpDetails, nil
 	}
+
+	// Get the dissolve time
+	dissolveTime := creationTime.Add(c.launchTimeout)
+	mpDetails.TimeUntilDissolve = time.Until(dissolveTime)
 
 	// Load the private key
 	pubkey := mpCommon.Pubkey.Get()

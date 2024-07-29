@@ -40,8 +40,9 @@ type MinipoolCreateData struct {
 
 type MinipoolStakeDetails struct {
 	CanStake           bool                   `json:"canStake"`
-	RemainingTime      time.Duration          `json:"remainingTime"`
 	StillInScrubPeriod bool                   `json:"stillInScrubPeriod"`
+	RemainingTime      time.Duration          `json:"remainingTime"`
+	TimeUntilDissolve  time.Duration          `json:"timeUntilDissolve"`
 	Address            common.Address         `json:"address"`
 	Pubkey             beacon.ValidatorPubkey `json:"pubkey"`
 	TxInfo             *eth.TransactionInfo   `json:"txInfo"`
