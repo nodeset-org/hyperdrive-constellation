@@ -88,6 +88,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	slotsToAdvance := 1200 * 60 * 60 / 12
 
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
 
 	// Get balances before harvest
 	var wethBalanceNodeBefore *big.Int
@@ -98,6 +99,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
 		return nil
 	}, nil)
+	require.NoError(t, err)
 
 	// Send 1 ETH to the deposit pool
 	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, slotsToAdvance)
@@ -132,6 +134,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, bindings.TreasuryAddress)
 		return nil
 	}, nil)
+	require.NoError(t, err)
 
 	// Verify balances
 	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
