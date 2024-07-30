@@ -87,7 +87,9 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 
 	// Disable RPL coverage limitation
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
 	disableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(false, deployerOpts)
+	require.NoError(t, err)
 	testMgr.MineTx(t, disableCoverageTx, deployerOpts, "Disabled RPL coverage limitation")
 
 	// Mint 1000 xrETH + 1000 ETH of xRPL
@@ -107,10 +109,12 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 
 	// Enable RPL coverage and set to 30%
 	enableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(true, deployerOpts)
+	require.NoError(t, err)
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
 	coverageRatio := big.NewInt(30)
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
+	require.NoError(t, err)
 	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 30%")
 
 	// Attempt to mint 1 xrETH (should fail)
