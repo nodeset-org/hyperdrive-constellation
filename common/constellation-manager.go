@@ -18,6 +18,7 @@ type ConstellationManager struct {
 	PriceFetcher        *constellation.PriceFetcher
 	OperatorDistributor *constellation.OperatorDistributor
 	YieldDistributor    *constellation.YieldDistributor
+	RplVault            *constellation.RplVault
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -54,12 +55,14 @@ func (m *ConstellationManager) LoadContracts() error {
 	var priceFetcherAddress common.Address
 	var operatorDistributorAddress common.Address
 	var yieldDistributorAddress common.Address
+	var rplVaultAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
 		m.Directory.GetPriceFetcherAddress(mc, &priceFetcherAddress)
 		m.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
 		m.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
+		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -87,6 +90,10 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating yield distributor binding: %w", err)
 	}
+	rplVault, err := constellation.NewRplVault(rplVaultAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating RPL vault binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
@@ -94,6 +101,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.PriceFetcher = priceFetcher
 	m.OperatorDistributor = operatorDistributor
 	m.YieldDistributor = yieldDistributor
+	m.RplVault = rplVault
 	m.isLoaded = true
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
@@ -28,7 +29,7 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 
 	// Constellation bindings
-	RplVault        contracts.IErc4626Token
+	RplVault        *constellation.RplVault
 	WethVault       contracts.IErc4626Token
 	Weth            *contracts.Weth
 	RpSuperNode     *node.Node
@@ -94,7 +95,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	if err != nil {
 		return nil, fmt.Errorf("error creating RP supernode binding: %w", err)
 	}
-	rplVault, err := contracts.NewErc4626Token(rplVaultAddress, ec, qMgr, txMgr, nil)
+	rplVault, err := constellation.NewRplVault(rplVaultAddress, ec, txMgr)
 	if err != nil {
 		return nil, fmt.Errorf("error creating RPL vault binding: %w", err)
 	}

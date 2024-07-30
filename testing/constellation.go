@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
@@ -13,7 +14,7 @@ import (
 )
 
 // Mint RPL and deposit it into the RPL Vault
-func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault contracts.IErc4626Token, amount *big.Int, depositOpts *bind.TransactOpts, owner *bind.TransactOpts) error {
+func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault *constellation.RplVault, amount *big.Int, depositOpts *bind.TransactOpts, owner *bind.TransactOpts) error {
 	// Make some bindings
 	rp := m.sp.GetRocketPoolManager().RocketPool
 	txMgr := m.sp.GetTransactionManager()
@@ -63,7 +64,7 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 			return "swap legacy RPL for new RPL", txInfo, err
 		},
 		func() (string, *eth.TransactionInfo, error) {
-			txInfo, err := rpl.Approve(rplVault.Address(), amount, depositOpts)
+			txInfo, err := rpl.Approve(rplVault.Address, amount, depositOpts)
 			return "approve RPL for deposit", txInfo, err
 		},
 		func() (string, *eth.TransactionInfo, error) {

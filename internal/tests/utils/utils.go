@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
@@ -45,7 +46,7 @@ func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTes
 }
 
 // Deposits RPL to the RPL vault and verifies the contract balances have been updated
-func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, rplVault contracts.IErc4626Token, rpl *tokens.TokenRpl, amount *big.Int, opts *bind.TransactOpts) {
+func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, rplVault *constellation.RplVault, rpl *tokens.TokenRpl, amount *big.Int, opts *bind.TransactOpts) {
 	// Bindings
 	sp := testMgr.GetConstellationServiceProvider()
 	qMgr := sp.GetQueryManager()
@@ -61,7 +62,7 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 	var rvRplBalance *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		rpl.BalanceOf(mc, &odRplBalance, csMgr.OperatorDistributor.Address)
-		rpl.BalanceOf(mc, &rvRplBalance, rplVault.Address())
+		rpl.BalanceOf(mc, &rvRplBalance, rplVault.Address)
 		return nil
 	}, nil)
 	require.NoError(t, err)

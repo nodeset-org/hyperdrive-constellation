@@ -51,7 +51,7 @@ func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
 }
 
 // Run a full cycle test of provisioning RP and Constellation, then depositing and staking a minipool
-func TestMinipoolDepositAndStake(t *testing.T) {
+func TestMinipoolDepositAndStake_SimpleRoundTrip(t *testing.T) {
 	// Take a snapshot, revert at the end
 	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
 	if err != nil {
@@ -60,6 +60,33 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	defer nodeset_cleanup(snapshotName)
 
 	depositAndStakeMinipool(t)
+}
+
+// Disable RPL coverage limitation, deposit 1000 xrETH/ETH, set RPL coverage limitation to 30%
+func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	// sp := testMgr.GetConstellationServiceProvider()
+	// csMgr := sp.GetConstellationManager()
+	// qMgr := sp.GetQueryManager()
+
+	// Disable RPL coverage limitation (SetEnforceWethCoverageRatio)
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	disableCoverageTx, err := bindings.RplVault.SetEnforceWethCoverageRatio(false, deployerOpts)
+	testMgr.MineTx(t, disableCoverageTx, deployerOpts, "Disabled RPL coverage limitation")
+
+	// Mint 1000 xrETH + 1000 ETH of xRPL (should succeed)
+
+	// Enable RPL coverage and set to 30%
+
+	// Attempt to mint 1 xrETH (should fail)
+
 }
 
 // Makes a minipool and stakes it
