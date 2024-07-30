@@ -94,6 +94,8 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 
 	// Mint 1000 xrETH + 1000 ETH of xRPL
 	ethAmount := eth.EthToWei(1000)
+	// TODO: Make sure to disable the coverage limitation
+	// Also add a require that it's not disabled prior to this
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
@@ -103,8 +105,12 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 	}, nil)
 
 	require.NoError(t, err)
-
-	rplAmount := ethAmount.Div(ethAmount, rplPrice)
+	rplPriceStr := rplPrice.String()
+	t.Logf("RPL price: %v", rplPriceStr)
+	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
+	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
+	rplAmountStr := rplAmount.String()
+	t.Logf("Minting RPL: %v", rplAmountStr)
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Enable RPL coverage and set to 30%

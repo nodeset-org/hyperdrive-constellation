@@ -60,7 +60,7 @@ func NewPriceFetcher(address common.Address, ec eth.IExecutionClient, txMgr *eth
 // === Calls ===
 // =============
 
-// Gets the price of RPL as a ratio of ETH:RPL
+// Gets the price of RPL as a ratio of RPL:ETH
 func (c *PriceFetcher) GetRplPrice(mc *batch.MultiCaller, out **big.Int) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getPrice")
 }
