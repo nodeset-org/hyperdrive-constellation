@@ -73,3 +73,7 @@ func (c *RplVault) SetWETHCoverageRatio(wethCoverageRatio *big.Int, opts *bind.T
 func (c *RplVault) SetEnforceWethCoverageRatio(enforceWethCoverageRatio bool, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setEnforceWethCoverageRatio", opts, enforceWethCoverageRatio)
 }
+
+func (c *RplVault) Deposit(assets *big.Int, receiver common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "deposit", opts, assets, receiver)
+}
