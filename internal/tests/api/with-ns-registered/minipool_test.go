@@ -101,11 +101,13 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
+	oneEth := big.NewInt(1e18)
+
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, big.NewInt(1e18), slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, big.NewInt(1e18), 0)
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
 
 	// Call harvest()
 	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, deployerOpts)
@@ -115,10 +117,10 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	// Again - to simulate an interval tick for rewards to go to treasury
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, big.NewInt(1e18), slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, big.NewInt(1e18), 0)
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
 
 	// Call harvest()
 	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, common.Big1, common.Big2, deployerOpts)
