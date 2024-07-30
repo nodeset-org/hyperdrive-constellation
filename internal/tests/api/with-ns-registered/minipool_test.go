@@ -63,12 +63,30 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
-	// Make the bindings
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
 	depositAndStakeMinipool(t, bindings)
+	simulateEthRewardToYieldDistributor(t, bindings)
+}
+
+// Utility function to send ETH and advance blockchain time
+func sendEthAndAdvanceTime(t *testing.T, address common.Address, amount *big.Int, slotsToAdvance int) {
+	sp := testMgr.GetConstellationServiceProvider()
+	txMgr := sp.GetTransactionManager()
+
+	sendEthOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: amount,
+	}
+
+	sendEthTx := txMgr.CreateTransactionInfoRaw(address, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH")
+
+	err := testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
 }
 
 // Run a check to make sure depositing with duplicate salts fails
@@ -103,6 +121,65 @@ func TestDuplicateSalts(t *testing.T) {
 	_, err = cs.Minipool.Create(salt)
 	require.Error(t, err)
 	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
+}
+
+// Simulate an ETH reward getting deposited to YieldDistributor
+func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.ContractBindings) {
+	sp := testMgr.GetConstellationServiceProvider()
+	qMgr := sp.GetQueryManager()
+	slotsToAdvance := 1200 * 60 * 60 / 12
+
+	// Get balances before harvest
+	var wethBalanceNodeBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
+
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	oneEth := big.NewInt(1e18)
+
+	// Send 1 ETH to the deposit pool
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+
+	// Send 1 ETH to the yield distributor
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+
+	// Call harvest()
+	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
+	// Again - to simulate an interval tick for rewards to go to treasury
+
+	// Send 1 ETH to the deposit pool
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+
+	// Send 1 ETH to the yield distributor
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+
+	// Call harvest()
+	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, common.Big1, common.Big2, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
+	// Get balances after harvest
+	var wethBalanceNodeAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
+
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Verify balances
+	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 }
 
 // Makes a minipool and stakes it
