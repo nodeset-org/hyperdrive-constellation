@@ -53,6 +53,16 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault *con
 		return fmt.Errorf("error submitting mint transactions: %w", err)
 	}
 
+	// Mine the block
+	err = m.CommitBlock()
+	if err != nil {
+		return fmt.Errorf("error committing block: %w", err)
+	}
+	err = txMgr.WaitForTransactions(txs)
+	if err != nil {
+		return fmt.Errorf("error waiting for deploy transactions: %w", err)
+	}
+
 	// Mint and deposit RPL
 	submissions, err = eth.BatchCreateTransactionSubmissions([]func() (string, *eth.TransactionInfo, error){
 		func() (string, *eth.TransactionInfo, error) {

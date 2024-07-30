@@ -5,4 +5,5 @@ const (
 	MessageKey string = "message"
 	NonceKey   string = "nonce"
 	AttemptKey string = "attempt"
+	TaskKey    string = "task"
 )

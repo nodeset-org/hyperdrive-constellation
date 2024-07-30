@@ -112,9 +112,9 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 	previousMpCount := rpSuperNode.MinipoolCount.Formatted()
 	t.Logf("Supernode has %d minipools", previousMpCount)
 
-	depositResponse, err := cs.Minipool.Deposit(salt)
+	depositResponse, err := cs.Minipool.Create(salt)
 	require.NoError(t, err)
-	require.True(t, depositResponse.Data.CanDeposit)
+	require.True(t, depositResponse.Data.CanCreate)
 	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
 	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
 	testMgr.MineTxViaHyperdrive(t, depositResponse.Data.TxInfo, "Deposited and made a minipool")
@@ -155,11 +155,12 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 }
 
 // Stakes a minipool, optionally advancing time enough to pass the scrub check first
-func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, mp minipool.IMinipool, timeToAdvance time.Duration) {
+func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, nodeAddress common.Address, mp minipool.IMinipool, timeToAdvance time.Duration) {
 	// Bindings
 	cs := testMgr.GetApiClient()
 	sp := testMgr.GetConstellationServiceProvider()
 	qMgr := sp.GetQueryManager()
+	ec := sp.GetEthClient()
 
 	if timeToAdvance > 0 {
 		// Fast forward time
@@ -171,6 +172,10 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, mp
 		require.NoError(t, err)
 		t.Logf("Advanced %d slots", slotsToAdvance)
 	}
+
+	// Get the node balance
+	beforeBalance, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	require.NoError(t, err)
 
 	// Stake the minipool
 	stakeResponse, err := cs.Minipool.Stake()
@@ -190,6 +195,12 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, mp
 	require.NoError(t, err)
 	require.Equal(t, types.MinipoolStatus_Staking, mp.Common().Status.Formatted())
 	t.Logf("Minipool %s is in staking", mp.Common().Address.Hex())
+
+	// Get the balance after
+	afterBalance, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, afterBalance.Cmp(beforeBalance))
+	t.Logf("Node balance increased from %.6f to %.6f", eth.WeiToEth(beforeBalance), eth.WeiToEth(afterBalance))
 }
 
 // Harvest rewards from the yield distributor and assert the node's WETH balance increased

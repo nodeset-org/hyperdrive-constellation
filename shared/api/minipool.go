@@ -19,16 +19,71 @@ type MinipoolGetAvailableMinipoolCountData struct {
 	Count int `json:"count"`
 }
 
-type MinipoolDepositData struct {
-	CanDeposit                      bool                   `json:"canDeposit"`
+/*
+type MinipoolDetails struct {
+	Address         common.Address         `json:"address"`
+	ValidatorPubkey beacon.ValidatorPubkey `json:"validatorPubkey"`
+	Version         uint8                  `json:"version"`
+	Status          struct {
+		Status      types.MinipoolStatus `json:"status"`
+		StatusBlock uint64               `json:"statusBlock"`
+		StatusTime  time.Time            `json:"statusTime"`
+	} `json:"status"`
+	Node struct {
+		Fee             float64        `json:"fee"`
+		DepositBalance  *big.Int       `json:"depositBalance"`
+		RefundBalance   *big.Int       `json:"refundBalance"`
+		DepositAssigned bool           `json:"depositAssigned"`
+	} `json:"node"`
+	User struct {
+		DepositBalance      *big.Int  `json:"depositBalance"`
+		DepositAssigned     bool      `json:"depositAssigned"`
+		DepositAssignedTime time.Time `json:"depositAssignedTime"`
+	} `json:"user"`
+	Balance               *big.Int `json:"balance"`
+	NodeShareOfEthBalance *big.Int `json:"nodeShareOfEthBalance"`
+	Validator             struct {
+		Exists      bool     `json:"exists"`
+		Active      bool     `json:"active"`
+		Index       string   `json:"index"`
+		Balance     *big.Int `json:"balance"`
+		NodeBalance *big.Int `json:"nodeBalance"`
+	} `json:"validator"`
+	CanStake          bool                  `json:"canStake"`
+	Queue             minipool.QueueDetails `json:"queue"`
+	CloseAvailable    bool                  `json:"closeAvailable"`
+	Finalised         bool                  `json:"finalised"`
+	UseLatestDelegate bool                  `json:"useLatestDelegate"`
+	Delegate          common.Address        `json:"delegate"`
+	PreviousDelegate  common.Address        `json:"previousDelegate"`
+	EffectiveDelegate common.Address        `json:"effectiveDelegate"`
+	TimeUntilDissolve time.Duration         `json:"timeUntilDissolve"`
+	Penalties         uint64                `json:"penalties"`
+}
+
+type MinipoolStatusData struct {
+	Minipools      []MinipoolDetails `json:"minipools"`
+	LatestDelegate common.Address    `json:"latestDelegate"`
+}
+*/
+
+type MinipoolStatusData struct {
+	Minipools      []snapi.MinipoolDetails `json:"minipools"`
+	LatestDelegate common.Address          `json:"latestDelegate"`
+}
+
+type MinipoolCreateData struct {
+	CanCreate                       bool                   `json:"canCreate"`
 	InsufficientBalance             bool                   `json:"insufficientBalance"`
-	EthBalance                      *big.Int               `json:"balance"`
 	InsufficientLiquidity           bool                   `json:"insufficientLiquidity"`
 	NotRegisteredWithNodeSet        bool                   `json:"notRegisteredWithNodeSet"`
 	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
 	InsufficientMinipoolCount       bool                   `json:"insufficientMinipoolCount"`
 	RocketPoolDepositingDisabled    bool                   `json:"rocketPoolDepositingDisabled"`
 	NodeSetDepositingDisabled       bool                   `json:"noteSetDepositingDisabled"`
+	NodeBalance                     *big.Int               `json:"nodeBalance"`
+	LockupAmount                    *big.Int               `json:"lockupAmount"`
+	LockupTime                      time.Duration          `json:"lockupTime"`
 	MinipoolAddress                 common.Address         `json:"minipoolAddress"`
 	ValidatorPubkey                 beacon.ValidatorPubkey `json:"validatorPubkey"`
 	Index                           uint64                 `json:"index"`
@@ -38,8 +93,9 @@ type MinipoolDepositData struct {
 
 type MinipoolStakeDetails struct {
 	CanStake           bool                   `json:"canStake"`
-	RemainingTime      time.Duration          `json:"remainingTime"`
 	StillInScrubPeriod bool                   `json:"stillInScrubPeriod"`
+	RemainingTime      time.Duration          `json:"remainingTime"`
+	TimeUntilDissolve  time.Duration          `json:"timeUntilDissolve"`
 	Address            common.Address         `json:"address"`
 	Pubkey             beacon.ValidatorPubkey `json:"pubkey"`
 	TxInfo             *eth.TransactionInfo   `json:"txInfo"`

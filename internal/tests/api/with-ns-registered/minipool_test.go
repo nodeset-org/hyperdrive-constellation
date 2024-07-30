@@ -13,6 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	salt *big.Int = big.NewInt(0x90de5e7)
+)
+
 // Test getting the available minipool count when there are no minipools available
 func TestMinipoolGetAvailableMinipoolCount_Zero(t *testing.T) {
 	// Take a snapshot, revert at the end
@@ -41,7 +45,7 @@ func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
 	// Set up the NodeSet mock server
 	expectedMinipoolCount := 1
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
+	nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, expectedMinipoolCount)
 
 	// Check the available minipool count
 	cs := testMgr.GetApiClient()
@@ -59,7 +63,12 @@ func TestMinipoolDepositAndStake_SimpleRoundTrip(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
-	depositAndStakeMinipool(t)
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
+	t.Log("Created contract bindings")
+
+	depositAndStakeMinipool(t, bindings)
+	simulateEthRewardToYieldDistributor(t, bindings)
 }
 
 // Disable RPL coverage limitation, deposit 1000 xrETH/ETH, set RPL coverage limitation to 30%
@@ -89,23 +98,129 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 
 }
 
-// Makes a minipool and stakes it
-func depositAndStakeMinipool(t *testing.T) {
-	// Get some services
+// Utility function to send ETH and advance blockchain time
+func sendEthAndAdvanceTime(t *testing.T, address common.Address, amount *big.Int, slotsToAdvance int) {
 	sp := testMgr.GetConstellationServiceProvider()
-	csMgr := sp.GetConstellationManager()
-	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
+
+	sendEthOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: amount,
+	}
+
+	sendEthTx := txMgr.CreateTransactionInfoRaw(address, nil, sendEthOpts)
+	testMgr.MineTx(t, sendEthTx, deployerOpts, "Sent ETH")
+
+	err := testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
+}
+
+// Run a check to make sure depositing with duplicate salts fails
+func TestDuplicateSalts(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
 
 	// Make the bindings
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
+	// Get some services
+	cs := testMgr.GetApiClient()
+
+	// Make a normal minipool
+	depositAndStakeMinipool(t, bindings)
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(3200)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(90)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Try making another one with the same salt, it should fail
+	_, err = cs.Minipool.Create(salt)
+	require.Error(t, err)
+	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
+}
+
+// Simulate an ETH reward getting deposited to YieldDistributor
+func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.ContractBindings) {
+	sp := testMgr.GetConstellationServiceProvider()
+	qMgr := sp.GetQueryManager()
+	slotsToAdvance := 1200 * 60 * 60 / 12
+
+	// Get balances before harvest
+	var wethBalanceNodeBefore *big.Int
+	var wethBalanceTreasuryBefore *big.Int
+
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	oneEth := big.NewInt(1e18)
+
+	// Send 1 ETH to the deposit pool
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+
+	// Send 1 ETH to the yield distributor
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+
+	// Call harvest()
+	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
+	// Again - to simulate an interval tick for rewards to go to treasury
+
+	// Send 1 ETH to the deposit pool
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+
+	// Send 1 ETH to the yield distributor
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+
+	// Call harvest()
+	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, common.Big1, common.Big2, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
+
+	// Get balances after harvest
+	var wethBalanceNodeAfter *big.Int
+	var wethBalanceTreasuryAfter *big.Int
+
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, bindings.TreasuryAddress)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Verify balances
+	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
+}
+
+// Makes a minipool and stakes it
+func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings) {
+	// Get some services
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
 	// Query some details
 	var rplPrice *big.Int
 	var totalEthStaking *big.Int
 	var minipoolBond *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
 		csMgr.SuperNodeAccount.TotalEthStaking(mc, &totalEthStaking)
 		csMgr.SuperNodeAccount.Bond(mc, &minipoolBond)
@@ -138,6 +253,15 @@ func depositAndStakeMinipool(t *testing.T) {
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Funded the RP deposit pool")
 
+	// ===
+	/*
+		newLockThreshold := eth.EthToWei(2)
+		txInfo, err = csMgr.SuperNodeAccount.SetLockAmount(newLockThreshold, adminOpts)
+		require.NoError(t, err)
+		testMgr.MineTx(t, txInfo, adminOpts, "Set the lock amount")
+	*/
+	// ===
+
 	// Get the RPL requirement
 	var rplShortfall *big.Int
 	ethAmount := new(big.Int).Add(totalEthStaking, minipoolBond)
@@ -168,13 +292,12 @@ func depositAndStakeMinipool(t *testing.T) {
 
 	// Set the available minipool count
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, 1)
+	nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
 	t.Log("Set up the NodeSet mock server")
 
 	// Deposit to make a minipool
-	salt := big.NewInt(0x90de5e7)
 	mp := cstestutils.CreateMinipoolViaDeposit(t, testMgr, salt, bindings.RpSuperNode, bindings.MinipoolManager)
 
 	// Stake the minipool
-	cstestutils.StakeMinipool(t, testMgr, mp, bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted())
+	cstestutils.StakeMinipool(t, testMgr, nodeAddress, mp, bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted())
 }
