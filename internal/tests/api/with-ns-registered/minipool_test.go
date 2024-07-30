@@ -118,7 +118,9 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
-	coverageRatio := big.NewInt(30)
+	coverageRatio := new(big.Int).Mul(big.NewInt(3), big.NewInt(1e17))
+	coverageRatioStr := coverageRatio.String()
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 30%")
