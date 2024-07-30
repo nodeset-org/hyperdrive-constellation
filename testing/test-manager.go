@@ -94,6 +94,13 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	}
 	apiClient := csclient.NewApiClient(url, tm.GetLogger(), nil)
 
+	// Disable automining
+	err = tm.ToggleAutoMine(false)
+	if err != nil {
+		closeTestManager(tm)
+		return nil, fmt.Errorf("error disabling automining: %v", err)
+	}
+
 	// Return
 	m := &ConstellationTestManager{
 		HyperdriveTestManager: tm,
