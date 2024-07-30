@@ -13,6 +13,7 @@ import (
 	"github.com/nodeset-org/hyperdrive-daemon/shared/types/api"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/utils"
+	"github.com/rocket-pool/node-manager-core/wallet"
 )
 
 // Config
@@ -42,6 +43,7 @@ type TaskLoop struct {
 	wg     *sync.WaitGroup
 
 	// Tasks
+	stakeMinipools *StakeMinipoolsTask
 
 	// Internal
 	wasExecutionClientSynced bool
@@ -52,10 +54,11 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 	logger := sp.GetTasksLogger()
 	ctx := logger.CreateContextWithLogger(sp.GetBaseContext())
 	taskLoop := &TaskLoop{
-		sp:     sp,
-		logger: logger,
-		ctx:    ctx,
-		wg:     wg,
+		sp:             sp,
+		logger:         logger,
+		ctx:            ctx,
+		wg:             wg,
+		stakeMinipools: NewStakeMinipoolsTask(ctx, sp, logger),
 
 		wasExecutionClientSynced: true,
 		wasBeaconClientSynced:    true,
@@ -75,7 +78,7 @@ func (t *TaskLoop) Run() error {
 
 		for {
 			// Make sure all of the resources are ready for task processing
-			readyResult := t.waitUntilReady()
+			walletStatus, readyResult := t.waitUntilReady()
 			switch readyResult {
 			case waitUntilReadyExit:
 				return
@@ -84,7 +87,7 @@ func (t *TaskLoop) Run() error {
 			}
 
 			// === Task execution ===
-			if t.runTasks() {
+			if t.runTasks(walletStatus) {
 				return
 			}
 		}
@@ -151,17 +154,17 @@ func (t *TaskLoop) getNodeSetRegistrationStatus() {
 
 // Wait until the chains and other resources are ready to be queried
 // Returns true if the owning loop needs to exit, false if it can continue
-func (t *TaskLoop) waitUntilReady() waitUntilReadyResult {
+func (t *TaskLoop) waitUntilReady() (*wallet.WalletStatus, waitUntilReadyResult) {
 	// Check the EC status
 	err := t.sp.WaitEthClientSynced(t.ctx, false) // Force refresh the primary / fallback EC status
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "context canceled") {
-			return waitUntilReadyExit
+			return nil, waitUntilReadyExit
 		}
 		t.wasExecutionClientSynced = false
 		t.logger.Error("Execution Client not synced. Waiting for sync...", slog.String(log.ErrorKey, errMsg))
-		return t.sleepAndReturnReadyResult()
+		return nil, t.sleepAndReturnReadyResult()
 	}
 
 	if !t.wasExecutionClientSynced {
@@ -174,12 +177,12 @@ func (t *TaskLoop) waitUntilReady() waitUntilReadyResult {
 	if err != nil {
 		errMsg := err.Error()
 		if strings.Contains(errMsg, "context canceled") {
-			return waitUntilReadyExit
+			return nil, waitUntilReadyExit
 		}
 		// NOTE: if not synced, it returns an error - so there isn't necessarily an underlying issue
 		t.wasBeaconClientSynced = false
 		t.logger.Error("Beacon Node not synced. Waiting for sync...", slog.String(log.ErrorKey, errMsg))
-		return t.sleepAndReturnReadyResult()
+		return nil, t.sleepAndReturnReadyResult()
 	}
 
 	if !t.wasBeaconClientSynced {
@@ -187,12 +190,23 @@ func (t *TaskLoop) waitUntilReady() waitUntilReadyResult {
 		t.wasBeaconClientSynced = true
 	}
 
-	// Wait for NodeSet registration
-	if t.sp.WaitForNodeSetRegistration(t.ctx) {
-		return waitUntilReadyExit
+	// Wait for a wallet
+	walletStatus, err := t.sp.WaitForWallet(t.ctx)
+	if err != nil {
+		errMsg := err.Error()
+		t.logger.Error("Waiting for node address...", slog.String(log.ErrorKey, errMsg))
+		return nil, t.sleepAndReturnReadyResult()
+	}
+	if walletStatus == nil {
+		return nil, waitUntilReadyExit
 	}
 
-	return waitUntilReadySuccess
+	// Wait for NodeSet registration
+	if t.sp.WaitForNodeSetRegistration(t.ctx) {
+		return nil, waitUntilReadyExit
+	}
+
+	return walletStatus, waitUntilReadySuccess
 }
 
 // Sleep on the context for the task cooldown time, and return either exit or continue
@@ -207,6 +221,21 @@ func (t *TaskLoop) sleepAndReturnReadyResult() waitUntilReadyResult {
 
 // Runs an iteration of the node tasks.
 // Returns true if the task loop should exit, false if it should continue.
-func (t *TaskLoop) runTasks() bool {
+func (t *TaskLoop) runTasks(walletStatus *wallet.WalletStatus) bool {
+	// Stake minipools that are ready
+	if err := t.stakeMinipools.Run(walletStatus); err != nil {
+		t.logger.Error(err.Error())
+	}
+	/*
+		if utils.SleepWithCancel(t.ctx, taskCooldown) {
+			return true
+		}
+
+		// Submit missing exit messages to the NodeSet server
+		if err := t.sendExitData.Run(); err != nil {
+			t.logger.Error(err.Error())
+		}
+	*/
+
 	return utils.SleepWithCancel(t.ctx, tasksInterval)
 }

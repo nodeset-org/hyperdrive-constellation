@@ -45,7 +45,7 @@ func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
 	// Set up the NodeSet mock server
 	expectedMinipoolCount := 1
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, expectedMinipoolCount)
+	nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, expectedMinipoolCount)
 
 	// Check the available minipool count
 	cs := testMgr.GetApiClient()
@@ -188,7 +188,7 @@ func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBinding
 
 	// Set the available minipool count
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetAvailableConstellationMinipoolCount(nodeAddress, 1)
+	nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
 	t.Log("Set up the NodeSet mock server")
 
 	// Deposit to make a minipool
