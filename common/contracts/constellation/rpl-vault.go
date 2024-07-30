@@ -70,7 +70,7 @@ func (c *RplVault) SetWETHCoverageRatio(wethCoverageRatio *big.Int, opts *bind.T
 	return c.txMgr.CreateTransactionInfo(c.contract, "setWETHCoverageRatio", opts, wethCoverageRatio)
 }
 
-func (c *RplVault) SetEnforceWethCoverageRatio(enforceWethCoverageRatio bool, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+func (c *RplVault) SetEnforceWETHCoverageRatio(enforceWethCoverageRatio bool, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setEnforceWethCoverageRatio", opts, enforceWethCoverageRatio)
 }
 

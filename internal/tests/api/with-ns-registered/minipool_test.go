@@ -81,21 +81,43 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 	defer nodeset_cleanup(snapshotName)
 
 	// Get some services
-	// sp := testMgr.GetConstellationServiceProvider()
-	// csMgr := sp.GetConstellationManager()
-	// qMgr := sp.GetQueryManager()
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
 
-	// Disable RPL coverage limitation (SetEnforceWethCoverageRatio)
+	// Disable RPL coverage limitation
 	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
-	disableCoverageTx, err := bindings.RplVault.SetEnforceWethCoverageRatio(false, deployerOpts)
+	disableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(false, deployerOpts)
 	testMgr.MineTx(t, disableCoverageTx, deployerOpts, "Disabled RPL coverage limitation")
 
-	// Mint 1000 xrETH + 1000 ETH of xRPL (should succeed)
+	// Mint 1000 xrETH + 1000 ETH of xRPL
+	ethAmount := eth.EthToWei(1000)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+
+	var rplPrice *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
+		return nil
+	}, nil)
+
+	require.NoError(t, err)
+
+	rplAmount := ethAmount.Div(ethAmount, rplPrice)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Enable RPL coverage and set to 30%
+	enableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(true, deployerOpts)
+	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
+
+	coverageRatio := big.NewInt(30)
+	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
+	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 30%")
 
 	// Attempt to mint 1 xrETH (should fail)
-
+	ethAmount = eth.EthToWei(1)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	require.Error(t, err)
+	t.Logf("Failed to mint 1 xrETH as expected: %v", err)
 }
 
 // Utility function to send ETH and advance blockchain time
