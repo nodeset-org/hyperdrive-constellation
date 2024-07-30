@@ -1,0 +1,1 @@
+package with_ns_registered

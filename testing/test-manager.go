@@ -31,7 +31,7 @@ type ConstellationTestManager struct {
 	apiClient *csclient.ApiClient
 
 	// Wait group for graceful shutdown
-	swWg *sync.WaitGroup
+	wg *sync.WaitGroup
 }
 
 // Creates a new TestManager instance
@@ -78,8 +78,8 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	}
 
 	// Create the server
-	swWg := &sync.WaitGroup{}
-	serverMgr, err := csserver.NewServerManager(constellationSp, csAddress, 0, swWg)
+	wg := &sync.WaitGroup{}
+	serverMgr, err := csserver.NewServerManager(constellationSp, csAddress, 0, wg)
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating constellation server: %v", err)
@@ -107,7 +107,7 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 		sp:                    constellationSp,
 		serverMgr:             serverMgr,
 		apiClient:             apiClient,
-		swWg:                  swWg,
+		wg:                    wg,
 	}
 	return m, nil
 }
@@ -131,7 +131,7 @@ func (m *ConstellationTestManager) GetApiClient() *csclient.ApiClient {
 func (m *ConstellationTestManager) Close() error {
 	if m.serverMgr != nil {
 		m.serverMgr.Stop()
-		m.swWg.Wait()
+		m.wg.Wait()
 		m.TestManager.GetLogger().Info("Stopped daemon API server")
 		m.serverMgr = nil
 	}
