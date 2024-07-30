@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
@@ -28,11 +29,14 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 
 	// Constellation bindings
-	RplVault        contracts.IErc4626Token
-	WethVault       contracts.IErc4626Token
-	Weth            *contracts.Weth
-	RpSuperNode     *node.Node
-	TreasuryAddress common.Address
+	RplVault                   contracts.IErc4626Token
+	WethVault                  contracts.IErc4626Token
+	Weth                       *contracts.Weth
+	YieldDistributor           *constellation.YieldDistributor
+	RpSuperNode                *node.Node
+	TreasuryAddress            common.Address
+	DepositPoolAddress         common.Address
+	OperatorDistributorAddress common.Address
 }
 
 // Create a new contract bindings instance
@@ -80,11 +84,17 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	var wethVaultAddress common.Address
 	var wethAddress common.Address
 	var treasuryAddress common.Address
+	var depositPoolAddress common.Address
+	var operatorDistributorAddress common.Address
+	var yieldDistributorAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
 		csMgr.Directory.GetTreasuryAddress(mc, &treasuryAddress)
+		csMgr.Directory.GetDepositPoolAddress(mc, &depositPoolAddress)
+		csMgr.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
+		csMgr.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -106,7 +116,10 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	if err != nil {
 		return nil, fmt.Errorf("error creating WETH binding: %w", err)
 	}
-
+	yieldDistributor, err := constellation.NewYieldDistributor(yieldDistributorAddress, ec, txMgr)
+	if err != nil {
+		return nil, fmt.Errorf("error creating yield distributor binding: %w", err)
+	}
 	return &ContractBindings{
 		// Rocket Pool
 		DepositPoolManager: dpMgr,
@@ -118,10 +131,13 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		NodeManager:        nodeMgr,
 
 		// Constellation
-		RplVault:        rplVault,
-		WethVault:       wethVault,
-		Weth:            weth,
-		TreasuryAddress: treasuryAddress,
-		RpSuperNode:     rpSuperNode,
+		RplVault:                   rplVault,
+		WethVault:                  wethVault,
+		Weth:                       weth,
+		TreasuryAddress:            treasuryAddress,
+		DepositPoolAddress:         depositPoolAddress,
+		OperatorDistributorAddress: operatorDistributorAddress,
+		RpSuperNode:                rpSuperNode,
+		YieldDistributor:           yieldDistributor,
 	}, nil
 }
