@@ -174,6 +174,9 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 		Data: data,
 	}
 
+	// Set the node minipool count to the Constellation count
+	node.MinipoolCount.SetRawValue(minipoolCount)
+
 	// Supplemental function-specific check to see if minipool processing should continue
 	if !mpContext.CheckState(node, data) {
 		return types.ResponseStatus_Success, response, nil

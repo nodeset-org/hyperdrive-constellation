@@ -45,18 +45,24 @@ func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csap
 	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCountData](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
 }
 
-// Deposit to make a new minipool
-func (r *MinipoolRequester) Deposit(salt *big.Int) (*types.ApiResponse[csapi.MinipoolDepositData], error) {
+// Deposit to Constellation to create a new minipool
+func (r *MinipoolRequester) Create(salt *big.Int) (*types.ApiResponse[csapi.MinipoolCreateData], error) {
 	args := map[string]string{
 		"salt": salt.String(),
 	}
-	return client.SendGetRequest[csapi.MinipoolDepositData](r, "deposit", "Deposit", args)
+	return client.SendGetRequest[csapi.MinipoolCreateData](r, "create", "Create", args)
 }
 
 // Get details and transaction info of minipools that are eligible for staking
 func (r *MinipoolRequester) Stake() (*types.ApiResponse[csapi.MinipoolStakeData], error) {
 	args := map[string]string{}
 	return client.SendGetRequest[csapi.MinipoolStakeData](r, "stake", "Stake", args)
+}
+
+// Get all status details for minipools
+func (r *MinipoolRequester) Status() (*types.ApiResponse[csapi.MinipoolStatusData], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.MinipoolStatusData](r, "status", "Status", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

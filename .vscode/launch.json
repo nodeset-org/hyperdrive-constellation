@@ -14,7 +14,9 @@
                 "-d",
                 "${env:HOME}/.hyperdrive/data/modules/constellation",
                 "--hd",
-                "http://localhost:8080"
+                "http://localhost:8080",
+                "-s",
+                "/usr/share/hyperdrive/networks/modules/constellation"
             ]
         }
     ]

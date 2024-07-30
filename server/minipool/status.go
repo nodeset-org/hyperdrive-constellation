@@ -25,12 +25,12 @@ import (
 // === Factory ===
 // ===============
 
-type minipoolCloseDetailsContextFactory struct {
+type minipoolStatusContextFactory struct {
 	handler *MinipoolHandler
 }
 
-func (f *minipoolCloseDetailsContextFactory) Create(args url.Values) (*MinipoolCloseDetailsContext, error) {
-	c := &MinipoolCloseDetailsContext{
+func (f *minipoolStatusContextFactory) Create(args url.Values) (*MinipoolStatusContext, error) {
+	c := &MinipoolStatusContext{
 		ServiceProvider:   f.handler.serviceProvider,
 		Logger:            f.handler.logger.Logger,
 		Context:           f.handler.ctx,
@@ -39,9 +39,9 @@ func (f *minipoolCloseDetailsContextFactory) Create(args url.Values) (*MinipoolC
 	return c, nil
 }
 
-func (f *minipoolCloseDetailsContextFactory) RegisterRoute(router *mux.Router) {
-	RegisterMinipoolRoute[*MinipoolCloseDetailsContext, csapi.MinipoolCloseDetailsData](
-		router, "close/details", f, f.handler.ctx, f.handler.logger.Logger, f.handler.serviceProvider,
+func (f *minipoolStatusContextFactory) RegisterRoute(router *mux.Router) {
+	RegisterMinipoolRoute[*MinipoolStatusContext, csapi.MinipoolStatusData](
+		router, "status", f, f.handler.ctx, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
 
@@ -49,49 +49,50 @@ func (f *minipoolCloseDetailsContextFactory) RegisterRoute(router *mux.Router) {
 // === Context ===
 // ===============
 
-type MinipoolCloseDetailsContext struct {
+type MinipoolStatusContext struct {
 	// Dependencies
 	ServiceProvider   cscommon.IConstellationServiceProvider
 	Logger            *slog.Logger
 	Context           context.Context
 	SnServiceProvider snservices.ISmartNodeServiceProvider
 
-	snContext *snminipool.MinipoolCloseDetailsContext
-	snData    *snapi.MinipoolCloseDetailsData
+	snContext *snminipool.MinipoolStatusContext
+	snData    *snapi.MinipoolStatusData
 }
 
-func (c *MinipoolCloseDetailsContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
+func (c *MinipoolStatusContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
 	// Create the SN context
-	c.snContext = &snminipool.MinipoolCloseDetailsContext{
+	c.snContext = &snminipool.MinipoolStatusContext{
 		ServiceProvider: c.SnServiceProvider,
 		Logger:          c.Logger,
 		Context:         c.Context,
 	}
 
 	// Create the data used by the SN context
-	c.snData = &snapi.MinipoolCloseDetailsData{}
+	c.snData = &snapi.MinipoolStatusData{}
 
 	return c.snContext.Initialize()
 }
 
-func (c *MinipoolCloseDetailsContext) GetState(node *node.Node, mc *batch.MultiCaller) {
+func (c *MinipoolStatusContext) GetState(node *node.Node, mc *batch.MultiCaller) {
 	// Defer to the SN
 	c.snContext.GetState(node, mc)
 }
 
-func (c *MinipoolCloseDetailsContext) CheckState(node *node.Node, data *csapi.MinipoolCloseDetailsData) bool {
+func (c *MinipoolStatusContext) CheckState(node *node.Node, data *csapi.MinipoolStatusData) bool {
 	// Defer to the SN
 	return c.snContext.CheckState(node, c.snData)
 }
 
-func (c *MinipoolCloseDetailsContext) GetMinipoolDetails(mc *batch.MultiCaller, mp minipool.IMinipool, index int) {
+func (c *MinipoolStatusContext) GetMinipoolDetails(mc *batch.MultiCaller, mp minipool.IMinipool, index int) {
 	// Defer to the SN
 	c.snContext.GetMinipoolDetails(mc, mp, index)
 }
 
-func (c *MinipoolCloseDetailsContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolCloseDetailsData, latestBlockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolStatusData, latestBlockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	// Defer to the SN for data preparation and response, but copy the data over to the CS type first
 	code, err := c.snContext.PrepareData(addresses, mps, c.snData)
-	data.Details = c.snData.Details
+	data.Minipools = c.snData.Minipools
+	data.LatestDelegate = c.snData.LatestDelegate
 	return code, err
 }

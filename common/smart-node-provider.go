@@ -145,11 +145,13 @@ func (p *smartNodeServiceProvider) WaitBeaconClientSynced(ctx context.Context, v
 }
 
 func (p *smartNodeServiceProvider) WaitNodeAddress(ctx context.Context, verbose bool) error {
-	return p.csSp.WaitForNodeAddress(ctx)
+	_, err := p.csSp.WaitForNodeAddress(ctx)
+	return err
 }
 
 func (p *smartNodeServiceProvider) WaitWalletReady(ctx context.Context, verbose bool) error {
-	return p.csSp.WaitForWallet(ctx)
+	_, err := p.csSp.WaitForWallet(ctx)
+	return err
 }
 
 func (p *smartNodeServiceProvider) WaitNodeRegistered(ctx context.Context, verbose bool) error {
