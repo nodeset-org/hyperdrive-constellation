@@ -19,12 +19,12 @@ func TestHarvest(t *testing.T) {
 	defer nodeset_cleanup(snapshotName)
 
 	// Make the bindings
-	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
 	// Make a minipool
-	depositAndStakeMinipool(t, bindings)
+	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
 
 	// Fast forward time for reward interval to increment
 	slotsToAdvance := 1200 * 60 * 60 / 12
@@ -38,5 +38,5 @@ func TestHarvest(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Funded the YieldDistributor with %.6f WETH", eth.WeiToEth(fundAmount))
 
-	cstestutils.HarvestRewards(t, testMgr, bindings.Weth, bindings.TreasuryAddress, nodeAddress, deployerOpts)
+	cstestutils.HarvestRewards(t, testMgr, mainNode, bindings.Weth, bindings.TreasuryAddress, nodeAddress, deployerOpts)
 }

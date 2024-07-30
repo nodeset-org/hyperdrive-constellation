@@ -2,14 +2,10 @@ package cstesting
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
 
-	csclient "github.com/nodeset-org/hyperdrive-constellation/client"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
-	csserver "github.com/nodeset-org/hyperdrive-constellation/server"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	hdservices "github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
@@ -21,33 +17,22 @@ import (
 type ConstellationTestManager struct {
 	*hdtesting.HyperdriveTestManager
 
-	// The service provider for the test environment
-	sp cscommon.IConstellationServiceProvider
-
-	// The Constellation Daemon server
-	serverMgr *csserver.ServerManager
-
-	// The Constellation Daemon client
-	apiClient *csclient.ApiClient
-
-	// Wait group for graceful shutdown
-	wg *sync.WaitGroup
+	// The complete Constellation node
+	node *ConstellationNode
 }
 
 // Creates a new TestManager instance
-// `hdAddress` is the address to bind the Hyperdrive daemon to.
-// `csAddress` is the address to bind the Constellation daemon to.
-// `nsAddress` is the address to bind the nodeset.io mock server to.
-func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress string) (*ConstellationTestManager, error) {
-	tm, err := hdtesting.NewHyperdriveTestManagerWithDefaults(hdAddress, nsAddress, provisionNetworkSettings)
+func NewConstellationTestManager() (*ConstellationTestManager, error) {
+	tm, err := hdtesting.NewHyperdriveTestManagerWithDefaults(provisionNetworkSettings)
 	if err != nil {
 		return nil, fmt.Errorf("error creating test manager: %w", err)
 	}
 
 	// Get the HD artifacts
-	hdSp := tm.GetServiceProvider()
+	hdNode := tm.GetNode()
+	hdSp := hdNode.GetServiceProvider()
 	hdCfg := hdSp.GetConfig()
-	hdClient := tm.GetApiClient()
+	hdClient := hdNode.GetApiClient()
 
 	// Make Constellation resources
 	csResources := getTestResources(hdSp.GetResources())
@@ -71,28 +56,18 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	constellationSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources)
+	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources)
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)
 	}
 
-	// Create the server
-	wg := &sync.WaitGroup{}
-	serverMgr, err := csserver.NewServerManager(constellationSp, csAddress, 0, wg)
+	// Create the Constellation node
+	node, err := newConstellationNode(csSp, "localhost", tm.GetLogger(), hdNode)
 	if err != nil {
 		closeTestManager(tm)
-		return nil, fmt.Errorf("error creating constellation server: %v", err)
+		return nil, fmt.Errorf("error creating Constellation node: %v", err)
 	}
-
-	// Create the client
-	urlString := fmt.Sprintf("http://%s:%d/%s", csAddress, serverMgr.GetPort(), csconfig.ApiClientRoute)
-	url, err := url.Parse(urlString)
-	if err != nil {
-		closeTestManager(tm)
-		return nil, fmt.Errorf("error parsing client URL [%s]: %v", urlString, err)
-	}
-	apiClient := csclient.NewApiClient(url, tm.GetLogger(), nil)
 
 	// Disable automining
 	err = tm.ToggleAutoMine(false)
@@ -104,36 +79,21 @@ func NewConstellationTestManager(hdAddress string, csAddress string, nsAddress s
 	// Return
 	m := &ConstellationTestManager{
 		HyperdriveTestManager: tm,
-		sp:                    constellationSp,
-		serverMgr:             serverMgr,
-		apiClient:             apiClient,
-		wg:                    wg,
+		node:                  node,
 	}
 	return m, nil
 }
 
-// Get the Constellation service provider
-func (m *ConstellationTestManager) GetConstellationServiceProvider() cscommon.IConstellationServiceProvider {
-	return m.sp
-}
-
-// Get the Constellation Daemon server manager
-func (m *ConstellationTestManager) GetServerManager() *csserver.ServerManager {
-	return m.serverMgr
-}
-
-// Get the Constellation Daemon client
-func (m *ConstellationTestManager) GetApiClient() *csclient.ApiClient {
-	return m.apiClient
+// Get the Constellation node handle
+func (m *ConstellationTestManager) GetNode() *ConstellationNode {
+	return m.node
 }
 
 // Closes the test manager, shutting down the nodeset mock server and all other resources
 func (m *ConstellationTestManager) Close() error {
-	if m.serverMgr != nil {
-		m.serverMgr.Stop()
-		m.wg.Wait()
-		m.TestManager.GetLogger().Info("Stopped daemon API server")
-		m.serverMgr = nil
+	err := m.node.Close()
+	if err != nil {
+		return fmt.Errorf("error closing Constellation node: %w", err)
 	}
 	if m.HyperdriveTestManager != nil {
 		err := m.HyperdriveTestManager.Close()

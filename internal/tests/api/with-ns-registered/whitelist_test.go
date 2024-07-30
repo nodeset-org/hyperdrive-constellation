@@ -28,11 +28,11 @@ func TestConstellationRegistration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Assert the admin has the right role
-	csMgr := testMgr.GetConstellationServiceProvider().GetConstellationManager()
+	sp := mainNode.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	adminAddress := crypto.PubkeyToAddress(adminKey.PublicKey)
 	t.Logf("Admin address: %s", adminAddress.Hex())
 	roleHash := crypto.Keccak256Hash([]byte("ADMIN_SERVER_ROLE"))
-	sp := testMgr.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 	var isAdmin bool
 	err = qMgr.Query(func(mc *batchquery.MultiCaller) error {
@@ -51,14 +51,14 @@ func TestConstellationRegistration(t *testing.T) {
 	}
 
 	// Check if the node is registered
-	cs := testMgr.GetApiClient()
+	cs := mainNode.GetApiClient()
 	statusResponse, err := cs.Node.GetRegistrationStatus()
 	require.NoError(t, err)
 	require.False(t, statusResponse.Data.Registered)
 	t.Log("Node is not registered with Constellation yet, as expected")
 
 	// Set up the NodeSet mock server
-	hd := testMgr.HyperdriveTestManager.GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(adminKey)
 	t.Log("Set up the NodeSet mock server")
@@ -110,5 +110,17 @@ func nodeset_cleanup(snapshotName string) {
 		if err != nil {
 			fail("Error reverting to custom snapshot: %v", err)
 		}
+	}
+
+	// Reload the HD wallet to undo any changes made during the test
+	err := mainNode.GetHyperdriveNode().GetServiceProvider().GetWallet().Reload(testMgr.GetLogger())
+	if err != nil {
+		fail("Error reloading hyperdrive wallet: %v", err)
+	}
+
+	// Reload the SW wallet to undo any changes made during the test
+	err = mainNode.GetServiceProvider().GetWallet().Reload()
+	if err != nil {
+		fail("Error reloading constellation wallet: %v", err)
 	}
 }

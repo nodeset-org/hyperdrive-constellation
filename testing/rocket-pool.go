@@ -22,8 +22,9 @@ import (
 
 // Register multiple nodes at once with Rocket Pool
 func (m *ConstellationTestManager) RocketPool_RegisterNodes(timezones []string, opts []*bind.TransactOpts) ([]*node.Node, error) {
-	rp := m.sp.GetRocketPoolManager().RocketPool
-	txMgr := m.sp.GetTransactionManager()
+	sp := m.node.GetServiceProvider()
+	rp := sp.GetRocketPoolManager().RocketPool
+	txMgr := sp.GetTransactionManager()
 	nodes := make([]*node.Node, len(opts))
 	txInfos := make([]*eth.TransactionInfo, len(opts))
 
@@ -118,9 +119,10 @@ func (m *ConstellationTestManager) RocketPool_CreateOracleDaoNodesWithDefaults(k
 // Registers a set of nodes and bootstraps them into the Oracle DAO, taking care of all of the details involved
 func (m *ConstellationTestManager) RocketPool_CreateOracleDaoNodes(details []OracleDaoNodeCreationDetails, owner *bind.TransactOpts) ([]*node.Node, error) {
 	// Get some contract bindings
-	rp := m.sp.GetRocketPoolManager().RocketPool
-	qMgr := m.sp.GetQueryManager()
-	txMgr := m.sp.GetTransactionManager()
+	sp := m.node.GetServiceProvider()
+	rp := sp.GetRocketPoolManager().RocketPool
+	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
 	odaoMgr, err := oracle.NewOracleDaoManager(rp)
 	if err != nil {
 		return nil, fmt.Errorf("error getting oDAO manager binding: %w", err)
@@ -263,8 +265,9 @@ func (m *ConstellationTestManager) RocketPool_CreateOracleDaoNodes(details []Ora
 
 // Mints legacy RPL and sends it to the specified address
 func (m *ConstellationTestManager) RocketPool_MintLegacyRpl(receiver common.Address, amount *big.Int, owner *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	rp := m.sp.GetRocketPoolManager().RocketPool
-	txMgr := m.sp.GetTransactionManager()
+	sp := m.node.GetServiceProvider()
+	rp := sp.GetRocketPoolManager().RocketPool
+	txMgr := sp.GetTransactionManager()
 	fsrpl, err := rp.GetContract(rocketpool.ContractName_RocketTokenRPLFixedSupply)
 	if err != nil {
 		return nil, fmt.Errorf("error creating legacy RPL contract: %w", err)

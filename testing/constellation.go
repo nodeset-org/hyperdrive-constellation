@@ -15,8 +15,9 @@ import (
 // Mint RPL and deposit it into the RPL Vault
 func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault contracts.IErc4626Token, amount *big.Int, depositOpts *bind.TransactOpts, owner *bind.TransactOpts) error {
 	// Make some bindings
-	rp := m.sp.GetRocketPoolManager().RocketPool
-	txMgr := m.sp.GetTransactionManager()
+	sp := m.node.GetServiceProvider()
+	rp := sp.GetRocketPoolManager().RocketPool
+	txMgr := sp.GetTransactionManager()
 	rplContract, err := rp.GetContract(rocketpool.ContractName_RocketTokenRPL)
 	if err != nil {
 		return fmt.Errorf("error getting RPL contract: %w", err)
@@ -114,7 +115,8 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 // Swap ETH for WETH and deposit it into the WETH Vault
 func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contracts.Weth, wethVault contracts.IErc4626Token, amount *big.Int, opts *bind.TransactOpts) error {
 	// Services
-	txMgr := m.sp.GetTransactionManager()
+	sp := m.node.GetServiceProvider()
+	txMgr := sp.GetTransactionManager()
 
 	// Mint and deposit WETH
 	submissions, err := eth.BatchCreateTransactionSubmissions([]func() (string, *eth.TransactionInfo, error){
@@ -167,9 +169,10 @@ func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contra
 // Sends ETH to the YieldDistributor, which should trigger the finalizeInterval function
 func (m *ConstellationTestManager) Constellation_FundYieldDistributor(weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) error {
 	// Services
-	qMgr := m.sp.GetQueryManager()
-	txMgr := m.sp.GetTransactionManager()
-	csMgr := m.sp.GetConstellationManager()
+	sp := m.node.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
+	csMgr := sp.GetConstellationManager()
 
 	// Get the balance of the YieldDistributor before
 	var wethBalanceYieldDistributorBefore *big.Int

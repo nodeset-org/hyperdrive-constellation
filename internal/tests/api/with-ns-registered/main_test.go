@@ -28,6 +28,9 @@ var (
 	deployerOpts *bind.TransactOpts
 	adminOpts    *bind.TransactOpts
 
+	// Primary CS node
+	mainNode *cstesting.ConstellationNode
+
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
 	odaoNodes []*node.Node
@@ -37,17 +40,19 @@ var (
 func TestMain(m *testing.M) {
 	wg = &sync.WaitGroup{}
 	var err error
-	testMgr, err = cstesting.NewConstellationTestManager("localhost", "localhost", "localhost")
+	testMgr, err = cstesting.NewConstellationTestManager()
 	if err != nil {
 		fail("error creating test manager: %v", err)
 	}
 	logger = testMgr.GetLogger()
+	mainNode = testMgr.GetNode()
 
 	// Generate a new wallet
 	derivationPath := string(wallet.DerivationPath_Default)
 	index := uint64(4)
 	password := "test_password123"
-	hd := testMgr.HyperdriveTestManager.GetApiClient()
+	hdNode := mainNode.GetHyperdriveNode()
+	hd := hdNode.GetApiClient()
 	recoverResponse, err := hd.Wallet.Recover(&derivationPath, keys.DefaultMnemonic, &index, password, true)
 	if err != nil {
 		fail("error generating wallet: %v", err)
@@ -103,7 +108,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Set up the services
-	sp := testMgr.GetConstellationServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	rpMgr := sp.GetRocketPoolManager()
 	err = rpMgr.RefreshRocketPoolContracts()
 	if err != nil {

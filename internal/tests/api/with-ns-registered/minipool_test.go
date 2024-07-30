@@ -3,18 +3,21 @@ package with_ns_registered
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
+	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/stretchr/testify/require"
 )
 
 var (
-	salt *big.Int = big.NewInt(0x90de5e7)
+	standardSalt *big.Int = big.NewInt(0x90de5e7)
 )
 
 // Test getting the available minipool count when there are no minipools available
@@ -27,7 +30,7 @@ func TestMinipoolGetAvailableMinipoolCount_Zero(t *testing.T) {
 	defer nodeset_cleanup(snapshotName)
 
 	// Check the available minipool count
-	cs := testMgr.GetApiClient()
+	cs := mainNode.GetApiClient()
 	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
 	require.NoError(t, err)
 	require.Equal(t, 0, countResponse.Data.Count)
@@ -49,7 +52,7 @@ func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check the available minipool count
-	cs := testMgr.GetApiClient()
+	cs := mainNode.GetApiClient()
 	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
 	require.NoError(t, err)
 	require.Equal(t, expectedMinipoolCount, countResponse.Data.Count)
@@ -64,17 +67,51 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	}
 	defer nodeset_cleanup(snapshotName)
 
-	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
-	depositAndStakeMinipool(t, bindings)
-	simulateEthRewardToYieldDistributor(t, bindings)
+	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
+	simulateEthRewardToYieldDistributor(t, bindings, mainNode)
+}
+
+// Run a check to make sure depositing with duplicate salts fails
+func TestDuplicateSalts(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Make the bindings
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	require.NoError(t, err)
+	t.Log("Created contract bindings")
+
+	// Get some services
+	cs := mainNode.GetApiClient()
+
+	// Make a normal minipool
+	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(3200)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(90)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Try making another one with the same salt, it should fail
+	_, err = cs.Minipool.Create(standardSalt)
+	require.Error(t, err)
+	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
 }
 
 // Utility function to send ETH and advance blockchain time
-func sendEthAndAdvanceTime(t *testing.T, address common.Address, amount *big.Int, slotsToAdvance int) {
-	sp := testMgr.GetConstellationServiceProvider()
+func sendEthAndAdvanceTime(t *testing.T, node *cstesting.ConstellationNode, address common.Address, amount *big.Int, slotsToAdvance int) {
+	sp := node.GetServiceProvider()
 	txMgr := sp.GetTransactionManager()
 
 	sendEthOpts := &bind.TransactOpts{
@@ -90,43 +127,9 @@ func sendEthAndAdvanceTime(t *testing.T, address common.Address, amount *big.Int
 	t.Logf("Advanced %d slots", slotsToAdvance)
 }
 
-// Run a check to make sure depositing with duplicate salts fails
-func TestDuplicateSalts(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
-
-	// Make the bindings
-	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
-	require.NoError(t, err)
-	t.Log("Created contract bindings")
-
-	// Get some services
-	cs := testMgr.GetApiClient()
-
-	// Make a normal minipool
-	depositAndStakeMinipool(t, bindings)
-
-	// Deposit RPL to the RPL vault
-	rplAmount := eth.EthToWei(3200)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
-
-	// Deposit WETH to the WETH vault
-	wethAmount := eth.EthToWei(90)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
-
-	// Try making another one with the same salt, it should fail
-	_, err = cs.Minipool.Create(salt)
-	require.Error(t, err)
-	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
-}
-
 // Simulate an ETH reward getting deposited to YieldDistributor
-func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.ContractBindings) {
-	sp := testMgr.GetConstellationServiceProvider()
+func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode) {
+	sp := node.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 	slotsToAdvance := 1200 * 60 * 60 / 12
 
@@ -144,10 +147,10 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	oneEth := big.NewInt(1e18)
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+	sendEthAndAdvanceTime(t, node, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+	sendEthAndAdvanceTime(t, node, bindings.YieldDistributor.Address, oneEth, 0)
 
 	// Call harvest()
 	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, deployerOpts)
@@ -157,10 +160,10 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	// Again - to simulate an interval tick for rewards to go to treasury
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+	sendEthAndAdvanceTime(t, node, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, oneEth, 0)
+	sendEthAndAdvanceTime(t, node, bindings.YieldDistributor.Address, oneEth, 0)
 
 	// Call harvest()
 	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, common.Big1, common.Big2, deployerOpts)
@@ -183,10 +186,37 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 }
 
-// Makes a minipool and stakes it
-func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings) {
+// Makes a minipool, waits for the scrub check, then stakes it
+func createAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, salt *big.Int) {
+	// Create the minipool
+	mp := createMinipool(t, bindings, node, salt)
+
+	// Get the scrub period
+	sp := node.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	err := qMgr.Query(nil, nil,
+		bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod,
+	)
+	require.NoError(t, err)
+
+	// Fast forward time
+	timeToAdvance := bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted()
+	secondsPerSlot := time.Duration(testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot) * time.Second
+	slotsToAdvance := uint(timeToAdvance / secondsPerSlot)
+	err = testMgr.AdvanceSlots(slotsToAdvance, false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Logf("Advanced %d slots", slotsToAdvance)
+
+	// Stake the minipool
+	cstestutils.StakeMinipool(t, testMgr, node, nodeAddress, mp)
+}
+
+// Makes a minipool
+func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, salt *big.Int) minipool.IMinipool {
 	// Get some services
-	sp := testMgr.GetConstellationServiceProvider()
+	sp := node.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
@@ -262,7 +292,7 @@ func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBinding
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Register with Constellation
-	cstestutils.RegisterWithConstellation(t, testMgr)
+	cstestutils.RegisterWithConstellation(t, testMgr, node)
 
 	// Set the available minipool count
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
@@ -271,8 +301,6 @@ func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBinding
 	t.Log("Set up the NodeSet mock server")
 
 	// Deposit to make a minipool
-	mp := cstestutils.CreateMinipoolViaDeposit(t, testMgr, salt, bindings.RpSuperNode, bindings.MinipoolManager)
-
-	// Stake the minipool
-	cstestutils.StakeMinipool(t, testMgr, nodeAddress, mp, bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted())
+	mp := cstestutils.CreateMinipoolViaDeposit(t, testMgr, node, salt, bindings.RpSuperNode, bindings.MinipoolManager)
+	return mp
 }

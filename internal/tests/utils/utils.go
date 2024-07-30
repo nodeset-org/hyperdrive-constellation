@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,9 +19,9 @@ import (
 )
 
 // Registers the node with Constellation, ensuring it wasn't previously registered beforehand
-func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTestManager) {
+func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode) {
 	// Bindings
-	cs := testMgr.GetApiClient()
+	cs := csNode.GetApiClient()
 
 	// Check if the node is registered
 	statusResponse, err := cs.Node.GetRegistrationStatus()
@@ -35,7 +34,7 @@ func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTes
 	require.NoError(t, err)
 	require.False(t, response.Data.NotAuthorized)
 	require.False(t, response.Data.NotRegisteredWithNodeSet)
-	testMgr.MineTxViaHyperdrive(t, response.Data.TxInfo, "Registered the node with Constellation")
+	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), response.Data.TxInfo, "Registered the node with Constellation")
 
 	// Check if the node is registered
 	statusResponse, err = cs.Node.GetRegistrationStatus()
@@ -47,7 +46,8 @@ func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTes
 // Deposits RPL to the RPL vault and verifies the contract balances have been updated
 func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, rplVault contracts.IErc4626Token, rpl *tokens.TokenRpl, amount *big.Int, opts *bind.TransactOpts) {
 	// Bindings
-	sp := testMgr.GetConstellationServiceProvider()
+	csNode := testMgr.GetNode()
+	sp := csNode.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 	csMgr := sp.GetConstellationManager()
 
@@ -74,7 +74,7 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 // Deposits WETH to the WETH vault and verifies the contract balances have been updated
 func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, wethVault contracts.IErc4626Token, weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) {
 	// Bindings
-	sp := testMgr.GetConstellationServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 	csMgr := sp.GetConstellationManager()
 	ec := sp.GetEthClient()
@@ -99,10 +99,10 @@ func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManage
 }
 
 // Deposits into Constellation, creating a new minipool
-func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTestManager, salt *big.Int, rpSuperNode *node.Node, mpMgr *minipool.MinipoolManager) minipool.IMinipool {
+func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, salt *big.Int, rpSuperNode *node.Node, mpMgr *minipool.MinipoolManager) minipool.IMinipool {
 	// Bindings
-	cs := testMgr.GetApiClient()
-	sp := testMgr.GetConstellationServiceProvider()
+	cs := csNode.GetApiClient()
+	sp := csNode.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 
 	// Check the Supernode minipool count
@@ -116,7 +116,7 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 	require.True(t, depositResponse.Data.CanCreate)
 	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
 	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
-	testMgr.MineTxViaHyperdrive(t, depositResponse.Data.TxInfo, "Deposited and made a minipool")
+	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), depositResponse.Data.TxInfo, "Deposited and made a minipool")
 	t.Logf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
 
 	// Save the key
@@ -153,24 +153,13 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 	return mp
 }
 
-// Stakes a minipool, optionally advancing time enough to pass the scrub check first
-func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, nodeAddress common.Address, mp minipool.IMinipool, timeToAdvance time.Duration) {
+// Stakes a minipool
+func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, nodeAddress common.Address, mp minipool.IMinipool) {
 	// Bindings
-	cs := testMgr.GetApiClient()
-	sp := testMgr.GetConstellationServiceProvider()
+	cs := csNode.GetApiClient()
+	sp := csNode.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 	ec := sp.GetEthClient()
-
-	if timeToAdvance > 0 {
-		// Fast forward time
-		secondsPerSlot := time.Duration(testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot) * time.Second
-		slotsToAdvance := uint(timeToAdvance / secondsPerSlot)
-		err := testMgr.AdvanceSlots(slotsToAdvance, false)
-		require.NoError(t, err)
-		err = testMgr.CommitBlock()
-		require.NoError(t, err)
-		t.Logf("Advanced %d slots", slotsToAdvance)
-	}
 
 	// Get the node balance
 	beforeBalance, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
@@ -184,7 +173,7 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, no
 	// Find the details for the MP and stake it
 	for _, details := range stakeResponse.Data.Details {
 		if details.Address == mp.Common().Address {
-			testMgr.MineTxViaHyperdrive(t, details.TxInfo, "Staked the minipool")
+			testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), details.TxInfo, "Staked the minipool")
 			break
 		}
 	}
@@ -204,9 +193,9 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, no
 
 // Harvest rewards from the yield distributor and assert the node's WETH balance increased
 // Note that a node must have a minipool staking for this to succeed
-func HarvestRewards(t *testing.T, testMgr *cstesting.ConstellationTestManager, weth *contracts.Weth, treasuryAddress common.Address, nodeAddress common.Address, opts *bind.TransactOpts) {
+func HarvestRewards(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, weth *contracts.Weth, treasuryAddress common.Address, nodeAddress common.Address, opts *bind.TransactOpts) {
 	// Bindings
-	sp := testMgr.GetConstellationServiceProvider()
+	sp := csNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
@@ -220,7 +209,7 @@ func HarvestRewards(t *testing.T, testMgr *cstesting.ConstellationTestManager, w
 	}, nil)
 	require.NoError(t, err)
 
-	// Make a harvest TX for the minipool
+	// Make a harvest TX
 	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, opts)
 	require.NoError(t, err)
 	require.NotNil(t, harvestTxInfo)
