@@ -64,13 +64,13 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 }
 
 // Utility function to send ETH and advance blockchain time
-func sendEthAndAdvanceTime(t *testing.T, address common.Address, slotsToAdvance int) {
+func sendEthAndAdvanceTime(t *testing.T, address common.Address, amount *big.Int, slotsToAdvance int) {
 	sp := testMgr.GetConstellationServiceProvider()
 	txMgr := sp.GetTransactionManager()
 
 	sendEthOpts := &bind.TransactOpts{
 		From:  deployerOpts.From,
-		Value: big.NewInt(1e18),
+		Value: amount,
 	}
 
 	sendEthTx := txMgr.CreateTransactionInfoRaw(address, nil, sendEthOpts)
@@ -102,26 +102,26 @@ func simulateEthRewardToYieldDistributor(t *testing.T) {
 	require.NoError(t, err)
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, big.NewInt(1e18), slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, 0)
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, big.NewInt(1e18), 0)
 
 	// Call harvest()
-	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(0), big.NewInt(1), deployerOpts)
+	harvestTx, err := bindings.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
 
 	// Again - to simulate an interval tick for rewards to go to treasury
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, slotsToAdvance)
+	sendEthAndAdvanceTime(t, bindings.DepositPoolAddress, big.NewInt(1e18), slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
-	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, 0)
+	sendEthAndAdvanceTime(t, bindings.YieldDistributor.Address, big.NewInt(1e18), 0)
 
 	// Call harvest()
-	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, big.NewInt(1), big.NewInt(2), deployerOpts)
+	harvestTx, err = bindings.YieldDistributor.Harvest(nodeAddress, common.Big1, common.Big2, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, harvestTx, deployerOpts, "Called harvest from YieldDistributor")
 
