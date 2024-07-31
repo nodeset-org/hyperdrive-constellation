@@ -113,6 +113,43 @@ func BuildAndVerifyCreateMinipoolTx(t *testing.T, csNode *cstesting.Constellatio
 	return depositResponse.Data
 }
 
+// Builds and submits multiple minipool creation TXs, returning the minipool data and transaction hashes
+func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nodes []*cstesting.ConstellationNode, mpsPerNode int, salts [][]*big.Int, rpSuperNode *node.Node) ([][]*csapi.MinipoolCreateData, [][]common.Hash) {
+	// Build the minipool creation TXs
+	datas := make([][]*csapi.MinipoolCreateData, len(nodes))
+	for i, node := range nodes {
+		datasForNode := make([]*csapi.MinipoolCreateData, mpsPerNode)
+		for j := 0; j < mpsPerNode; j++ {
+			var salt *big.Int
+			if salts != nil {
+				salt = salts[i][j]
+			} else {
+				salt = big.NewInt(int64(mpsPerNode*i + j)) // Sequential salts; only works if this function is called once
+			}
+			data := BuildAndVerifyCreateMinipoolTx(t, node, salt, rpSuperNode)
+			datasForNode[j] = data
+		}
+		datas[i] = datasForNode
+	}
+	t.Log("Built minipool creation TXs")
+
+	// Submit each TX
+	hashes := make([][]common.Hash, len(nodes))
+	for i, node := range nodes {
+		hashesForNode := make([]common.Hash, mpsPerNode)
+		hd := node.GetHyperdriveNode().GetApiClient()
+		for j, data := range datas[i] {
+			submission, _ := eth.CreateTxSubmissionFromInfo(data.TxInfo, nil)
+			response, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+			require.NoError(t, err)
+			hashesForNode[j] = response.Data.TxHash
+		}
+		hashes[i] = hashesForNode
+	}
+	t.Log("Submitted minipool creation TXs")
+	return datas, hashes
+}
+
 // Saves the validator key created as part of a minipool creation TX to disk
 func SaveValidatorKey(t *testing.T, csNode *cstesting.ConstellationNode, data *csapi.MinipoolCreateData) {
 	// Bindings

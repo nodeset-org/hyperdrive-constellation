@@ -5,14 +5,12 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	"github.com/nodeset-org/osha/keys"
-	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
@@ -109,8 +107,13 @@ func TestMain(m *testing.M) {
 		fail("error loading Constellation contracts: %v", err)
 	}
 
+	// Set up the nodeset.io mock
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
+	err = nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
+	if err != nil {
+		fail("error setting available minipool count for user: %v", err)
+	}
 
 	// Bootstrap the oDAO - indices are addresses 10-12
 	odaoNodes, odaoOpts, err = testMgr.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, deployerOpts)
@@ -141,58 +144,6 @@ func cleanup() {
 		logger.Error("Error closing test manager", log.Err(err))
 	}
 	testMgr = nil
-}
-
-// Create a set of subnodes running HD and CS, register them with the nodeset, and send them some ETH
-func createSubNodes(primary *cstesting.ConstellationNode, count int, initialFunding *big.Int) ([]*cstesting.ConstellationNode, []common.Address, error) {
-	// Make the subnodes
-	basePath := testMgr.GetTestDir()
-	nodes := make([]*cstesting.ConstellationNode, count)
-	addresses := make([]common.Address, count)
-	for i := 0; i < count; i++ {
-		var err error
-		nodeDir := filepath.Join(basePath, fmt.Sprintf("node%d", i+1))
-		nodes[i], addresses[i], err = createNewNode(primary, nodeDir)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error creating subnode %d: %v", i, err)
-		}
-		logger.Info(
-			"Created subnode",
-			slog.Int("index", i+1),
-			slog.String("address", addresses[i].Hex()),
-		)
-	}
-
-	// Send the subnodes some ETH
-	hd := primary.GetHyperdriveNode().GetApiClient()
-	submissions := make([]*eth.TransactionSubmission, len(addresses))
-	for i, addr := range addresses {
-		resp, err := hd.Wallet.Send(initialFunding, "eth", addr)
-		if err != nil {
-			fail("error sending ETH to subnode %d: %v", i, err)
-		}
-		if !resp.Data.CanSend {
-			fail("can't send ETH to subnode %d: insufficient balance", i)
-		}
-		submission, _ := eth.CreateTxSubmissionFromInfo(resp.Data.TxInfo, nil)
-		submissions[i] = submission
-	}
-	submitResp, err := hd.Tx.SubmitTxBatch(submissions, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
-	if err != nil {
-		fail("error submitting ETH send tx batch: %v", err)
-	}
-	err = testMgr.CommitBlock()
-	if err != nil {
-		fail("error committing block: %v", err)
-	}
-	for i, hash := range submitResp.Data.TxHashes {
-		_, err = hd.Tx.WaitForTransaction(hash)
-		if err != nil {
-			fail("error waiting for ETH send tx %d: %v", i, err)
-		}
-	}
-
-	return nodes, addresses, nil
 }
 
 // Create a new node pair with a given user directory, initialize its wallet, and register it with nodeset
