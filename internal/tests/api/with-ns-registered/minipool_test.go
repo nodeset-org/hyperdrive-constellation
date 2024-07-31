@@ -105,12 +105,10 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t 
 	}, nil)
 
 	require.NoError(t, err)
-	rplPriceStr := rplPrice.String()
-	t.Logf("RPL price: %v", rplPriceStr)
+	t.Logf("RPL price: %v", rplPrice.String())
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
-	rplAmountStr := rplAmount.String()
-	t.Logf("Minting RPL: %v", rplAmountStr)
+	t.Logf("Minting RPL: %v", rplAmount.String())
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Enable RPL coverage and set to 30%
@@ -118,9 +116,9 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t 
 	require.NoError(t, err)
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
-	coverageRatio := new(big.Int).Mul(big.NewInt(30), big.NewInt(1e16))
-	coverageRatioStr := coverageRatio.String()
-	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
+	// Set the coverage ratio to 30%
+	coverageRatio := big.NewInt(3e17)
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatio.String())
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 30%")
@@ -166,12 +164,10 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *tes
 	}, nil)
 
 	require.NoError(t, err)
-	rplPriceStr := rplPrice.String()
-	t.Logf("RPL price: %v", rplPriceStr)
+	t.Logf("RPL price: %v", rplPrice.String())
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
-	rplAmountStr := rplAmount.String()
-	t.Logf("Minting RPL: %v", rplAmountStr)
+	t.Logf("Minting RPL: %v", rplAmount.String())
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Enable RPL coverage and set to 100%
@@ -179,9 +175,8 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *tes
 	require.NoError(t, err)
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
-	coverageRatio := new(big.Int).Mul(big.NewInt(100), big.NewInt(1e16))
-	coverageRatioStr := coverageRatio.String()
-	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
+	coverageRatio := big.NewInt(1e18)
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatio.String())
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 100%")
@@ -227,12 +222,10 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *te
 	}, nil)
 
 	require.NoError(t, err)
-	rplPriceStr := rplPrice.String()
-	t.Logf("RPL price: %v", rplPriceStr)
+	t.Logf("RPL price: %v", rplPrice.String())
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
-	rplAmountStr := rplAmount.String()
-	t.Logf("Minting RPL: %v", rplAmountStr)
+	t.Logf("Minting RPL: %v", rplAmount.String())
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Enable RPL coverage and set to 200%
@@ -241,9 +234,8 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *te
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
 	// Set the coverage ratio to 200%
-	coverageRatio := 2e18
-	coverageRatioStr := coverageRatio.String()
-	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
+	coverageRatio := big.NewInt(2e18)
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatio.String())
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 200%")
