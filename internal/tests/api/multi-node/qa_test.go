@@ -452,11 +452,9 @@ func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 
 	// Query some details
 	var rplPrice *big.Int
-	var totalEthStaking *big.Int
 	var minipoolBond *big.Int
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
-		csMgr.SuperNodeAccount.TotalEthStaking(mc, &totalEthStaking)
 		csMgr.SuperNodeAccount.Bond(mc, &minipoolBond)
 		return nil
 	}, nil,
@@ -464,7 +462,6 @@ func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 		bindings.RpSuperNode.RplStake,
 		bindings.DepositPoolManager.Balance,
 		bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize,
-		bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod,
 	)
 	require.NoError(t, err)
 

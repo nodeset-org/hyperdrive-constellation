@@ -222,16 +222,16 @@ func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *
 
 	// Query some details
 	var rplPrice *big.Int
-	var totalEthStaking *big.Int
 	var minipoolBond *big.Int
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
-		csMgr.SuperNodeAccount.TotalEthStaking(mc, &totalEthStaking)
 		csMgr.SuperNodeAccount.Bond(mc, &minipoolBond)
 		return nil
 	}, nil,
 		bindings.RpSuperNode.Exists,
 		bindings.RpSuperNode.RplStake,
+		bindings.RpSuperNode.EthMatched,
+		bindings.MinipoolManager.LaunchBalance,
 		bindings.DepositPoolManager.Balance,
 		bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize,
 		bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod,
@@ -268,7 +268,10 @@ func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *
 
 	// Get the RPL requirement
 	var rplShortfall *big.Int
-	ethAmount := new(big.Int).Add(totalEthStaking, minipoolBond)
+	totalEthMatched := bindings.RpSuperNode.EthMatched.Get()
+	launchRequirement := bindings.MinipoolManager.LaunchBalance.Get()
+	ethAmount := new(big.Int).Add(totalEthMatched, launchRequirement)
+	ethAmount.Sub(ethAmount, minipoolBond)
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.CalculateRplStakeShortfall(mc, &rplShortfall, bindings.RpSuperNode.RplStake.Get(), ethAmount)
 		return nil
