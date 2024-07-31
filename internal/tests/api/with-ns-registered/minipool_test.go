@@ -301,6 +301,6 @@ func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *
 	t.Log("Set up the NodeSet mock server")
 
 	// Deposit to make a minipool
-	mp := cstestutils.CreateMinipoolViaDeposit(t, testMgr, node, salt, bindings.RpSuperNode, bindings.MinipoolManager)
+	mp := cstestutils.CreateMinipool(t, testMgr, node, salt, bindings.RpSuperNode, bindings.MinipoolManager)
 	return mp
 }

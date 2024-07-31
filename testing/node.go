@@ -110,6 +110,7 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	if err != nil {
 		return nil, fmt.Errorf("error creating Constellation config: %v", err)
 	}
+	csCfg.ApiPort.Value = port
 
 	// Make sure the module directory exists
 	moduleDir := filepath.Join(hdCfg.UserDataPath.Value, hdconfig.ModulesName, csconfig.ModuleName)

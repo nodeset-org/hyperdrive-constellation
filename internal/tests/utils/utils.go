@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
@@ -98,10 +99,57 @@ func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManage
 	t.Logf("WETH vault's WETH balance is now %.6f (%s wei)", eth.WeiToEth(evWethBalance), evWethBalance.String())
 }
 
-// Deposits into Constellation, creating a new minipool
-func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, salt *big.Int, rpSuperNode *node.Node, mpMgr *minipool.MinipoolManager) minipool.IMinipool {
+// Creates the TX for creating a new minipool, and verifies it simulated successfully
+func BuildAndVerifyCreateMinipoolTx(t *testing.T, csNode *cstesting.ConstellationNode, salt *big.Int, rpSuperNode *node.Node) *csapi.MinipoolCreateData {
 	// Bindings
 	cs := csNode.GetApiClient()
+
+	depositResponse, err := cs.Minipool.Create(salt)
+	require.NoError(t, err)
+	require.True(t, depositResponse.Data.CanCreate)
+	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
+	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
+	t.Logf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
+	return depositResponse.Data
+}
+
+// Saves the validator key created as part of a minipool creation TX to disk
+func SaveValidatorKey(t *testing.T, csNode *cstesting.ConstellationNode, data *csapi.MinipoolCreateData) {
+	// Bindings
+	cs := csNode.GetApiClient()
+
+	// Save the key
+	pubkey := data.ValidatorPubkey
+	index := data.Index
+	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1)
+	require.NoError(t, err)
+	t.Logf("Saved validator key for pubkey %s, index %d", pubkey.Hex(), index)
+}
+
+// Verifies the supernode's minipool address at the provided index is expected and the minipool status is prelaunch
+func VerifyMinipoolAfterCreation(t *testing.T, qMgr *eth.QueryManager, rpSuperNode *node.Node, superNodeMpIndex uint64, expectedMinipoolAddress common.Address, mpMgr *minipool.MinipoolManager) minipool.IMinipool {
+	// Make sure the address is correct
+	var mpAddress common.Address
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		rpSuperNode.GetMinipoolAddress(mc, &mpAddress, superNodeMpIndex)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, expectedMinipoolAddress, mpAddress)
+
+	// Make sure it's in prelaunch
+	mp, err := mpMgr.CreateMinipoolFromAddress(mpAddress, false, nil)
+	require.NoError(t, err)
+	err = qMgr.Query(nil, nil, mp.Common().Status)
+	require.NoError(t, err)
+	require.Equal(t, types.MinipoolStatus_Prelaunch, mp.Common().Status.Formatted())
+	t.Log("Minipool is in prelaunch")
+	return mp
+}
+
+// Deposits into Constellation, creating a new minipool
+func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, salt *big.Int, rpSuperNode *node.Node, mpMgr *minipool.MinipoolManager) minipool.IMinipool {
+	// Bindings
 	sp := csNode.GetServiceProvider()
 	qMgr := sp.GetQueryManager()
 
@@ -111,20 +159,11 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 	previousMpCount := rpSuperNode.MinipoolCount.Formatted()
 	t.Logf("Supernode has %d minipools", previousMpCount)
 
-	depositResponse, err := cs.Minipool.Create(salt)
-	require.NoError(t, err)
-	require.True(t, depositResponse.Data.CanCreate)
-	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
-	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
-	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), depositResponse.Data.TxInfo, "Deposited and made a minipool")
-	t.Logf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
+	data := BuildAndVerifyCreateMinipoolTx(t, csNode, salt, rpSuperNode)
+	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo, "Deposited and made a minipool")
 
 	// Save the key
-	pubkey := depositResponse.Data.ValidatorPubkey
-	index := depositResponse.Data.Index
-	_, err = cs.Wallet.CreateValidatorKey(pubkey, index, 1)
-	require.NoError(t, err)
-	t.Logf("Saved validator key for pubkey %s, index %d", pubkey.Hex(), index)
+	SaveValidatorKey(t, csNode, data)
 
 	// Check the Supernode minipool count
 	err = qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
@@ -133,23 +172,8 @@ func CreateMinipoolViaDeposit(t *testing.T, testMgr *cstesting.ConstellationTest
 	require.Equal(t, uint64(1), newMpCount-previousMpCount)
 	t.Logf("Supernode now has %d minipools", newMpCount)
 
-	// Make sure the address is correct
-	var mpAddress common.Address
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		rpSuperNode.GetMinipoolAddress(mc, &mpAddress, newMpCount-1)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	require.Equal(t, depositResponse.Data.MinipoolAddress, mpAddress)
-
-	// Make sure it's in prelaunch
-	mp, err := mpMgr.CreateMinipoolFromAddress(mpAddress, false, nil)
-	require.NoError(t, err)
-	err = qMgr.Query(nil, nil, mp.Common().Status)
-	require.NoError(t, err)
-	require.Equal(t, types.MinipoolStatus_Prelaunch, mp.Common().Status.Formatted())
-	t.Log("Minipool is in prelaunch")
-
+	// Verify the minipool
+	mp := VerifyMinipoolAfterCreation(t, qMgr, rpSuperNode, newMpCount, data.MinipoolAddress, mpMgr)
 	return mp
 }
 
