@@ -214,6 +214,44 @@ func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	return mp
 }
 
+// Builds and submits multiple minipool stake TXs, returning the transaction hashes
+func BuildAndSubmitStakeMinipoolTxs(t *testing.T, nodes []*cstesting.ConstellationNode, creationData [][]*csapi.MinipoolCreateData) [][]common.Hash {
+	hashes := make([][]common.Hash, len(creationData))
+	for i, node := range nodes {
+		// Services
+		cs := node.GetApiClient()
+		hd := node.GetHyperdriveNode().GetApiClient()
+		creationDataForNode := creationData[i]
+		hashesForNode := make([]common.Hash, len(creationDataForNode))
+
+		// Run a stake request
+		stakeResp, err := cs.Minipool.Stake()
+		require.NoError(t, err)
+		require.Len(t, stakeResp.Data.Details, len(creationDataForNode))
+
+		// Require the minipools can stake
+		for j, data := range creationDataForNode {
+			address := data.MinipoolAddress
+			found := false
+			for _, details := range stakeResp.Data.Details {
+				if details.Address == address {
+					found = true
+					require.True(t, details.CanStake)
+					submission, _ := eth.CreateTxSubmissionFromInfo(details.TxInfo, nil)
+					submitResp, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+					require.NoError(t, err)
+					hashesForNode[j] = submitResp.Data.TxHash
+					break
+				}
+			}
+			require.True(t, found)
+		}
+
+		hashes[i] = hashesForNode
+	}
+	return hashes
+}
+
 // Stakes a minipool
 func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode, nodeAddress common.Address, mp minipool.IMinipool) {
 	// Bindings

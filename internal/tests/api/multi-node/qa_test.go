@@ -167,6 +167,285 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	t.Logf("Second minipool creation TX failed as expected: %v", err)
 }
 
+// Run test 5 of the QA suite
+func Test5_ComplexNOConcurrency(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	require.NoError(t, err)
+	t.Log("Created bindings")
+
+	// Create some subnodes
+	nodes, _, err := createNodesForTest(t, 14, eth.EthToWei(50))
+	require.NoError(t, err)
+
+	// Make sure the contract state is clean
+	runPreflightChecks(t, bindings)
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(4000)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(100)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Create salts
+	salts := make([][]*big.Int, 15)
+	for i := 0; i < 15; i++ {
+		saltsPerNode := []*big.Int{
+			big.NewInt(int64(i)),
+		}
+		salts[i] = saltsPerNode
+	}
+
+	// Build the wave 1 minipool creation TXs
+	wave1Nodes := nodes[:5]
+	wave1Salts := salts[:5]
+	_, wave1Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave1Nodes, 1, wave1Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 1 should succeed
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	for _, hashesPerNode := range wave1Hashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("First minipool creation wave succeeded")
+
+	// Build the wave 2 minipool creation TXs
+	wave2Nodes := nodes[5:10]
+	wave2Salts := salts[5:10]
+	_, wave2Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave2Nodes, 1, wave2Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 2 should succeed
+	for _, hashesPerNode := range wave2Hashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("Second minipool creation wave succeeded")
+
+	// Build the wave 3 minipool creation TXs
+	wave3Nodes := nodes[10:15]
+	wave3Salts := salts[10:15]
+	_, wave3Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave3Nodes, 1, wave3Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 3 should fail
+	for _, hashesPerNode := range wave3Hashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed with status 0")
+	}
+	t.Log("Third minipool creation wave failed as expected")
+}
+
+// Run test 15 of the QA suite
+func Test15_StakingTest(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	require.NoError(t, err)
+	sp := testMgr.GetNode().GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	t.Log("Created bindings")
+
+	// Set the nodeset timestamp
+	nodesetTime := time.Now()
+	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
+	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+
+	// Create some subnodes
+	nodes, _, err := createNodesForTest(t, 14, eth.EthToWei(50))
+	require.NoError(t, err)
+
+	// Make sure the contract state is clean
+	runPreflightChecks(t, bindings)
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(4000)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(100)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Create salts
+	salts := make([][]*big.Int, 15)
+	for i := 0; i < 15; i++ {
+		saltsPerNode := []*big.Int{
+			big.NewInt(int64(i)),
+		}
+		salts[i] = saltsPerNode
+	}
+
+	// Build the wave 1 minipool creation TXs
+	wave1Nodes := nodes[:5]
+	wave1Salts := salts[:5]
+	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave1Nodes, 1, wave1Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 1 creation should succeed
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	for _, hashesPerNode := range wave1CreateHashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("Wave 1 creation succeeded")
+
+	// Save the wave 1 pubkeys
+	for i, node := range wave1Nodes {
+		cstestutils.SaveValidatorKey(t, node, wave1Data[i][0])
+	}
+	t.Log("Saved wave 1 validator keys")
+
+	// Verify minipools
+	for i, dataForNode := range wave1Data {
+		data := dataForNode[0]
+		_ = cstestutils.VerifyMinipoolAfterCreation(t, qMgr, bindings.RpSuperNode, uint64(i), data.MinipoolAddress, bindings.MinipoolManager)
+	}
+	t.Log("Verified wave 1 minipools")
+
+	// Fast forward 1 day
+	secondsPerSlot := testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot
+	seconds := uint64(24 * 60 * 60)
+	secondsDuration := time.Duration(seconds) * time.Second
+	slots := seconds / secondsPerSlot
+	err = testMgr.AdvanceSlots(uint(slots), false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Set the nodeset timestamp
+	nodesetTime = nodesetTime.Add(secondsDuration)
+	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
+	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+
+	// Send ETH to the RP deposit pool again
+	fundOpts := &bind.TransactOpts{
+		From:  deployerOpts.From,
+		Value: eth.EthToWei(120),
+	}
+	fundTxInfo, err := bindings.DepositPoolManager.Deposit(fundOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool again")
+
+	// Build wave 1 minipools stake TXs
+	wave1StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave1Nodes, wave1Data)
+
+	// Build the wave 2 minipool creation TXs
+	wave2Nodes := nodes[5:10]
+	wave2Salts := salts[5:10]
+	wave2Data, wave2CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave2Nodes, 1, wave2Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 1 staking should succeed
+	for _, hashesPerNode := range wave1StakeHashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("Wave 1 staking succeeded")
+
+	// Wave 2 creation should succeed
+	for _, hashesPerNode := range wave2CreationHashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("Wave 2 creation succeeded")
+
+	// Save the wave 2 pubkeys
+	for i, node := range wave2Nodes {
+		cstestutils.SaveValidatorKey(t, node, wave2Data[i][0])
+	}
+	t.Log("Saved wave 2 validator keys")
+
+	// Verify minipools
+	for i, dataForNode := range wave2Data {
+		data := dataForNode[0]
+		_ = cstestutils.VerifyMinipoolAfterCreation(t, qMgr, bindings.RpSuperNode, uint64(i+len(wave1Data)), data.MinipoolAddress, bindings.MinipoolManager)
+	}
+	t.Log("Verified wave 2 minipools")
+
+	// Fast forward 1 day
+	err = testMgr.AdvanceSlots(uint(slots), false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Set the nodeset timestamp
+	nodesetTime = nodesetTime.Add(secondsDuration)
+	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
+	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+
+	// Send ETH to the RP deposit pool again
+	fundTxInfo, err = bindings.DepositPoolManager.Deposit(fundOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool again")
+
+	// Build wave 2 minipools stake TXs
+	wave2StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave2Nodes, wave2Data)
+
+	wave3Nodes := nodes[10:15]
+	wave3Salts := salts[10:15]
+	_, wave3CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave3Nodes, 1, wave3Salts, bindings.RpSuperNode)
+
+	// Mine a block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Log("Mined a block")
+
+	// Wave 2 should succeed staking
+	for _, hashesPerNode := range wave2StakeHashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.NoError(t, err)
+	}
+	t.Log("Wave 2 staking succeeded")
+
+	// Wave 3 creation should fail
+	for _, hashesPerNode := range wave3CreationHashes {
+		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "failed with status 0")
+	}
+	t.Log("Wave 3 creation failed as expected")
+}
+
 // Do some initial sanity checks on the state of Constellation before running a test
 // Also sends ETH to the RP deposit pool for convenience
 func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
