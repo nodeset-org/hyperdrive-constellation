@@ -30,7 +30,7 @@ type WethVault struct {
 }
 
 // Create a new WethVault instance
-func NewWethVault(address common.Address, ec eth.IExecutionClient, txMgr *eth.TransactionManager) (*WethVault, error) {
+func NewWethVault(address common.Address, ec eth.IExecutionClient, qMgr *eth.QueryManager, txMgr *eth.TransactionManager, opts *bind.CallOpts) (*WethVault, error) {
 	// Parse the ABI
 	var err error
 	wethVaultOnce.Do(func() {
@@ -51,10 +51,15 @@ func NewWethVault(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tr
 		ABI:          &wethVaultAbi,
 	}
 
+	erc4626token, err := contracts.NewErc4626Token(address, ec, qMgr, txMgr, opts)
+	if err != nil {
+		return nil, fmt.Errorf("error creating Erc4626Token instance: %w", err)
+	}
 	return &WethVault{
-		Address:  address,
-		contract: contract,
-		txMgr:    txMgr,
+		IErc4626Token: erc4626token,
+		Address:       address,
+		contract:      contract,
+		txMgr:         txMgr,
 	}, nil
 }
 
@@ -72,8 +77,4 @@ func (c *WethVault) setEnforceRplCoverageRatio(enforceRplCoverage bool, opts *bi
 
 func (c *WethVault) setRplCoverageRatio(rplCoverageRatio *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setRplCoverageRatio", opts, rplCoverageRatio)
-}
-
-func (c *WethVault) Deposit(assets *big.Int, receiver common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
-	return c.txMgr.CreateTransactionInfo(c.contract, "deposit", opts, assets, receiver)
 }

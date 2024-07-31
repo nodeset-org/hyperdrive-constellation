@@ -108,7 +108,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	if err != nil {
 		return nil, fmt.Errorf("error creating RPL vault binding: %w", err)
 	}
-	wethVault, err := constellation.NewWethVault(wethVaultAddress, ec, txMgr)
+	wethVault, err := constellation.NewWethVault(wethVaultAddress, ec, qMgr, txMgr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating WETH vault binding: %w", err)
 	}
