@@ -72,7 +72,7 @@ func TestMinipoolDepositAndStake_SimpleRoundTrip(t *testing.T) {
 }
 
 // Disable RPL coverage limitation, deposit 1000 xrETH/ETH, set RPL coverage limitation to 30%
-func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
+func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t *testing.T) {
 	// Take a snapshot, revert at the end
 	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
 	if err != nil {
@@ -118,7 +118,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 	require.NoError(t, err)
 	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
 
-	coverageRatio := new(big.Int).Mul(big.NewInt(3), big.NewInt(1e17))
+	coverageRatio := new(big.Int).Mul(big.NewInt(30), big.NewInt(1e16))
 	coverageRatioStr := coverageRatio.String()
 	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
 	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
@@ -130,6 +130,128 @@ func TestMinipoolDepositAndStake_BigRplBootstrap(t *testing.T) {
 	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xrETH as expected: %v", err)
+}
+
+// Disable RPL coverage limitation, deposit 1000 xrETH/ETH, set RPL coverage limitation to 100%
+func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
+	// Disable RPL coverage limitation
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
+	disableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(false, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, disableCoverageTx, deployerOpts, "Disabled RPL coverage limitation")
+
+	// Mint 1000 xrETH + 1000 ETH of xRPL
+	ethAmount := eth.EthToWei(1000)
+	// TODO: Make sure to disable the coverage limitation
+	// Also add a require that it's not disabled prior to this
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+
+	var rplPrice *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
+		return nil
+	}, nil)
+
+	require.NoError(t, err)
+	rplPriceStr := rplPrice.String()
+	t.Logf("RPL price: %v", rplPriceStr)
+	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
+	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
+	rplAmountStr := rplAmount.String()
+	t.Logf("Minting RPL: %v", rplAmountStr)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Enable RPL coverage and set to 100%
+	enableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(true, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
+
+	coverageRatio := new(big.Int).Mul(big.NewInt(100), big.NewInt(1e16))
+	coverageRatioStr := coverageRatio.String()
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
+	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 100%")
+
+	// Attempt to mint 1 xrETH (should fail)
+	ethAmount = eth.EthToWei(1)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	require.Error(t, err)
+	t.Logf("Failed to mint 1 xrETH as expected: %v", err)
+}
+
+// Disable RPL coverage limitation, deposit 1000 xrETH/ETH, set RPL coverage limitation to 200%
+func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *testing.T) {
+	// Take a snapshot, revert at the end
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := testMgr.GetConstellationServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
+	// Disable RPL coverage limitation
+	bindings, err := cstestutils.CreateBindings(testMgr.GetConstellationServiceProvider())
+	require.NoError(t, err)
+	disableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(false, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, disableCoverageTx, deployerOpts, "Disabled RPL coverage limitation")
+
+	// Mint 1000 xrETH + 1000 ETH of xRPL
+	ethAmount := eth.EthToWei(1000)
+	// TODO: Make sure to disable the coverage limitation
+	// Also add a require that it's not disabled prior to this
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+
+	var rplPrice *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.PriceFetcher.GetRplPrice(mc, &rplPrice)
+		return nil
+	}, nil)
+
+	require.NoError(t, err)
+	rplPriceStr := rplPrice.String()
+	t.Logf("RPL price: %v", rplPriceStr)
+	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
+	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
+	rplAmountStr := rplAmount.String()
+	t.Logf("Minting RPL: %v", rplAmountStr)
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Enable RPL coverage and set to 200%
+	enableCoverageTx, err := bindings.RplVault.SetEnforceWETHCoverageRatio(true, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, enableCoverageTx, deployerOpts, "Enabled RPL coverage limitation")
+
+	coverageRatio := new(big.Int).Mul(big.NewInt(200), big.NewInt(1e16))
+	coverageRatioStr := coverageRatio.String()
+	t.Logf("Setting RPL coverage limitation: %v", coverageRatioStr)
+	setCoverageTx, err := bindings.RplVault.SetWETHCoverageRatio(coverageRatio, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, setCoverageTx, deployerOpts, "Set RPL coverage limitation to 200%")
+
+	// Attempt to mint 1 xrETH (should fail)
+	ethAmount = eth.EthToWei(1)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	require.NoError(t, err)
+	t.Logf("Minted 1 xrETH as expected: %v", err)
 }
 
 // Utility function to send ETH and advance blockchain time
