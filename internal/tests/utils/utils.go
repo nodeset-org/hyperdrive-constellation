@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
@@ -72,7 +73,7 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 }
 
 // Deposits WETH to the WETH vault and verifies the contract balances have been updated
-func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, wethVault contracts.IErc4626Token, weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) {
+func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManager, wethVault *constellation.WethVault, weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) {
 	// Bindings
 	sp := testMgr.GetConstellationServiceProvider()
 	qMgr := sp.GetQueryManager()
@@ -88,7 +89,7 @@ func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManage
 	require.NoError(t, err)
 	var evWethBalance *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		weth.BalanceOf(mc, &evWethBalance, wethVault.Address())
+		weth.BalanceOf(mc, &evWethBalance, wethVault.Address)
 		return nil
 	}, nil)
 	require.NoError(t, err)
