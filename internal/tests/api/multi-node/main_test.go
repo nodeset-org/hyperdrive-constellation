@@ -31,18 +31,6 @@ var (
 	mainNode        *cstesting.ConstellationNode
 	mainNodeAddress common.Address
 
-	node2        *cstesting.ConstellationNode
-	node2Address common.Address
-
-	node3        *cstesting.ConstellationNode
-	node3Address common.Address
-
-	node4        *cstesting.ConstellationNode
-	node4Address common.Address
-
-	node5        *cstesting.ConstellationNode
-	node5Address common.Address
-
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
 	odaoNodes []*node.Node
@@ -81,59 +69,6 @@ func TestMain(m *testing.M) {
 	err = registerWithNodeset(mainNode, mainNodeAddress)
 	if err != nil {
 		fail("error registering with nodeset: %v", err)
-	}
-
-	// Make the subnodes
-	basePath := testMgr.GetTestDir()
-	node2, node2Address, err = createNewNode(nil, mainNode, filepath.Join(basePath, "node2"))
-	node3, node3Address, err = createNewNode(err, mainNode, filepath.Join(basePath, "node3"))
-	node4, node4Address, err = createNewNode(err, mainNode, filepath.Join(basePath, "node4"))
-	node5, node5Address, err = createNewNode(err, mainNode, filepath.Join(basePath, "node5"))
-	if err != nil {
-		fail("error creating subnodes: %v", err)
-	}
-	subnodeAddrs := []common.Address{node2Address, node3Address, node4Address, node5Address}
-	for i, addr := range subnodeAddrs {
-		logger.Info(
-			"Created subnode",
-			slog.Int("index", i+2),
-			slog.String("address", addr.Hex()),
-		)
-	}
-
-	// Mine a block to make the sync check pass
-	err = testMgr.CommitBlock()
-	if err != nil {
-		fail("error committing block: %v", err)
-	}
-
-	// Send the subnodes some ETH
-	amount := eth.EthToWei(100)
-	submissions := make([]*eth.TransactionSubmission, len(subnodeAddrs))
-	for i, addr := range subnodeAddrs {
-		resp, err := hd.Wallet.Send(amount, "eth", addr)
-		if err != nil {
-			fail("error sending ETH to subnode %d: %v", i, err)
-		}
-		if !resp.Data.CanSend {
-			fail("can't send ETH to subnode %d: insufficient balance", i)
-		}
-		submission, _ := eth.CreateTxSubmissionFromInfo(resp.Data.TxInfo, nil)
-		submissions[i] = submission
-	}
-	submitResp, err := hd.Tx.SubmitTxBatch(submissions, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
-	if err != nil {
-		fail("error submitting ETH send tx batch: %v", err)
-	}
-	err = testMgr.CommitBlock()
-	if err != nil {
-		fail("error committing block: %v", err)
-	}
-	for i, hash := range submitResp.Data.TxHashes {
-		_, err = hd.Tx.WaitForTransaction(hash)
-		if err != nil {
-			fail("error waiting for ETH send tx %d: %v", i, err)
-		}
 	}
 
 	// Get the private key for the RP and Constellation deployer
@@ -208,12 +143,60 @@ func cleanup() {
 	testMgr = nil
 }
 
-// Create a new node pair with a given user directory, initialize its wallet, and register it with nodeset
-func createNewNode(err error, primary *cstesting.ConstellationNode, newUserDir string) (*cstesting.ConstellationNode, common.Address, error) {
-	if err != nil {
-		return nil, common.Address{}, err
+// Create a set of subnodes running HD and CS, register them with the nodeset, and send them some ETH
+func createSubNodes(primary *cstesting.ConstellationNode, count int, initialFunding *big.Int) ([]*cstesting.ConstellationNode, []common.Address, error) {
+	// Make the subnodes
+	basePath := testMgr.GetTestDir()
+	nodes := make([]*cstesting.ConstellationNode, count)
+	addresses := make([]common.Address, count)
+	for i := 0; i < count; i++ {
+		var err error
+		nodeDir := filepath.Join(basePath, fmt.Sprintf("node%d", i+1))
+		nodes[i], addresses[i], err = createNewNode(primary, nodeDir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error creating subnode %d: %v", i, err)
+		}
+		logger.Info(
+			"Created subnode",
+			slog.Int("index", i+1),
+			slog.String("address", addresses[i].Hex()),
+		)
 	}
 
+	// Send the subnodes some ETH
+	hd := primary.GetHyperdriveNode().GetApiClient()
+	submissions := make([]*eth.TransactionSubmission, len(addresses))
+	for i, addr := range addresses {
+		resp, err := hd.Wallet.Send(initialFunding, "eth", addr)
+		if err != nil {
+			fail("error sending ETH to subnode %d: %v", i, err)
+		}
+		if !resp.Data.CanSend {
+			fail("can't send ETH to subnode %d: insufficient balance", i)
+		}
+		submission, _ := eth.CreateTxSubmissionFromInfo(resp.Data.TxInfo, nil)
+		submissions[i] = submission
+	}
+	submitResp, err := hd.Tx.SubmitTxBatch(submissions, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
+	if err != nil {
+		fail("error submitting ETH send tx batch: %v", err)
+	}
+	err = testMgr.CommitBlock()
+	if err != nil {
+		fail("error committing block: %v", err)
+	}
+	for i, hash := range submitResp.Data.TxHashes {
+		_, err = hd.Tx.WaitForTransaction(hash)
+		if err != nil {
+			fail("error waiting for ETH send tx %d: %v", i, err)
+		}
+	}
+
+	return nodes, addresses, nil
+}
+
+// Create a new node pair with a given user directory, initialize its wallet, and register it with nodeset
+func createNewNode(primary *cstesting.ConstellationNode, newUserDir string) (*cstesting.ConstellationNode, common.Address, error) {
 	// Make the HD node
 	hdNode, err := primary.GetHyperdriveNode().CreateSubNode(newUserDir, "localhost", 0)
 	if err != nil {

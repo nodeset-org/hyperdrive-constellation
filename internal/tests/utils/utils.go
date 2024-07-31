@@ -173,7 +173,7 @@ func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	t.Logf("Supernode now has %d minipools", newMpCount)
 
 	// Verify the minipool
-	mp := VerifyMinipoolAfterCreation(t, qMgr, rpSuperNode, newMpCount, data.MinipoolAddress, mpMgr)
+	mp := VerifyMinipoolAfterCreation(t, qMgr, rpSuperNode, newMpCount-1, data.MinipoolAddress, mpMgr)
 	return mp
 }
 
