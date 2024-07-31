@@ -20,10 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	standardSalt *big.Int = big.NewInt(0x90de5e7)
-)
-
 // Run test 3 of the QA suite
 func Test3_ComplexRoundTrip(t *testing.T) {
 	// Take a snapshot, revert at the end
