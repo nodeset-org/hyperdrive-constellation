@@ -309,7 +309,6 @@ func (t *StakeMinipoolsTask) stakeMinipools(submissions []*eth.TransactionSubmis
 
 	// Print the gas info
 	forceSubmissions := []*eth.TransactionSubmission{}
-	forceMinipools := []minipool.IMinipool{}
 	if !gas.PrintAndCheckGasInfoForBatch(submissions, true, t.gasThreshold, t.logger, maxFee) {
 		// Check for the timeout buffers
 		for i, mp := range minipools {
@@ -325,14 +324,12 @@ func (t *StakeMinipoolsTask) stakeMinipools(submissions []*eth.TransactionSubmis
 				slog.String("minipool", mpCommon.Address.Hex()),
 			)
 			forceSubmissions = append(forceSubmissions, submissions[i])
-			forceMinipools = append(forceMinipools, mp)
 		}
 
 		if len(forceSubmissions) == 0 {
 			return false, nil
 		}
 		submissions = forceSubmissions
-		minipools = forceMinipools
 	}
 
 	// Print TX info and wait for them to be included in a block

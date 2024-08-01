@@ -29,9 +29,8 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 
 	// Constellation bindings
-
 	RplVault                   *constellation.RplVault
-	WethVault                  contracts.IErc4626Token
+	WethVault                  *constellation.WethVault
 	Weth                       *contracts.Weth
 	YieldDistributor           *constellation.YieldDistributor
 	RpSuperNode                *node.Node
@@ -109,7 +108,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	if err != nil {
 		return nil, fmt.Errorf("error creating RPL vault binding: %w", err)
 	}
-	wethVault, err := contracts.NewErc4626Token(wethVaultAddress, ec, qMgr, txMgr, nil)
+	wethVault, err := constellation.NewWethVault(wethVaultAddress, ec, qMgr, txMgr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating WETH vault binding: %w", err)
 	}
