@@ -116,7 +116,7 @@ func TestDuplicateSalts(t *testing.T) {
 
 	// Deposit WETH to the WETH vault
 	wethAmount := eth.EthToWei(90)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, wethAmount, deployerOpts)
 
 	// Try making another one with the same salt, it should fail
 	_, err = cs.Minipool.Create(salt)
@@ -259,7 +259,7 @@ func depositAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBinding
 	ethRequired.Div(ethRequired, eth.EthToWei(0.9)) // TEMP: Add 10%, the required collateral - get this from the contracts later
 	ethRequired.Add(ethRequired, common.Big1)       // Add 1 wei to the required amount to make it pass the greater check
 	wethAmount := ethRequired                       // eth.EthToWei(90)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, wethAmount, deployerOpts)
 
 	// Register with Constellation
 	cstestutils.RegisterWithConstellation(t, testMgr)

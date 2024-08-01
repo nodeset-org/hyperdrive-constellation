@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
-	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
@@ -113,7 +112,7 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 }
 
 // Swap ETH for WETH and deposit it into the WETH Vault
-func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contracts.Weth, wethVault *constellation.WethVault, amount *big.Int, opts *bind.TransactOpts) error {
+func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contracts.Weth, wethVault contracts.IErc4626Token, amount *big.Int, opts *bind.TransactOpts) error {
 	// Services
 	txMgr := m.sp.GetTransactionManager()
 
@@ -128,7 +127,7 @@ func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contra
 			return "minting WETH", txInfo, err
 		},
 		func() (string, *eth.TransactionInfo, error) {
-			txInfo, err := weth.Approve(wethVault.Address, amount, opts)
+			txInfo, err := weth.Approve(wethVault.Address(), amount, opts)
 			return "approve WETH for deposit", txInfo, err
 		},
 		func() (string, *eth.TransactionInfo, error) {
