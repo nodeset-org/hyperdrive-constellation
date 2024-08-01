@@ -71,10 +71,10 @@ func NewWethVault(address common.Address, ec eth.IExecutionClient, qMgr *eth.Que
 // === Transactions ===
 // ====================
 
-func (c *WethVault) setEnforceRplCoverageRatio(enforceRplCoverage bool, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+func (c *WethVault) SetEnforceRplCoverageRatio(enforceRplCoverage bool, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setEnforceRplCoverageRatio", opts, enforceRplCoverage)
 }
 
-func (c *WethVault) setRplCoverageRatio(rplCoverageRatio *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+func (c *WethVault) SetRplCoverageRatio(rplCoverageRatio *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setRplCoverageRatio", opts, rplCoverageRatio)
 }
