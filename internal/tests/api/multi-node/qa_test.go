@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
@@ -134,12 +135,13 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	// Make sure the contract state is clean
 	runPreflightChecks(t, bindings)
 
+	// Get the deposit amounts
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), 1)
+
 	// Deposit RPL to the RPL vault
-	rplAmount := eth.EthToWei(1225)
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
-	wethAmount := eth.EthToWei(10)
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Build the minipool creation TXs
@@ -174,6 +176,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	sp := testMgr.GetNode().GetServiceProvider()
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
@@ -184,14 +187,6 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	// Make sure the contract state is clean
 	runPreflightChecks(t, bindings)
 
-	// Deposit RPL to the RPL vault
-	rplAmount := eth.EthToWei(4000)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
-
-	// Deposit WETH to the WETH vault
-	wethAmount := eth.EthToWei(100)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
-
 	// Create salts
 	salts := make([][]*big.Int, 15)
 	for i := 0; i < 15; i++ {
@@ -200,6 +195,15 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 		}
 		salts[i] = saltsPerNode
 	}
+
+	// Get deposit amounts
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools but no more
+
+	// Deposit WETH to the WETH vault
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Deposit RPL to the RPL vault
+	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Build the wave 1 minipool creation TXs
 	wave1Nodes := nodes[:5]
@@ -236,21 +240,17 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	}
 	t.Log("Second minipool creation wave succeeded")
 
-	// Build the wave 3 minipool creation TXs
+	// Attempt to build the wave 3 minipool creation TXs - they should all fail
 	wave3Nodes := nodes[10:15]
-	wave3Salts := salts[10:15]
-	_, wave3Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave3Nodes, 1, wave3Salts, bindings.RpSuperNode)
-
-	// Mine a block
-	err = testMgr.CommitBlock()
-	require.NoError(t, err)
-	t.Log("Mined a block")
-
-	// Wave 3 should fail
-	for _, hashesPerNode := range wave3Hashes {
-		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed with status 0")
+	wave3Salts := salts[5:10]
+	for i, node := range wave3Nodes {
+		cs := node.GetApiClient()
+		salt := wave3Salts[i][0]
+		depositResponse, err := cs.Minipool.Create(salt)
+		require.NoError(t, err)
+		require.False(t, depositResponse.Data.CanCreate)
+		require.True(t, depositResponse.Data.InsufficientLiquidity)
+		t.Logf("Node %d correctly reported insufficient liquidity", i+10)
 	}
 	t.Log("Third minipool creation wave failed as expected")
 }
@@ -284,12 +284,13 @@ func Test15_StakingTest(t *testing.T) {
 	// Make sure the contract state is clean
 	runPreflightChecks(t, bindings)
 
+	// Get the deposit amounts
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools
+
 	// Deposit RPL to the RPL vault
-	rplAmount := eth.EthToWei(4000)
 	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
-	wethAmount := eth.EthToWei(100)
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Create salts
@@ -417,10 +418,6 @@ func Test15_StakingTest(t *testing.T) {
 	// Build wave 2 minipools stake TXs
 	wave2StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave2Nodes, wave2Data)
 
-	wave3Nodes := nodes[10:15]
-	wave3Salts := salts[10:15]
-	_, wave3CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave3Nodes, 1, wave3Salts, bindings.RpSuperNode)
-
 	// Mine a block
 	err = testMgr.CommitBlock()
 	require.NoError(t, err)
@@ -433,13 +430,19 @@ func Test15_StakingTest(t *testing.T) {
 	}
 	t.Log("Wave 2 staking succeeded")
 
-	// Wave 3 creation should fail
-	for _, hashesPerNode := range wave3CreationHashes {
-		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed with status 0")
+	// Attempt to build the wave 3 minipool creation TXs - they should all fail
+	wave3Nodes := nodes[10:15]
+	wave3Salts := salts[10:15]
+	for i, node := range wave3Nodes {
+		cs := node.GetApiClient()
+		salt := wave3Salts[i][0]
+		depositResponse, err := cs.Minipool.Create(salt)
+		require.NoError(t, err)
+		require.False(t, depositResponse.Data.CanCreate)
+		require.True(t, depositResponse.Data.InsufficientLiquidity)
+		t.Logf("Node %d correctly reported insufficient liquidity", i+10)
 	}
-	t.Log("Wave 3 creation failed as expected")
+	t.Log("Third minipool creation wave failed as expected")
 }
 
 // Do some initial sanity checks on the state of Constellation before running a test
@@ -568,4 +571,64 @@ func nodeset_cleanup(snapshotName string) {
 	if err != nil {
 		fail("Error reloading constellation wallet: %v", err)
 	}
+}
+
+// Get the amount of ETH and RPL to deposit into the WETH and RPL vaults respectively in order to launch the given number of minipools
+func getDepositAmounts(t *testing.T, bindings *cstestutils.ContractBindings, sp cscommon.IConstellationServiceProvider, minipoolCount int) (*big.Int, *big.Int) {
+	// Get some services
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+	countBig := big.NewInt(int64(minipoolCount))
+
+	// Query some details
+	var rplPerEth *big.Int
+	var minipoolBond *big.Int
+	var ethReserveRatio *big.Int
+	var rplReserveRatio *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.PriceFetcher.GetRplPrice(mc, &rplPerEth)
+		csMgr.SuperNodeAccount.Bond(mc, &minipoolBond)
+		csMgr.WethVault.GetLiquidityReserveRatio(mc, &ethReserveRatio)
+		csMgr.RplVault.GetLiquidityReserveRatio(mc, &rplReserveRatio)
+		return nil
+	}, nil,
+		bindings.RpSuperNode.RplStake,
+		bindings.RpSuperNode.EthMatched,
+		bindings.MinipoolManager.LaunchBalance,
+	)
+	require.NoError(t, err)
+
+	// Get the total ETH bond and borrow amounts
+	launchRequirement := bindings.MinipoolManager.LaunchBalance.Get()
+	totalEthBond := new(big.Int).Mul(minipoolBond, countBig)
+	totalEthBorrow := new(big.Int).Sub(launchRequirement, minipoolBond)
+	totalEthBorrow.Mul(totalEthBorrow, countBig)
+	t.Logf("Calculating RPL shortfall for %d minipools with %.2f ETH bond and %.2f ETH borrow", minipoolCount, eth.WeiToEth(totalEthBond), eth.WeiToEth(totalEthBorrow))
+
+	// Get the RPL requirement
+	var rplShortfall *big.Int
+	totalEthMatched := bindings.RpSuperNode.EthMatched.Get()
+	ethAmount := new(big.Int).Add(totalEthMatched, totalEthBorrow)
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.OperatorDistributor.CalculateRplStakeShortfall(mc, &rplShortfall, bindings.RpSuperNode.RplStake.Get(), ethAmount)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	t.Logf("RPL shortfall is %.6f RPL (%s wei)", eth.WeiToEth(rplShortfall), rplShortfall.String())
+
+	// Fix the ETH amount based on the liquidity reserve
+	collateralBase := big.NewInt(1e5)
+	ethCollateral := new(big.Int).Sub(collateralBase, ethReserveRatio)
+	ethDepositRequirement := new(big.Int).Mul(totalEthBond, collateralBase)
+	ethDepositRequirement.Div(ethDepositRequirement, ethCollateral)
+	ethDepositRequirement.Add(ethDepositRequirement, common.Big1)
+
+	// Fix the RPL amount based on the liquidity reserve
+	rplCollateral := new(big.Int).Sub(collateralBase, rplReserveRatio)
+	rplDepositRequirement := new(big.Int).Mul(rplShortfall, collateralBase)
+	rplDepositRequirement.Div(rplDepositRequirement, rplCollateral)
+	rplDepositRequirement.Add(rplDepositRequirement, common.Big1)
+
+	t.Logf("Total deposit requirements are %.2f ETH (%s wei) and %.6f RPL (%s wei)", eth.WeiToEth(ethDepositRequirement), ethDepositRequirement.String(), eth.WeiToEth(rplDepositRequirement), rplDepositRequirement.String())
+	return ethDepositRequirement, rplDepositRequirement
 }
