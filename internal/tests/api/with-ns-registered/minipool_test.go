@@ -97,7 +97,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t 
 	ethAmount := eth.EthToWei(1000)
 	// TODO: Make sure to disable the coverage limitation
 	// Also add a require that it's not disabled prior to this
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -126,7 +126,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t 
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault.IErc4626Token, ethAmount, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xrETH as expected: %v", err)
 }
@@ -156,7 +156,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *tes
 	ethAmount := eth.EthToWei(1000)
 	// TODO: Make sure to disable the coverage limitation
 	// Also add a require that it's not disabled prior to this
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -184,7 +184,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *tes
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault.IErc4626Token, ethAmount, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xrETH as expected: %v", err)
 }
@@ -214,7 +214,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *te
 	ethAmount := eth.EthToWei(1000)
 	// TODO: Make sure to disable the coverage limitation
 	// Also add a require that it's not disabled prior to this
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -243,7 +243,7 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *te
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault.IErc4626Token, ethAmount, deployerOpts)
 	require.NoError(t, err)
 	t.Logf("Minted 1 xrETH as expected: %v", err)
 }
@@ -412,7 +412,7 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintGreaterThanCoverageRatio(t 
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToRplVault(bindings.Rpl, bindings.RplVault.IErc4626Token, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToRplVault(bindings.RplVault, ethAmount, deployerOpts, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xRPL as expected: %v", err)
 }
@@ -470,7 +470,7 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintEqualToCoverageRatio(t *tes
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToRplVault(bindings.Rpl, bindings.RplVault.IErc4626Token, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToRplVault(bindings.RplVault, ethAmount, deployerOpts, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xRPL as expected: %v", err)
 }
@@ -528,7 +528,7 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintLessThanCoverageRatio(t *te
 
 	// Attempt to mint 1 xrETH (should fail)
 	ethAmount = eth.EthToWei(1)
-	err = testMgr.Constellation_DepositToRplVault(bindings.Rpl, bindings.RplVault.IErc4626Token, ethAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToRplVault(bindings.RplVault, ethAmount, deployerOpts, deployerOpts)
 	require.Error(t, err)
 	t.Logf("Failed to mint 1 xRPL as expected: %v", err)
 }
