@@ -392,7 +392,6 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintGreaterThanCoverageRatio(t 
 
 	require.NoError(t, err)
 	t.Logf("RPL price: %v", rplPrice.String())
-	// ethAmount200 := eth.EthToWei(200)
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
 	t.Logf("Minting RPL: %v", rplAmount.String())
@@ -450,7 +449,6 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintEqualToCoverageRatio(t *tes
 
 	require.NoError(t, err)
 	t.Logf("RPL price: %v", rplPrice.String())
-	// ethAmount200 := eth.EthToWei(200)
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
 	t.Logf("Minting RPL: %v", rplAmount.String())
@@ -508,7 +506,6 @@ func TestMinipoolDepositAndStake_BigEthBootstrap_MintLessThanCoverageRatio(t *te
 
 	require.NoError(t, err)
 	t.Logf("RPL price: %v", rplPrice.String())
-	// ethAmount200 := eth.EthToWei(200)
 	rplAmount := ethAmount.Mul(ethAmount, rplPrice)
 	rplAmount = rplAmount.Div(rplAmount, eth.EthToWei(1e18))
 	t.Logf("Minting RPL: %v", rplAmount.String())
