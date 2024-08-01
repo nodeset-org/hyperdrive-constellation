@@ -95,8 +95,6 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintGreaterThanCoverageRatio(t 
 
 	// Mint 1000 xrETH + 1000 ETH of xRPL
 	ethAmount := eth.EthToWei(1000)
-	// TODO: Make sure to disable the coverage limitation
-	// Also add a require that it's not disabled prior to this
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
@@ -154,8 +152,6 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintEqualToCoverageRatio(t *tes
 
 	// Mint 1000 xrETH + 1000 ETH of xRPL
 	ethAmount := eth.EthToWei(1000)
-	// TODO: Make sure to disable the coverage limitation
-	// Also add a require that it's not disabled prior to this
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
@@ -212,8 +208,6 @@ func TestMinipoolDepositAndStake_BigRplBootstrap_MintLessThanCoverageRatio(t *te
 
 	// Mint 1000 xrETH + 1000 ETH of xRPL
 	ethAmount := eth.EthToWei(1000)
-	// TODO: Make sure to disable the coverage limitation
-	// Also add a require that it's not disabled prior to this
 	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault.IErc4626Token, bindings.Weth, ethAmount, deployerOpts)
 
 	var rplPrice *big.Int
