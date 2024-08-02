@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gorilla/mux"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
@@ -85,6 +86,7 @@ type MinipoolCreateContext struct {
 	lockupTime         *big.Int
 	minipoolBondAmount *big.Int
 	isWhitelisted      bool
+	internalSalt       *big.Int
 }
 
 func (c *MinipoolCreateContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
@@ -148,12 +150,17 @@ func (c *MinipoolCreateContext) Initialize(walletStatus wallet.WalletStatus) (ty
 		return types.ResponseStatus_Error, fmt.Errorf("error creating minipool manager binding: %w", err)
 	}
 
+	// Adjust the salt
 	c.nodeAddress = walletStatus.Wallet.WalletAddress
+	saltBytes := [32]byte{}
+	c.Salt.FillBytes(saltBytes[:])
+	saltWithNodeAddress := crypto.Keccak256(saltBytes[:], c.nodeAddress[:])
+	c.internalSalt = new(big.Int).SetBytes(saltWithNodeAddress)
 	return types.ResponseStatus_Success, nil
 }
 
 func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
-	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.ExpectedMinipoolAddress, c.Salt)
+	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.ExpectedMinipoolAddress, c.internalSalt)
 	c.csMgr.SuperNodeAccount.LockThreshold(mc, &c.lockThreshold)
 	c.csMgr.SuperNodeAccount.LockupTime(mc, &c.lockupTime)
 	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
@@ -280,10 +287,11 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 		From:  opts.From,
 		Value: prelaunchValueWei,
 	}
+	depositDataSignature := beacon.ValidatorSignature(depositData.Signature)
 	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
 	data.TxInfo, err = c.csMgr.SuperNodeAccount.CreateMinipool(
-		validatorKey.PublicKey[:],
-		depositData.Signature,
+		validatorKey.PublicKey,
+		depositDataSignature,
 		depositDataRoot,
 		c.Salt,
 		c.ExpectedMinipoolAddress,

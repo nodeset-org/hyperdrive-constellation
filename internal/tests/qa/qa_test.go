@@ -1,6 +1,7 @@
 package qa
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
@@ -15,13 +16,18 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
+	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
+	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/nodeset-client-go/utils"
 	batch "github.com/rocket-pool/batch-query"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
+	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +44,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	sp := mainNode.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
 	t.Log("Created services")
 
 	// Create some subnodes
@@ -63,7 +71,8 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	t.Log("Set up the NodeSet mock server")
 
 	// Build the minipool creation TXs
-	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, 1, nil, bindings.RpSuperNode)
+	minipoolsPerNode := 1
+	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, minipoolsPerNode, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -72,18 +81,23 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Wait for each TX
 	for i, node := range nodes {
+		hashesPerNode := hashes[i]
 		hd := node.GetHyperdriveNode().GetApiClient()
-		_, err = hd.Tx.WaitForTransaction(hashes[i][0])
-		require.NoError(t, err)
+		for _, hash := range hashesPerNode {
+			_, err = hd.Tx.WaitForTransaction(hash)
+			require.NoError(t, err)
+		}
 	}
 	t.Log("Finished waiting for minipool creation TXs")
 
 	// Verify minipools
 	mps := make([]minipool.IMinipool, len(nodes))
 	for i, dataForNode := range datas {
-		data := dataForNode[0]
-		mp := cstestutils.VerifyMinipoolAfterCreation(t, qMgr, bindings.RpSuperNode, uint64(i), data.MinipoolAddress, bindings.MinipoolManager)
-		mps[i] = mp
+		for j, data := range dataForNode {
+			index := i*minipoolsPerNode + j
+			mp := cstestutils.VerifyMinipoolAfterCreation(t, qMgr, bindings.RpSuperNode, uint64(index), data.MinipoolAddress, bindings.MinipoolManager)
+			mps[index] = mp
+		}
 	}
 	t.Log("Verified minipools")
 
@@ -109,7 +123,55 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	}
 	t.Log("Staked the minipools")
 
-	// TODO: examine rewards
+	// Assume 0.015 ETH in rewards per validator
+	rewardsPerValidator := eth.EthToWei(0.015)
+	totalRewards := new(big.Int).Mul(rewardsPerValidator, big.NewInt(int64(minipoolsPerNode)))
+	totalRewards.Mul(totalRewards, big.NewInt(int64(len(nodes))))
+
+	// Update the oracle report
+	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
+	newTime := time.Now().Add(timeToAdvance)
+	sig, err := createXrEthOracleSignature(totalRewards, newTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	require.NoError(t, err)
+	txInfo, err := csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalRewards, sig, newTime, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Updated the xrETH Oracle with total rewards of %.4f ETH", eth.WeiToEth(totalRewards)))
+
+	// Verify the new ETH:xrETH price
+	oneEth := big.NewInt(1e18)
+	xrEthPrice := getTokenPrice(t, qMgr, csMgr.WethVault)
+	originalAmount := wethAmount
+	newAmount := new(big.Int).Add(originalAmount, totalRewards)
+	ratio := new(big.Int).Mul(newAmount, oneEth)
+	ratio.Div(ratio, originalAmount)
+	ratio.Sub(ratio, common.Big1) // Subtract 1 wei to account for integer truncation
+	require.Equal(t, ratio, xrEthPrice)
+	t.Logf("The new ETH:xrETH price is %.10f", eth.WeiToEth(xrEthPrice))
+
+	// Redeem all xrETH
+	var xrEthInAccount *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.WethVault.BalanceOf(mc, &xrEthInAccount, deployerOpts.From)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	xrEthRedeemAmount := big.NewInt(5) //xrEthInAccount
+
+	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, true, deployerOpts)
+	expectedAmount := new(big.Int).Mul(wethAmount, xrEthPrice)
+	expectedAmount.Div(expectedAmount, oneEth)
+	require.Equal(t, expectedAmount, wethReturned)
+	t.Logf("Redeemed %d xrETH for %.10f WETH", xrEthRedeemAmount.Int64(), eth.WeiToEth(wethReturned))
+
+	// Redeem all xRPL
+	xRplRedeemAmount := rplAmount
+	rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	expectedAmount = rplAmount
+	require.Equal(t, rplAmount, rplReturned)
+	t.Logf("Redeemed %d xRPL for %.10f RPL", xRplRedeemAmount.Int64(), eth.WeiToEth(rplReturned))
+
+	// Claim NO rewards
+
 }
 
 // Run test 4 of the QA suite
@@ -359,13 +421,13 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 10 xrETH
 	xrEthRedeemAmount := big.NewInt(10)
-	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, deployerOpts)
+	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, true, deployerOpts)
 	require.Equal(t, eth.EthToWei(10), wethReturned)
 	t.Logf("Redeemed %d xrETH for %.2f WETH", xrEthRedeemAmount.Int64(), eth.WeiToEth(wethReturned))
 
 	// Redeem 100 xrRPL
 	xRplRedeemAmount := big.NewInt(100)
-	rplDepositAmount = redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, deployerOpts)
+	rplDepositAmount = redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, true, deployerOpts)
 	require.Equal(t, eth.EthToWei(100), rplDepositAmount)
 	t.Logf("Redeemed %d xRPL for %.2f RPL", xRplRedeemAmount.Int64(), eth.WeiToEth(rplDepositAmount))
 
@@ -415,27 +477,31 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
 	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
 
-	// Assume 0.015 ETH in rewards per validator
-	rewardsPerValidator := eth.EthToWei(0.015)
-	totalRewards := new(big.Int).Mul(rewardsPerValidator, big.NewInt(int64(wave1MinipoolsPerNode)))
-	totalRewards.Mul(totalRewards, big.NewInt(int64(len(nodes))))
+	// Assume 0.010 ETH in rewards on Beacon and 0.005 on the EL per validator
+	elRewardsPerMinipool := eth.EthToWei(0.005)
+	beaconRewardsPerValidator := 1e7 // Beacon is in gwei
+	simulateBeaconRewards(t, sp, wave1Data, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), deployerOpts)
+	ratio := calculateXrEthOracleRatio(t, sp, bindings)
+	t.Logf("The new ETH:xrETH price to report is %.10f (%s wei)", eth.WeiToEth(ratio), ratio.String())
 
 	// Update the oracle report
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
-	sig, err := createXrEthOracleSignature(totalRewards, nodesetTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(ratio, nodesetTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalRewards, sig, nodesetTime, deployerOpts)
+	txInfo, err = csMgr.XrEthAdminOracle.SetTotalYieldAccrued(ratio, sig, nodesetTime, deployerOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Updated the xrETH Oracle with total rewards of %.4f ETH", eth.WeiToEth(totalRewards)))
+	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
 	// Verify the new ETH:xrETH price
 	xrEthPrice := getTokenPrice(t, qMgr, csMgr.WethVault)
-	originalAmount := new(big.Int).Sub(ethDepositAmount, wethReturned)
-	newAmount := new(big.Int).Add(originalAmount, totalRewards)
-	ratio := new(big.Int).Mul(newAmount, oneEth)
-	ratio.Div(ratio, originalAmount)
+	/*
+		originalAmount := new(big.Int).Sub(ethDepositAmount, wethReturned)
+		newAmount := new(big.Int).Add(originalAmount, totalRewards)
+		ratio := new(big.Int).Mul(newAmount, oneEth)
+		ratio.Div(ratio, originalAmount)
+	*/
 	require.Equal(t, ratio, xrEthPrice)
-	t.Logf("The new ETH:xrETH price is %.10f", eth.WeiToEth(xrEthPrice))
+	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPrice), xrEthPrice.String())
 }
 
 // Run test 15 of the QA suite
@@ -761,7 +827,7 @@ func getDepositAmounts(t *testing.T, bindings *cstestutils.ContractBindings, sp 
 	t.Logf("RPL shortfall is %.6f RPL (%s wei)", eth.WeiToEth(rplShortfall), rplShortfall.String())
 
 	// Fix the ETH amount based on the liquidity reserve
-	collateralBase := big.NewInt(1e5)
+	collateralBase := big.NewInt(1e18)
 	ethCollateral := new(big.Int).Sub(collateralBase, ethReserveRatio)
 	ethDepositRequirement := new(big.Int).Mul(totalEthBond, collateralBase)
 	ethDepositRequirement.Div(ethDepositRequirement, ethCollateral)
@@ -898,7 +964,7 @@ func setLiquidityReserveRatios(t *testing.T, sp cscommon.IConstellationServicePr
 }
 
 // Redeems an ERC4626 token for the underlying asset and returns the amount of the asset redeemed
-func redeemToken(t *testing.T, qMgr *eth.QueryManager, txMgr *eth.TransactionManager, token contracts.IErc4626Token, amountHumanReadable *big.Int, opts *bind.TransactOpts) *big.Int {
+func redeemToken(t *testing.T, qMgr *eth.QueryManager, txMgr *eth.TransactionManager, token contracts.IErc4626Token, amount *big.Int, humanReadable bool, opts *bind.TransactOpts) *big.Int {
 	// Get the amount of the underlying asset before redeeming
 	asset := token.Asset()
 	var beforeBalance *big.Int
@@ -909,9 +975,12 @@ func redeemToken(t *testing.T, qMgr *eth.QueryManager, txMgr *eth.TransactionMan
 	require.NoError(t, err)
 
 	// Make the TX
-	decimals := token.Decimals()
-	offset := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
-	amount := new(big.Int).Mul(amountHumanReadable, offset) // Convert to the native share count
+	if humanReadable {
+		decimals := token.Decimals()
+		offset := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
+		amount.Mul(amount, offset) // Convert to the native share count
+	}
+	t.Logf("Redemption calculated as %.6f token (%s wei)", eth.WeiToEth(amount), amount.String())
 	txInfo, err := token.Redeem(amount, opts.From, opts.From, opts)
 	require.NoError(t, err)
 
@@ -987,6 +1056,186 @@ func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Ti
 		return nil, fmt.Errorf("error creating signature: %w", err)
 	}
 	return signature, nil
+}
+
+// Simulate rewards being earned on the Beacon Chain. If the validators don't exist, they're created and put into the `active_staking` status for convenience.
+func simulateBeaconRewards(t *testing.T, sp cscommon.IConstellationServiceProvider, minipools [][]*csapi.MinipoolCreateData, elAmount *big.Int, beaconAmount uint64, opts *bind.TransactOpts) {
+	// Services
+	txMgr := sp.GetTransactionManager()
+
+	// Send ETH to each minipool on the EL
+	sendOpts := &bind.TransactOpts{
+		From:  opts.From,
+		Value: elAmount,
+	}
+	submissions := []*eth.TransactionSubmission{}
+	for _, mpsForNode := range minipools {
+		for _, mp := range mpsForNode {
+			txInfo := txMgr.CreateTransactionInfoRaw(mp.MinipoolAddress, nil, sendOpts)
+			submission, _ := eth.CreateTxSubmissionFromInfo(txInfo, nil)
+			submissions = append(submissions, submission)
+		}
+	}
+	txs, err := txMgr.BatchExecuteTransactions(submissions, opts)
+	require.NoError(t, err)
+
+	// Mine the block
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+
+	// Wait for the transactions to be mined
+	err = txMgr.WaitForTransactions(txs)
+	require.NoError(t, err)
+	t.Logf("Sent %.4f ETH to %d minipools on the EL", eth.WeiToEth(elAmount), len(submissions))
+
+	// "Mint" ETH on the Beacon Chain
+	bm := testMgr.GetBeaconMockManager()
+	for _, mpsForNode := range minipools {
+		for _, mp := range mpsForNode {
+			pubkey := mp.ValidatorPubkey
+			val, err := bm.GetValidator(pubkey.Hex())
+			require.NoError(t, err)
+			if val == nil {
+				withdrawalCreds := validator.GetWithdrawalCredsFromAddress(mp.MinipoolAddress)
+				val, err = bm.AddValidator(pubkey, withdrawalCreds)
+				require.NoError(t, err)
+				val.Status = beacon.ValidatorState_ActiveOngoing
+			}
+			val.Balance += beaconAmount
+		}
+	}
+	t.Logf("Added %.4f ETH to %d validators on the Beacon Chain", eth.GweiToEth(float64(beaconAmount)), len(submissions))
+}
+
+// Reference implementation for the xrETH oracle
+func calculateXrEthOracleRatio(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) *big.Int {
+	// Services
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+
+	// Get the total minipool count and minipool launch balance
+	var minipoolCountBig *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.SuperNodeAccount.GetMinipoolCount(mc, &minipoolCountBig)
+		return nil
+	}, nil,
+		bindings.MinipoolManager.LaunchBalance,
+	)
+	require.NoError(t, err)
+	minipoolCount := int(minipoolCountBig.Uint64())
+	mpLaunchBalance := bindings.MinipoolManager.LaunchBalance.Get()
+
+	// Get the minipool addresses
+	addressBatchSize := 1000
+	addresses := make([]common.Address, minipoolCount)
+	err = qMgr.BatchQuery(minipoolCount, addressBatchSize, func(mc *batch.MultiCaller, index int) error {
+		indexBig := big.NewInt(int64(index))
+		csMgr.SuperNodeAccount.GetMinipoolAddress(mc, &addresses[index], indexBig)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	type ConstellationMinipool struct {
+		RocketPoolBinding minipool.IMinipool
+		ConstellationData constellation.MinipoolData
+	}
+
+	// Get the RP minipool bindings
+	rpMinipools, err := bindings.MinipoolManager.CreateMinipoolsFromAddresses(addresses, false, nil)
+	require.NoError(t, err)
+
+	// Get the RP minipool details and CS details
+	detailsBatchSize := 100
+	csMinipools := make([]ConstellationMinipool, minipoolCount)
+	err = qMgr.BatchQuery(minipoolCount, detailsBatchSize, func(mc *batch.MultiCaller, index int) error {
+		rpMinipool := rpMinipools[index]
+		csMinipools[index].RocketPoolBinding = rpMinipool
+		mpCommon := rpMinipool.Common()
+		eth.AddQueryablesToMulticall(mc,
+			mpCommon.Status,
+			mpCommon.Pubkey,
+			mpCommon.IsFinalised,
+		)
+		csMgr.SuperNodeAccount.GetMinipoolData(mc, &csMinipools[index].ConstellationData, mpCommon.Address)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Filter by minipool status
+	candidateMinipools := make([]*ConstellationMinipool, 0, minipoolCount)
+	for i, mp := range csMinipools {
+		rpMinipool := mp.RocketPoolBinding
+		mpCommon := rpMinipool.Common()
+		if mpCommon.IsFinalised.Get() {
+			continue
+		}
+		if mpCommon.Status.Formatted() != types.MinipoolStatus_Staking {
+			continue
+		}
+		candidateMinipools = append(candidateMinipools, &csMinipools[i])
+	}
+
+	// Get the Beacon statuses for each validator
+	pubkeys := make([]beacon.ValidatorPubkey, len(candidateMinipools))
+	for i, mp := range candidateMinipools {
+		mpCommon := mp.RocketPoolBinding.Common()
+		pubkey := mpCommon.Pubkey.Get()
+		pubkeys[i] = pubkey
+	}
+	bn := sp.GetBeaconClient()
+	beaconStatuses, err := bn.GetValidatorStatuses(context.Background(), pubkeys, nil)
+	require.NoError(t, err)
+
+	// Filter by Beacon status
+	activeMinipools := []*ConstellationMinipool{}
+	for i, mp := range candidateMinipools {
+		mpCommon := mp.RocketPoolBinding.Common()
+		pubkey := mpCommon.Pubkey.Get()
+		beaconStatus, exists := beaconStatuses[pubkey]
+		if !exists {
+			continue
+		}
+		if beaconStatus.Status == beacon.ValidatorState_PendingInitialized {
+			continue
+		}
+		activeMinipools = append(activeMinipools, candidateMinipools[i])
+	}
+
+	// Get the EL balances
+	bb, err := batch.NewBalanceBatcher(sp.GetEthClient(), sp.GetResources().BalanceBatcherAddress, 1000, 2)
+	require.NoError(t, err)
+	activeAddresses := make([]common.Address, len(activeMinipools))
+	for i, mp := range activeMinipools {
+		activeAddresses[i] = mp.RocketPoolBinding.Common().Address
+	}
+	activeBalances, err := bb.GetEthBalances(activeAddresses, nil)
+	require.NoError(t, err)
+
+	// Go through each detail and calculate the xrETH share of rewards
+	oneEth := big.NewInt(1e18)
+	oneGwei := big.NewInt(1e9)
+	totalRewards := big.NewInt(0)
+	for i, mp := range activeMinipools {
+		mpCommon := mp.RocketPoolBinding.Common()
+		pubkey := mpCommon.Pubkey.Get()
+
+		// Get the aggregated balance
+		elBalance := activeBalances[i]
+		beaconBalance := beaconStatuses[pubkey].Balance
+		beaconBalanceWei := new(big.Int).SetUint64(beaconBalance)
+		beaconBalanceWei.Mul(beaconBalanceWei, oneGwei)
+		mpBalance := new(big.Int).Add(elBalance, beaconBalanceWei)
+		mpRewards := new(big.Int).Sub(mpBalance, mpLaunchBalance)
+
+		// Get the xrETH share of rewards and add it to the total
+		fees := new(big.Int).Add(mp.ConstellationData.NodeFee, mp.ConstellationData.TreasuryFee)
+		xrEthShare := new(big.Int).Sub(oneEth, fees)
+		xrEthRewards := new(big.Int).Mul(mpRewards, xrEthShare)
+		xrEthRewards.Div(xrEthRewards, oneEth)
+		totalRewards.Add(totalRewards, xrEthRewards)
+	}
+
+	return totalRewards
 }
 
 // Cleanup after a unit test

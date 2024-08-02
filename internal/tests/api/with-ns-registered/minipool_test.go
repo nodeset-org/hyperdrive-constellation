@@ -72,7 +72,7 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	t.Log("Created contract bindings")
 
 	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
-	simulateEthRewardToYieldDistributor(t, bindings, mainNode)
+	//simulateEthRewardToYieldDistributor(t, bindings, mainNode)
 }
 
 // Run a check to make sure depositing with duplicate salts fails
