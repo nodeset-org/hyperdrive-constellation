@@ -35,7 +35,7 @@ type ContractBindings struct {
 	YieldDistributor           *constellation.YieldDistributor
 	RpSuperNode                *node.Node
 	TreasuryAddress            common.Address
-	DepositPoolAddress         common.Address
+	AssetRouterAddress         common.Address
 	OperatorDistributorAddress common.Address
 }
 
@@ -84,7 +84,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	var wethVaultAddress common.Address
 	var wethAddress common.Address
 	var treasuryAddress common.Address
-	var depositPoolAddress common.Address
+	var assetRouterAddress common.Address
 	var operatorDistributorAddress common.Address
 	var yieldDistributorAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -92,7 +92,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
 		csMgr.Directory.GetTreasuryAddress(mc, &treasuryAddress)
-		csMgr.Directory.GetDepositPoolAddress(mc, &depositPoolAddress)
+		csMgr.Directory.GetAssetRouterAddress(mc, &assetRouterAddress)
 		csMgr.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
 		csMgr.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		return nil
@@ -135,7 +135,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		WethVault:                  wethVault,
 		Weth:                       weth,
 		TreasuryAddress:            treasuryAddress,
-		DepositPoolAddress:         depositPoolAddress,
+		AssetRouterAddress:         assetRouterAddress,
 		OperatorDistributorAddress: operatorDistributorAddress,
 		RpSuperNode:                rpSuperNode,
 		YieldDistributor:           yieldDistributor,

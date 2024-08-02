@@ -20,6 +20,7 @@ type ConstellationManager struct {
 	YieldDistributor    *constellation.YieldDistributor
 	WethVault           *constellation.WethVault
 	RplVault            *constellation.RplVault
+	XrEthAdminOracle    *constellation.XrEthAdminOracle
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -58,6 +59,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	var yieldDistributorAddress common.Address
 	var wethVaultAddress common.Address
 	var rplVaultAddress common.Address
+	var xrEthAdminOracleAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
@@ -66,6 +68,7 @@ func (m *ConstellationManager) LoadContracts() error {
 		m.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		m.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
+		m.Directory.GetXrEthAdminOracleAddress(mc, &xrEthAdminOracleAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -101,6 +104,10 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating RPL vault binding: %w", err)
 	}
+	xrEthAdminOracle, err := constellation.NewXrEthAdminOracle(xrEthAdminOracleAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating xrETH admin oracle binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
@@ -110,6 +117,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.YieldDistributor = yieldDistributor
 	m.WethVault = wethVault
 	m.RplVault = rplVault
+	m.XrEthAdminOracle = xrEthAdminOracle
 	m.isLoaded = true
 	return nil
 }

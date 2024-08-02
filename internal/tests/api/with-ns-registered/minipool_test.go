@@ -147,7 +147,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	oneEth := big.NewInt(1e18)
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, node, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+	sendEthAndAdvanceTime(t, node, bindings.AssetRouterAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
 	sendEthAndAdvanceTime(t, node, bindings.YieldDistributor.Address, oneEth, 0)
@@ -160,7 +160,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	// Again - to simulate an interval tick for rewards to go to treasury
 
 	// Send 1 ETH to the deposit pool
-	sendEthAndAdvanceTime(t, node, bindings.DepositPoolAddress, oneEth, slotsToAdvance)
+	sendEthAndAdvanceTime(t, node, bindings.AssetRouterAddress, oneEth, slotsToAdvance)
 
 	// Send 1 ETH to the yield distributor
 	sendEthAndAdvanceTime(t, node, bindings.YieldDistributor.Address, oneEth, 0)

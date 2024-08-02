@@ -1,6 +1,7 @@
-package multi_node
+package qa
 
 import (
+	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -22,6 +23,7 @@ var (
 	logger       *slog.Logger
 	nsEmail      string = "test@nodeset.io"
 	keygen       *keys.KeyGenerator
+	deployerKey  *ecdsa.PrivateKey
 	deployerOpts *bind.TransactOpts
 	adminOpts    *bind.TransactOpts
 
@@ -74,7 +76,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fail("error creating key generator: %v", err)
 	}
-	deployerKey, err := keygen.GetEthPrivateKey(0)
+	deployerKey, err = keygen.GetEthPrivateKey(0)
 	if err != nil {
 		fail("error getting deployer key: %v", err)
 	}

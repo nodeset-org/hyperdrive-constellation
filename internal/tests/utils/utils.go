@@ -128,6 +128,7 @@ func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nodes []*cstesting.Constellat
 			}
 			data := BuildAndVerifyCreateMinipoolTx(t, node, salt, rpSuperNode)
 			datasForNode[j] = data
+			SaveValidatorKey(t, node, data)
 		}
 		datas[i] = datasForNode
 	}
@@ -180,7 +181,7 @@ func VerifyMinipoolAfterCreation(t *testing.T, qMgr *eth.QueryManager, rpSuperNo
 	err = qMgr.Query(nil, nil, mp.Common().Status)
 	require.NoError(t, err)
 	require.Equal(t, types.MinipoolStatus_Prelaunch, mp.Common().Status.Formatted())
-	t.Log("Minipool is in prelaunch")
+	t.Logf("Minipool %s is in prelaunch", mpAddress.Hex())
 	return mp
 }
 

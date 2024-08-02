@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/eth/contracts"
 )
@@ -21,11 +22,27 @@ const (
 // === Interfaces ===
 // ==================
 
-// Simple binding for ERC20 tokens
+// Simple binding for ERC4626 tokens.
+// See https://eips.ethereum.org/EIPS/eip-4626 for details.
 type IErc4626Token interface {
 	contracts.IErc20Token
 
+	// The address of the underlying asset token managed by the vault
+	Asset() contracts.IErc20Token
+
+	// Converts a number of underlying assets to an equivalent amount of vault shares.
+	// This is effectively the "price" of the shares, in terms of the share:asset ratio.
+	ConvertToShares(mc *batch.MultiCaller, out **big.Int, assets *big.Int)
+
+	// Converts a number of vault shares to an equivalent amount of underyling asset.
+	// This is effectively the "price" of the asset, in terms of the asset:share ratio.
+	ConvertToAssets(mc *batch.MultiCaller, out **big.Int, shares *big.Int)
+
+	// Deposits exactly `assets` of underlying tokens into the vault and sends the corresponding amount of vault shares to `receiver`
 	Deposit(assets *big.Int, receiver common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error)
+
+	// Burns exactly `shares` from `owner` and sends the corresponding amount of underlying tokens to `receiver`
+	Redeem(shares *big.Int, receiver common.Address, owner common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error)
 }
 
 // ABI cache
@@ -36,6 +53,7 @@ type erc4626Token struct {
 	contracts.IErc20Token
 	contract *eth.Contract
 	txMgr    *eth.TransactionManager
+	asset    contracts.IErc20Token
 }
 
 // Create a new Erc4626Token instance
@@ -60,6 +78,20 @@ func NewErc4626Token(address common.Address, ec eth.IExecutionClient, qMgr *eth.
 		ABI:          &erc4626AbiStringAbi,
 	}
 
+	// Get the details
+	var asset common.Address
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		eth.AddCallToMulticaller(mc, contract, &asset, "asset")
+		return nil
+	}, opts)
+	if err != nil {
+		return nil, fmt.Errorf("error getting ERC-4626 details of token %s: %w", address.Hex(), err)
+	}
+	assetBinding, err := contracts.NewErc20Contract(asset, ec, qMgr, txMgr, opts)
+	if err != nil {
+		return nil, fmt.Errorf("error creating ERC20 binding for ERC4626 token asset %s: %w", asset.Hex(), err)
+	}
+
 	// Create the ERC20 binding
 	erc20, err := contracts.NewErc20Contract(address, ec, qMgr, txMgr, opts)
 	if err != nil {
@@ -70,18 +102,41 @@ func NewErc4626Token(address common.Address, ec eth.IExecutionClient, qMgr *eth.
 		IErc20Token: erc20,
 		contract:    contract,
 		txMgr:       txMgr,
+		asset:       assetBinding,
 	}, nil
+}
+
+// The address of the underlying asset token managed by the vault
+func (c *erc4626Token) Asset() contracts.IErc20Token {
+	return c.asset
 }
 
 // =============
 // === Calls ===
 // =============
 
+// Converts a number of underlying assets to an equivalent amount of vault shares.
+// This is effectively the "price" of the shares, in terms of the share:asset ratio.
+func (c *erc4626Token) ConvertToShares(mc *batch.MultiCaller, out **big.Int, assets *big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "convertToShares", assets)
+}
+
+// Converts a number of vault shares to an equivalent amount of underyling asset.
+// This is effectively the "price" of the asset, in terms of the asset:share ratio.
+func (c *erc4626Token) ConvertToAssets(mc *batch.MultiCaller, out **big.Int, shares *big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "convertToAssets", shares)
+}
+
 // ====================
 // === Transactions ===
 // ====================
 
-// Deposit an amount of input tokens, and send some amount of output tokens to the receiver
+// Deposits exactly `assets` of underlying tokens into the vault and sends the corresponding amount of vault shares to `receiver`
 func (c *erc4626Token) Deposit(assets *big.Int, receiver common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "deposit", opts, assets, receiver)
+}
+
+// Burns exactly `shares` from `owner` and sends the corresponding amount of underlying tokens to `receiver`
+func (c *erc4626Token) Redeem(shares *big.Int, receiver common.Address, owner common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "redeem", opts, shares, receiver, owner)
 }
