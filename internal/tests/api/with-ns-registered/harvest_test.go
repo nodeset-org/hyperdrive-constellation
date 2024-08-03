@@ -1,12 +1,10 @@
 package with_ns_registered
 
 import (
-	"math/big"
 	"testing"
 
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
-	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,16 +25,18 @@ func TestHarvest(t *testing.T) {
 	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
 
 	// Fast forward time for reward interval to increment
-	slotsToAdvance := 1200 * 60 * 60 / 12
+	slotsToAdvance := 7 * 24 * 60 * 60 / 12 // 7 days
 	err = testMgr.AdvanceSlots(uint(slotsToAdvance), false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
 	require.NoError(t, err)
 	t.Logf("Advanced %d slots", slotsToAdvance)
 
 	// Fund the YieldDistributor
-	fundAmount := big.NewInt(1e18)
-	err = testMgr.Constellation_FundYieldDistributor(bindings.Weth, fundAmount, deployerOpts)
-	require.NoError(t, err)
-	t.Logf("Funded the YieldDistributor with %.6f WETH", eth.WeiToEth(fundAmount))
+	//fundAmount := big.NewInt(1e18)
+	//err = testMgr.Constellation_FundYieldDistributor(bindings.Weth, fundAmount, deployerOpts)
+	//require.NoError(t, err)
+	//t.Logf("Funded the YieldDistributor with %.6f WETH", eth.WeiToEth(fundAmount))
 
 	cstestutils.HarvestRewards(t, testMgr, mainNode, bindings.Weth, bindings.TreasuryAddress, nodeAddress, deployerOpts)
 }

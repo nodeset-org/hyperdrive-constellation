@@ -8,12 +8,15 @@ import (
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
 	batch "github.com/rocket-pool/batch-query"
+	"github.com/rocket-pool/rocketpool-go/v2/core"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/deposit"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/network"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
+	"github.com/rocket-pool/rocketpool-go/v2/rewards"
+	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
 )
 
@@ -27,6 +30,9 @@ type ContractBindings struct {
 	MinipoolManager    *minipool.MinipoolManager
 	NetworkManager     *network.NetworkManager
 	NodeManager        *node.NodeManager
+	RocketVault        *core.Contract
+	RewardsPool        *rewards.RewardsPool
+	SmoothingPool      *rewards.MerkleDistributorMainnet
 
 	// Constellation bindings
 	RplVault                   contracts.IErc4626Token
@@ -76,6 +82,14 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	nodeMgr, err := node.NewNodeManager(rp)
 	if err != nil {
 		return nil, fmt.Errorf("error creating node manager binding: %w", err)
+	}
+	rocketVault, err := rp.GetContract(rocketpool.ContractName_RocketVault)
+	if err != nil {
+		return nil, fmt.Errorf("error getting Rocket Vault contract: %w", err)
+	}
+	rewardsPool, err := rewards.NewRewardsPool(rp)
+	if err != nil {
+		return nil, fmt.Errorf("error creating rewards pool binding: %w", err)
 	}
 
 	// Constellation
@@ -129,6 +143,8 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		MinipoolManager:    mpMgr,
 		NetworkManager:     netMgr,
 		NodeManager:        nodeMgr,
+		RocketVault:        rocketVault,
+		RewardsPool:        rewardsPool,
 
 		// Constellation
 		RplVault:                   rplVault,

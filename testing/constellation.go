@@ -184,15 +184,36 @@ func (m *ConstellationTestManager) Constellation_FundYieldDistributor(weth *cont
 		return fmt.Errorf("error querying WETH balance of YieldDistributor: %w", err)
 	}
 
-	// Send ETH to YieldDistributor to trigger finalizeInterval
-	sendEthOpts := &bind.TransactOpts{
-		From:  opts.From,
-		Value: big.NewInt(1e18),
-	}
-	sendEthTx := txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
-	tx, err := txMgr.ExecuteTransaction(sendEthTx, opts)
+	// Mint and transfer WETH to YieldDistributor to trigger finalizeInterval
+	submissions, err := eth.BatchCreateTransactionSubmissions([]func() (string, *eth.TransactionInfo, error){
+		func() (string, *eth.TransactionInfo, error) {
+			wethOpts := &bind.TransactOpts{
+				From:  opts.From,
+				Value: amount,
+			}
+			txInfo, err := weth.Deposit(wethOpts)
+			return "minting WETH", txInfo, err
+		},
+		func() (string, *eth.TransactionInfo, error) {
+			txInfo, err := weth.Transfer(csMgr.YieldDistributor.Address, amount, opts)
+			return "approve WETH for deposit", txInfo, err
+		},
+	}, false)
 	if err != nil {
-		return fmt.Errorf("error sending ETH to YieldDistributor: %w", err)
+		return err
+	}
+
+	// Submit the TX's
+	txs, err := txMgr.BatchExecuteTransactions(submissions, &bind.TransactOpts{
+		From:      opts.From,
+		Signer:    opts.Signer,
+		Nonce:     nil,
+		Context:   opts.Context,
+		GasFeeCap: opts.GasFeeCap,
+		GasTipCap: opts.GasTipCap,
+	})
+	if err != nil {
+		return fmt.Errorf("error submitting deposit transactions: %w", err)
 	}
 
 	// Mine the block
@@ -200,10 +221,33 @@ func (m *ConstellationTestManager) Constellation_FundYieldDistributor(weth *cont
 	if err != nil {
 		return fmt.Errorf("error committing block: %w", err)
 	}
-	err = txMgr.WaitForTransaction(tx)
+	err = txMgr.WaitForTransactions(txs)
 	if err != nil {
-		return fmt.Errorf("error waiting for send TX: %w", err)
+		return fmt.Errorf("error waiting for deposit transactions: %w", err)
 	}
+
+	/*
+		// Send ETH to YieldDistributor to trigger finalizeInterval
+		sendEthOpts := &bind.TransactOpts{
+			From:  opts.From,
+			Value: amount,
+		}
+		sendEthTx := txMgr.CreateTransactionInfoRaw(csMgr.YieldDistributor.Address, nil, sendEthOpts)
+		tx, err := txMgr.ExecuteTransaction(sendEthTx, opts)
+		if err != nil {
+			return fmt.Errorf("error sending ETH to YieldDistributor: %w", err)
+		}
+
+		// Mine the block
+		err = m.CommitBlock()
+		if err != nil {
+			return fmt.Errorf("error committing block: %w", err)
+		}
+		err = txMgr.WaitForTransaction(tx)
+		if err != nil {
+			return fmt.Errorf("error waiting for send TX: %w", err)
+		}
+	*/
 
 	// Get the balance after
 	var wethBalanceYieldDistributorAfter *big.Int

@@ -297,37 +297,65 @@ func HarvestRewards(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	// Bindings
 	sp := csNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
-	qMgr := sp.GetQueryManager()
+	ec := sp.GetEthClient()
 
-	// Get wrapped ETH balances before harvest
-	var wethBalanceNodeBefore *big.Int
-	var wethBalanceTreasuryBefore *big.Int
-	err := qMgr.Query(func(mc *batch.MultiCaller) error {
-		weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
-		weth.BalanceOf(mc, &wethBalanceTreasuryBefore, treasuryAddress)
-		return nil
-	}, nil)
+	// Get ETH balances before harvest
+	ethBalanceNodeBefore, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	require.NoError(t, err)
+	ethBalanceTreasuryBefore, err := ec.BalanceAt(context.Background(), treasuryAddress, nil)
 	require.NoError(t, err)
 
 	// Make a harvest TX
-	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big1, opts)
+	harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big0, opts)
 	require.NoError(t, err)
 	require.NotNil(t, harvestTxInfo)
 	testMgr.MineTx(t, harvestTxInfo, opts, "Harvested minipool")
 
-	// Get wrapped ETH balances after harvest
-	var wethBalanceNodeAfter *big.Int
-	var wethBalanceTreasuryAfter *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
-		weth.BalanceOf(mc, &wethBalanceTreasuryAfter, treasuryAddress)
-		return nil
-	}, nil)
+	// Get ETH balances after harvest
+	ethBalanceNodeAfter, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	require.NoError(t, err)
+	ethBalanceTreasuryAfter, err := ec.BalanceAt(context.Background(), treasuryAddress, nil)
 	require.NoError(t, err)
 
-	// Verify the node's WETH balance increased
-	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
-	t.Logf("Node's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceNodeBefore), eth.WeiToEth(wethBalanceNodeAfter))
+	// Verify the node's ETH balance increased
+	require.Equal(t, 1, ethBalanceNodeAfter.Cmp(ethBalanceNodeBefore))
+	t.Logf("Node's ETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(ethBalanceNodeBefore), eth.WeiToEth(ethBalanceNodeAfter))
+
+	// TODO: Claim treasury WETH
+	require.Equal(t, 1, ethBalanceTreasuryAfter.Cmp(ethBalanceTreasuryBefore))
+	t.Logf("Treasury's ETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(ethBalanceTreasuryBefore), eth.WeiToEth(ethBalanceTreasuryAfter))
+
+	/*
+		// Get wrapped ETH balances before harvest
+		var wethBalanceNodeBefore *big.Int
+		var wethBalanceTreasuryBefore *big.Int
+		err := qMgr.Query(func(mc *batch.MultiCaller) error {
+			weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
+			weth.BalanceOf(mc, &wethBalanceTreasuryBefore, treasuryAddress)
+			return nil
+		}, nil)
+		require.NoError(t, err)
+
+		// Make a harvest TX
+		harvestTxInfo, err := csMgr.YieldDistributor.Harvest(nodeAddress, common.Big0, common.Big0, opts)
+		require.NoError(t, err)
+		require.NotNil(t, harvestTxInfo)
+		testMgr.MineTx(t, harvestTxInfo, opts, "Harvested minipool")
+
+		// Get wrapped ETH balances after harvest
+		var wethBalanceNodeAfter *big.Int
+		var wethBalanceTreasuryAfter *big.Int
+		err = qMgr.Query(func(mc *batch.MultiCaller) error {
+			weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
+			weth.BalanceOf(mc, &wethBalanceTreasuryAfter, treasuryAddress)
+			return nil
+		}, nil)
+		require.NoError(t, err)
+
+		// Verify the node's WETH balance increased
+		require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
+		t.Logf("Node's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceNodeBefore), eth.WeiToEth(wethBalanceNodeAfter))
+	*/
 
 	// TODO: Claim treasury WETH
 	// t.Logf("Treasury's WETH balance increased after harvest from %.6f to %.6f", eth.WeiToEth(wethBalanceTreasuryBefore), eth.WeiToEth(wethBalanceTreasuryAfter))

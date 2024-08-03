@@ -150,23 +150,51 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
 
 	// Redeem 5 xrETH
-	xrEthRedeemAmount := eth.EthToWei(5) // big.NewInt(5) //xrEthInAccount
+	xrEthRedeemAmount := eth.EthToWei(5)
 	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, false, deployerOpts)
 	expectedAmount := new(big.Int).Mul(xrEthRedeemAmount, xrEthPriceAccordingToVault)
 	expectedAmount.Div(expectedAmount, oneEth)
 	expectedAmount.Add(expectedAmount, big.NewInt(4)) // Deal with integer division
 	require.Equal(t, expectedAmount, wethReturned)
-	t.Logf("Redeemed %d xrETH for %.10f WETH", xrEthRedeemAmount.Int64(), eth.WeiToEth(wethReturned))
+	t.Logf("Redeemed %.6f xrETH (%s wei) for %.6f WETH (%s wei)", eth.WeiToEth(xrEthRedeemAmount), xrEthRedeemAmount.String(), eth.WeiToEth(wethReturned), wethReturned.String())
 
-	/*
-		// Redeem all xRPL
-		xRplRedeemAmount := rplAmount
-		rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
-		expectedAmount = rplAmount
-		require.Equal(t, rplAmount, rplReturned)
-		t.Logf("Redeemed %d xRPL for %.10f RPL", xRplRedeemAmount.Int64(), eth.WeiToEth(rplReturned))
-	*/
-	// Claim NO rewards
+	// Redeem 5 xRPL
+	xRplRedeemAmount := eth.EthToWei(5)
+	rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	expectedAmount = xRplRedeemAmount
+	require.Equal(t, expectedAmount, rplReturned)
+	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
+
+	// Exit the first 3 minipools and set their balance as withdrawn
+	for i := 0; i < 3; i++ {
+		setMinipoolToWithdrawn(t, sp, datas[i][0], deployerOpts)
+	}
+
+	// Run the tick 3 times
+	for i := 0; i < 3; i++ {
+		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
+		require.NoError(t, err)
+		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Processed the next minipool (tick %d)", i+1))
+	}
+
+	// Update the xrETH Oracle again
+	totalYieldAccrued = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
+	newTime = newTime.Add(time.Hour)
+	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
+	sig, err = createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	require.NoError(t, err)
+	txInfo, err = csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
+
+	// Verify the new ETH:xrETH price
+	//numerator := new(big.Int).Add(wethAmount, totalYieldAccrued)
+	//numerator.Mul(numerator, oneEth)
+	//expectedRatio := new(big.Int).Div(numerator, wethAmount)
+	//expectedRatio.Sub(expectedRatio, common.Big1) // Compensate for rounding errors
+	xrEthPriceAccordingToVault = getTokenPrice(t, qMgr, csMgr.WethVault)
+	//require.Equal(t, expectedRatio, xrEthPriceAccordingToVault)
+	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
 
 }
 
@@ -975,8 +1003,8 @@ func redeemToken(t *testing.T, qMgr *eth.QueryManager, txMgr *eth.TransactionMan
 		decimals := token.Decimals()
 		offset := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(decimals)), nil)
 		amount.Mul(amount, offset) // Convert to the native share count
+		t.Logf("Redemption calculated as %.6f token (%s wei)", eth.WeiToEth(amount), amount.String())
 	}
-	t.Logf("Redemption calculated as %.6f token (%s wei)", eth.WeiToEth(amount), amount.String())
 	txInfo, err := token.Redeem(amount, opts.From, opts.From, opts)
 	require.NoError(t, err)
 
@@ -1009,7 +1037,6 @@ func redeemToken(t *testing.T, qMgr *eth.QueryManager, txMgr *eth.TransactionMan
 
 	// Return the amount redeemed
 	redeemedAmount := new(big.Int).Sub(afterBalance, beforeBalance)
-	t.Logf("Redeemed %s %s for %s %s", amount.String(), token.Symbol(), redeemedAmount.String(), asset.Symbol())
 	return redeemedAmount
 }
 
@@ -1097,6 +1124,7 @@ func simulateBeaconRewards(t *testing.T, sp cscommon.IConstellationServiceProvid
 				val, err = bm.AddValidator(pubkey, withdrawalCreds)
 				require.NoError(t, err)
 				val.Status = beacon.ValidatorState_ActiveOngoing
+				val.Balance = 32e9 // 32 ETH
 			}
 			val.Balance += beaconAmount
 		}
@@ -1233,6 +1261,103 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 	}
 
 	return totalRewards
+}
+
+// Sets a minipool to withdrawn on Beacon and sends the Beacon balance to it to simulate a full withdrawal
+func setMinipoolToWithdrawn(t *testing.T, sp cscommon.IConstellationServiceProvider, minipool *csapi.MinipoolCreateData, opts *bind.TransactOpts) {
+	// Services
+	txMgr := sp.GetTransactionManager()
+	bm := testMgr.GetBeaconMockManager()
+
+	// Mark it as withdrawn on Beacon
+	val, err := bm.GetValidator(minipool.ValidatorPubkey.Hex())
+	require.NoError(t, err)
+	require.NotNil(t, val)
+	beaconBalance := val.Balance
+	beaconBalanceWei := eth.GweiToWei(float64(beaconBalance))
+	val.Balance = 0
+	val.Status = beacon.ValidatorState_WithdrawalDone
+
+	// Send the balance to the minipool to simulate a full withdrawal
+	sendOpts := &bind.TransactOpts{
+		From:  opts.From,
+		Value: beaconBalanceWei,
+	}
+	txInfo := txMgr.CreateTransactionInfoRaw(minipool.MinipoolAddress, nil, sendOpts)
+	testMgr.MineTx(t, txInfo, opts, fmt.Sprintf("Emulated a Beacon withdraw of %.6f ETH for minipool %s", eth.WeiToEth(beaconBalanceWei), minipool.MinipoolAddress.Hex()))
+}
+
+func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) {
+	// Services
+	ec := sp.GetEthClient()
+	qMgr := sp.GetQueryManager()
+	//txMgr := sp.GetTransactionManager()
+	rplBinding := bindings.Rpl
+	vault := bindings.RocketVault
+	rewardsPool := bindings.RewardsPool
+
+	// Query some initial settings
+	var initialVaultRpl *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		rplBinding.BalanceOf(mc, &initialVaultRpl, vault.Address)
+		eth.AddQueryablesToMulticall(mc,
+			rplBinding.InflationInterval,
+			rplBinding.InflationIntervalStartTime,
+			rewardsPool.RewardIndex,
+		)
+		return nil
+	}, nil)
+	if err != nil {
+		t.Fatal(fmt.Errorf("error querying initial settings: %w", err))
+	}
+
+	// Fast forward to the RPL inflation time
+	latestHeader, err := ec.HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currentTime := time.Unix(int64(latestHeader.Time), 0)
+	timeUntilStart := rplBinding.InflationIntervalStartTime.Formatted().Sub(currentTime)
+	timeToWait := timeUntilStart + rplBinding.InflationInterval.Formatted()
+	secondsPerSlot := testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot
+	slots := uint64(timeToWait.Seconds()) / secondsPerSlot
+	err = testMgr.AdvanceSlots(uint(slots), false)
+	require.NoError(t, err)
+	t.Logf("Fast forwarded %d slots", slots)
+
+	// Mint the RPL inflation
+	txInfo, err := rplBinding.MintInflationRPL(odaoOpts[0])
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, odaoOpts[0], "Minted RPL inflation")
+
+	// Make sure the vault has the new inflation
+	var vaultRpl *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		rplBinding.BalanceOf(mc, &vaultRpl, vault.Address)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, vaultRpl.Cmp(initialVaultRpl))
+	t.Logf("Vault RPL increased to %s", vaultRpl.String())
+
+	// Send some ETH to the Smoothing Pool
+	/*
+		smoothingPoolEth := 10.0
+		smoothingPoolEthWei := eth.EthToWei(smoothingPoolEth)
+		sender := odaoOpts[0]
+		newOpts := &bind.TransactOpts{
+			From:  sender.From,
+			Value: smoothingPoolEthWei,
+		}
+			txInfo = txMgr.CreateTransactionInfoRaw(smoothingPool.Address, nil, newOpts)
+			tx, err = txMgr.ExecuteTransaction(txInfo, sender)
+			if err != nil {
+				t.Fatal(fmt.Errorf("error sending ETH to SP: %w", err))
+			}
+			err = txMgr.WaitForTransaction(tx)
+			if err != nil {
+				t.Fatal(fmt.Errorf("error waiting for sending ETH to SP tx: %w", err))
+			}
+			t.Logf("Sent %.0f ETH to the Smoothing Pool", smoothingPoolEth)
+	*/
 }
 
 // Cleanup after a unit test
