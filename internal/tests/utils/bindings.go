@@ -32,7 +32,7 @@ type ContractBindings struct {
 	NodeManager        *node.NodeManager
 	RocketVault        *core.Contract
 	RewardsPool        *rewards.RewardsPool
-	SmoothingPool      *rewards.MerkleDistributorMainnet
+	SmoothingPool      *core.Contract
 
 	// Constellation bindings
 	RplVault                   contracts.IErc4626Token
@@ -91,6 +91,10 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	if err != nil {
 		return nil, fmt.Errorf("error creating rewards pool binding: %w", err)
 	}
+	smoothingPool, err := rp.GetContract(rocketpool.ContractName_RocketSmoothingPool)
+	if err != nil {
+		return nil, fmt.Errorf("error creating smoothin pool contract: %w", err)
+	}
 
 	// Constellation
 	supernodeAddress := csMgr.SuperNodeAccount.Address
@@ -145,6 +149,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		NodeManager:        nodeMgr,
 		RocketVault:        rocketVault,
 		RewardsPool:        rewardsPool,
+		SmoothingPool:      smoothingPool,
 
 		// Constellation
 		RplVault:                   rplVault,

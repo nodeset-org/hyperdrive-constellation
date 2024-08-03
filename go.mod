@@ -18,6 +18,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.2
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
+	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -90,6 +91,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-memdb v1.3.4 // indirect
+	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/herumi/bls-eth-go-binary v1.35.0 // indirect
 	github.com/holiman/uint256 v1.3.0 // indirect
@@ -158,7 +160,6 @@ require (
 	github.com/wealdtech/go-ens/v3 v3.6.0 // indirect
 	github.com/wealdtech/go-eth2-util v1.8.2 // indirect
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 // indirect
-	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a // indirect
 	github.com/wealdtech/go-multicodec v1.4.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -193,3 +194,5 @@ require (
 replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20240731214747-81867bb8ff63
 
 replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240729151944-127e460038df
+
+replace github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a => github.com/rocket-pool/go-merkletree v1.0.1-0.20220406020931-c262d9b976dd

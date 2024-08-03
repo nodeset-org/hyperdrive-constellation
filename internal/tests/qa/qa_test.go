@@ -26,9 +26,13 @@ import (
 	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
+	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
+	"github.com/rocket-pool/rocketpool-go/v2/rewards"
 	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
+	"github.com/wealdtech/go-merkletree"
+	"github.com/wealdtech/go-merkletree/keccak256"
 )
 
 // Run test 3 of the QA suite
@@ -526,6 +530,16 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	xrEthPriceAccordingToVault := getTokenPrice(t, qMgr, csMgr.WethVault)
 	require.Equal(t, expectedRatio, xrEthPriceAccordingToVault)
 	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
+
+	// Run an RP rewards interval
+	rewardsMap, rewardsSubmission := executeRpRewardsInterval(t, sp, bindings)
+
+	// Do a merkle claim
+	merkleCfg := createMerkleClaimConfig(t, sp, bindings, rewardsSubmission)
+	constellationRewards := rewardsMap[csMgr.SuperNodeAccount.Address]
+	txInfo, err = csMgr.SuperNodeAccount.MerkleClaim(rewardsSubmission.RewardIndex, constellationRewards.CollateralRpl, constellationRewards.SmoothingPoolEth, constellationRewards.MerkleProof, merkleCfg, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, "Executed the Merkle claim")
 }
 
 // Run test 15 of the QA suite
@@ -1253,7 +1267,7 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 		mpRewards := new(big.Int).Sub(mpBalance, mpLaunchBalance)
 
 		// Get the xrETH share of rewards and add it to the total
-		fees := new(big.Int).Add(mp.ConstellationData.NodeFee, mp.ConstellationData.TreasuryFee)
+		fees := new(big.Int).Add(mp.ConstellationData.NodeFee, mp.ConstellationData.EthTreasuryFee)
 		xrEthShare := new(big.Int).Sub(oneEth, fees)
 		xrEthRewards := new(big.Int).Mul(mpRewards, xrEthShare)
 		xrEthRewards.Div(xrEthRewards, oneEth)
@@ -1287,23 +1301,30 @@ func setMinipoolToWithdrawn(t *testing.T, sp cscommon.IConstellationServiceProvi
 	testMgr.MineTx(t, txInfo, opts, fmt.Sprintf("Emulated a Beacon withdraw of %.6f ETH for minipool %s", eth.WeiToEth(beaconBalanceWei), minipool.MinipoolAddress.Hex()))
 }
 
-func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) {
+// Generates a rewards snapshot for the Rewards Pool
+func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) (map[common.Address]*rewardsInfo, rewards.RewardSubmission) {
 	// Services
 	ec := sp.GetEthClient()
 	qMgr := sp.GetQueryManager()
-	//txMgr := sp.GetTransactionManager()
+	txMgr := sp.GetTransactionManager()
+	csMgr := sp.GetConstellationManager()
 	rplBinding := bindings.Rpl
 	vault := bindings.RocketVault
 	rewardsPool := bindings.RewardsPool
+	smoothingPool := bindings.SmoothingPool
 
 	// Query some initial settings
 	var initialVaultRpl *big.Int
+	var rewardsPercentages protocol.RplRewardsPercentages
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		rplBinding.BalanceOf(mc, &initialVaultRpl, vault.Address)
+		bindings.ProtocolDaoManager.GetRewardsPercentages(mc, &rewardsPercentages)
 		eth.AddQueryablesToMulticall(mc,
 			rplBinding.InflationInterval,
 			rplBinding.InflationIntervalStartTime,
 			rewardsPool.RewardIndex,
+			bindings.ProtocolDaoManager.Settings.Network.MaximumNodeFee,
+			bindings.NodeManager.NodeCount,
 		)
 		return nil
 	}, nil)
@@ -1335,29 +1356,377 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 		return nil
 	}, nil)
 	require.NoError(t, err)
-	require.Equal(t, 1, vaultRpl.Cmp(initialVaultRpl))
-	t.Logf("Vault RPL increased to %s", vaultRpl.String())
+	rplInflationAmount := new(big.Int).Sub(vaultRpl, initialVaultRpl)
+	require.Equal(t, 1, rplInflationAmount.Cmp(common.Big0))
+	t.Logf("Inflation occurred, %.6f new RPL (%s wei) minted", eth.WeiToEth(rplInflationAmount), rplInflationAmount.String())
 
 	// Send some ETH to the Smoothing Pool
-	/*
-		smoothingPoolEth := 10.0
-		smoothingPoolEthWei := eth.EthToWei(smoothingPoolEth)
-		sender := odaoOpts[0]
-		newOpts := &bind.TransactOpts{
-			From:  sender.From,
-			Value: smoothingPoolEthWei,
+	smoothingPoolEth := 10.0
+	smoothingPoolEthWei := eth.EthToWei(smoothingPoolEth)
+	sender := odaoOpts[0]
+	newOpts := &bind.TransactOpts{
+		From:  sender.From,
+		Value: smoothingPoolEthWei,
+	}
+	txInfo = txMgr.CreateTransactionInfoRaw(smoothingPool.Address, nil, newOpts)
+	testMgr.MineTx(t, txInfo, sender, fmt.Sprintf("Sent %.0f ETH to the Smoothing Pool", smoothingPoolEth))
+
+	// Get some stats of the current state
+	latestHeader, err = ec.HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+
+	// Get the RPL rewards for each category
+	oneEth := big.NewInt(1e18)
+	odaoAmount := new(big.Int).Mul(rplInflationAmount, rewardsPercentages.OdaoPercentage)
+	odaoAmount.Div(odaoAmount, oneEth)
+	odaoAmountPerNode := new(big.Int).Div(odaoAmount, big.NewInt(3))
+	nodeAmount := new(big.Int).Mul(rplInflationAmount, rewardsPercentages.NodePercentage)
+	nodeAmount.Div(nodeAmount, oneEth)
+	pdaoAmount := new(big.Int).Sub(rplInflationAmount, odaoAmount)
+	pdaoAmount.Sub(pdaoAmount, nodeAmount)
+
+	// Get the node op share of the SP ETH
+	halfSp := new(big.Int).Div(smoothingPoolEthWei, common.Big2)
+	nodeCommission := new(big.Int).Mul(halfSp, bindings.ProtocolDaoManager.Settings.Network.MaximumNodeFee.Raw())
+	nodeCommission.Div(nodeCommission, oneEth)
+	nodeSpShare := new(big.Int).Add(halfSp, nodeCommission)
+	userSpShare := new(big.Int).Sub(smoothingPoolEthWei, nodeSpShare)
+
+	// Make the rewards map
+	rewardsMap := map[common.Address]*rewardsInfo{
+		odaoOpts[0].From: {
+			CollateralRpl:    common.Big0,
+			OracleDaoRpl:     odaoAmountPerNode,
+			SmoothingPoolEth: common.Big0,
+		},
+		odaoOpts[1].From: {
+			CollateralRpl:    common.Big0,
+			OracleDaoRpl:     odaoAmountPerNode,
+			SmoothingPoolEth: common.Big0,
+		},
+		odaoOpts[2].From: {
+			CollateralRpl:    common.Big0,
+			OracleDaoRpl:     odaoAmountPerNode,
+			SmoothingPoolEth: common.Big0,
+		},
+		csMgr.SuperNodeAccount.Address: {
+			CollateralRpl:    nodeAmount,
+			OracleDaoRpl:     common.Big0,
+			SmoothingPoolEth: nodeSpShare,
+		},
+	}
+
+	// Create a new rewards snapshot
+	oldInterval := rewardsPool.RewardIndex.Formatted()
+	root, err := generateMerkleTree(rewardsMap)
+	require.NoError(t, err)
+	odaoRpl := big.NewInt(0)
+	collateralRpl := big.NewInt(0)
+	spEth := big.NewInt(0)
+	for _, rewards := range rewardsMap {
+		odaoRpl.Add(odaoRpl, rewards.OracleDaoRpl)
+		collateralRpl.Add(collateralRpl, rewards.CollateralRpl)
+		spEth.Add(spEth, rewards.SmoothingPoolEth)
+	}
+	rewardSnapshot := rewards.RewardSubmission{
+		RewardIndex:     rewardsPool.RewardIndex.Raw(),
+		ExecutionBlock:  latestHeader.Number,
+		ConsensusBlock:  latestHeader.Number,
+		MerkleRoot:      root,
+		MerkleTreeCID:   "",
+		IntervalsPassed: common.Big1,
+		TreasuryRPL:     pdaoAmount,
+		TrustedNodeRPL: []*big.Int{
+			odaoRpl,
+		},
+		NodeRPL: []*big.Int{
+			collateralRpl,
+		},
+		NodeETH: []*big.Int{
+			spEth,
+		},
+		UserETH: userSpShare,
+	}
+	t.Log("Rewards submission created")
+
+	// Submit it with 2 Oracles
+	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, odaoOpts[0])
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, odaoOpts[0], "Submitted rewards snapshot from ODAO 1")
+	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, odaoOpts[1])
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, odaoOpts[1], "Submitted rewards snapshot from ODAO 2")
+
+	// Ensure the interval was incremented and the snapshot is canon
+	err = qMgr.Query(nil, nil, rewardsPool.RewardIndex)
+	require.NoError(t, err)
+	interval := rewardsPool.RewardIndex.Formatted()
+	require.NotEqual(t, oldInterval, interval)
+	t.Logf("Interval incremented to %d successfully", interval)
+
+	return rewardsMap, rewardSnapshot
+}
+
+type rewardsInfo struct {
+	CollateralRpl    *big.Int
+	OracleDaoRpl     *big.Int
+	SmoothingPoolEth *big.Int
+	MerkleData       []byte
+	MerkleProof      []common.Hash
+}
+
+/*
+func createRewardsMap(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) map[common.Address]*rewardsInfo {
+	// Services
+	qMgr := sp.GetQueryManager()
+	txMgr := sp.GetTransactionManager()
+	rp := sp.GetRocketPoolManager().RocketPool
+	rplBinding := bindings.Rpl
+	vault := bindings.RocketVault
+	rewardsPool := bindings.RewardsPool
+	smoothingPool := bindings.SmoothingPool
+
+	// Get the node count
+	err := qMgr.Query(nil, nil,
+		bindings.
+			bindings.NodeManager.NodeCount,
+		bindings.OracleDaoManager.MemberCount,
+	)
+	require.NoError(t, err)
+
+	// Get the oDAO addresses
+	odaoAddresses, err := bindings.OracleDaoManager.GetMemberAddresses(bindings.OracleDaoManager.MemberCount.Formatted(), nil)
+	require.NoError(t, err)
+
+	// Get the node addresses
+	nodeCount := bindings.NodeManager.NodeCount.Formatted()
+	nodeAddresses := make([]common.Address, nodeCount)
+	err = qMgr.BatchQuery(int(nodeCount), 1000, func(mc *batch.MultiCaller, index int) error {
+		bindings.NodeManager.GetNodeAddress(mc, &nodeAddresses[index], uint64(index))
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Make node bindings
+	nodes := make([]*node.Node, nodeCount)
+	for i, address := range nodeAddresses {
+		node, err := node.NewNode(rp, address)
+		require.NoError(t, err)
+		nodes[i] = node
+	}
+
+	// Get the list of minipools per node
+
+}
+*/
+
+// Generates a Merkle tree for the given rewards map and creates the Merkle proofs for each claimer
+func generateMerkleTree(rewards map[common.Address]*rewardsInfo) (common.Hash, error) {
+	// Generate the leaf data for each claimer
+	totalData := make([][]byte, 0, len(rewards))
+	for address, rewardsForClaimer := range rewards {
+		// Ignore claimers that didn't receive any rewards
+		if rewardsForClaimer.CollateralRpl.Cmp(common.Big0) == 0 && rewardsForClaimer.OracleDaoRpl.Cmp(common.Big0) == 0 && rewardsForClaimer.SmoothingPoolEth.Cmp(common.Big0) == 0 {
+			continue
 		}
-			txInfo = txMgr.CreateTransactionInfoRaw(smoothingPool.Address, nil, newOpts)
-			tx, err = txMgr.ExecuteTransaction(txInfo, sender)
-			if err != nil {
-				t.Fatal(fmt.Errorf("error sending ETH to SP: %w", err))
-			}
-			err = txMgr.WaitForTransaction(tx)
-			if err != nil {
-				t.Fatal(fmt.Errorf("error waiting for sending ETH to SP tx: %w", err))
-			}
-			t.Logf("Sent %.0f ETH to the Smoothing Pool", smoothingPoolEth)
-	*/
+
+		// Claimer data is address[20] :: network[32] :: RPL[32] :: ETH[32]
+		claimerData := make([]byte, 0, 20+32*3)
+
+		// Claimer address
+		addressBytes := address.Bytes()
+		claimerData = append(claimerData, addressBytes...)
+
+		// Claimer network
+		network := big.NewInt(0)
+		networkBytes := make([]byte, 32)
+		network.FillBytes(networkBytes)
+		claimerData = append(claimerData, networkBytes...)
+
+		// RPL rewards
+		rplRewards := big.NewInt(0)
+		rplRewards.Add(rewardsForClaimer.CollateralRpl, rewardsForClaimer.OracleDaoRpl)
+		rplRewardsBytes := make([]byte, 32)
+		rplRewards.FillBytes(rplRewardsBytes)
+		claimerData = append(claimerData, rplRewardsBytes...)
+
+		// ETH rewards
+		ethRewardsBytes := make([]byte, 32)
+		rewardsForClaimer.SmoothingPoolEth.FillBytes(ethRewardsBytes)
+		claimerData = append(claimerData, ethRewardsBytes...)
+
+		// Assign it to the claimer rewards tracker and add it to the leaf data slice
+		rewardsForClaimer.MerkleData = claimerData
+		totalData = append(totalData, claimerData)
+	}
+
+	// Generate the tree
+	tree, err := merkletree.NewUsing(totalData, keccak256.New(), false, true)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("error generating Merkle Tree: %w", err)
+	}
+
+	// Generate the proofs for each claimer
+	for address, rewardsForClaimer := range rewards {
+		// Get the proof
+		proof, err := tree.GenerateProof(rewardsForClaimer.MerkleData, 0)
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("error generating proof for claimer %s: %w", address.Hex(), err)
+		}
+
+		// Convert the proof into hex strings
+		proofHashes := make([]common.Hash, len(proof.Hashes))
+		for i, hash := range proof.Hashes {
+			proofHashes[i] = common.BytesToHash(hash)
+		}
+
+		// Assign the proof hashes to the claimer rewards struct
+		rewardsForClaimer.MerkleProof = proofHashes
+	}
+
+	merkleRoot := common.BytesToHash(tree.Root())
+	return merkleRoot, nil
+}
+
+// Creates a Merkle claim config for the given rewards submission
+func createMerkleClaimConfig(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings, intervalInfo rewards.RewardSubmission) *constellation.MerkleRewardsConfig {
+	// Services
+	csMgr := sp.GetConstellationManager()
+
+	// Get the current time
+	latestHeader, err := sp.GetEthClient().HeaderByNumber(context.Background(), nil)
+	require.NoError(t, err)
+	currentTimeBig := big.NewInt(int64(latestHeader.Time))
+
+	ethTreasuryFee, nodeFee, rplTreasuryFee := getAvgFeesForBlock(t, sp, bindings, intervalInfo.ExecutionBlock.Uint64())
+
+	avgEthTreasuryFeeBytes := [32]byte{}
+	ethTreasuryFee.FillBytes(avgEthTreasuryFeeBytes[:])
+
+	avgNodeFeeBytes := [32]byte{}
+	nodeFee.FillBytes(avgNodeFeeBytes[:])
+
+	avgRplTreasuryFeeBytes := [32]byte{}
+	rplTreasuryFee.FillBytes(avgRplTreasuryFeeBytes[:])
+
+	sigGenesisTimeBytes := [32]byte{}
+	currentTimeBig.FillBytes(sigGenesisTimeBytes[:])
+
+	nonceBytes := [32]byte{}
+
+	chainIDBytes := [32]byte{}
+	chainID := testMgr.GetBeaconMockManager().GetConfig().ChainID
+	chainIDBig := big.NewInt(int64(chainID))
+	chainIDBig.FillBytes(chainIDBytes[:])
+
+	// Create the hash to sign
+	message := crypto.Keccak256(
+		avgEthTreasuryFeeBytes[:],
+		avgNodeFeeBytes[:],
+		avgRplTreasuryFeeBytes[:],
+		sigGenesisTimeBytes[:],
+		csMgr.SuperNodeAccount.Address[:],
+		nonceBytes[:],
+		chainIDBytes[:],
+	)
+
+	// Sign the message
+	signature, err := utils.CreateSignature(message, deployerKey)
+	require.NoError(t, err)
+
+	return &constellation.MerkleRewardsConfig{
+		Signature:             signature,
+		SignatureGenesisTime:  currentTimeBig,
+		AverageEthTreasuryFee: ethTreasuryFee,
+		AverageEthOperatorFee: nodeFee,
+		AverageRplTreasuryFee: rplTreasuryFee,
+	}
+}
+
+// Gets the average fees for the eligible minipools at the end of a rewards interval
+func getAvgFeesForBlock(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings, blockNumber uint64) (*big.Int, *big.Int, *big.Int) {
+	// Services
+	csMgr := sp.GetConstellationManager()
+	qMgr := sp.GetQueryManager()
+	opts := &bind.CallOpts{
+		BlockNumber: new(big.Int).SetUint64(blockNumber),
+	}
+
+	// Get the total minipool count and minipool launch balance
+	var minipoolCountBig *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.SuperNodeAccount.GetMinipoolCount(mc, &minipoolCountBig)
+		return nil
+	}, opts)
+	require.NoError(t, err)
+	minipoolCount := int(minipoolCountBig.Uint64())
+
+	// Get the minipool addresses
+	addressBatchSize := 1000
+	addresses := make([]common.Address, minipoolCount)
+	err = qMgr.BatchQuery(minipoolCount, addressBatchSize, func(mc *batch.MultiCaller, index int) error {
+		indexBig := big.NewInt(int64(index))
+		csMgr.SuperNodeAccount.GetMinipoolAddress(mc, &addresses[index], indexBig)
+		return nil
+	}, opts)
+	require.NoError(t, err)
+
+	type ConstellationMinipool struct {
+		RocketPoolBinding minipool.IMinipool
+		ConstellationData constellation.MinipoolData
+	}
+
+	// Get the RP minipool bindings
+	rpMinipools, err := bindings.MinipoolManager.CreateMinipoolsFromAddresses(addresses, false, nil)
+	require.NoError(t, err)
+
+	// Get the RP minipool details and CS details
+	detailsBatchSize := 100
+	csMinipools := make([]ConstellationMinipool, minipoolCount)
+	err = qMgr.BatchQuery(minipoolCount, detailsBatchSize, func(mc *batch.MultiCaller, index int) error {
+		rpMinipool := rpMinipools[index]
+		csMinipools[index].RocketPoolBinding = rpMinipool
+		mpCommon := rpMinipool.Common()
+		eth.AddQueryablesToMulticall(mc,
+			mpCommon.Status,
+			mpCommon.Pubkey,
+			mpCommon.IsFinalised,
+		)
+		csMgr.SuperNodeAccount.GetMinipoolData(mc, &csMinipools[index].ConstellationData, mpCommon.Address)
+		return nil
+	}, opts)
+	require.NoError(t, err)
+
+	// Filter by minipool status
+	eligibleMinipools := make([]*ConstellationMinipool, 0, minipoolCount)
+	for i, mp := range csMinipools {
+		rpMinipool := mp.RocketPoolBinding
+		mpCommon := rpMinipool.Common()
+		if mpCommon.IsFinalised.Get() {
+			continue
+		}
+		if mpCommon.Status.Formatted() != types.MinipoolStatus_Staking {
+			continue
+		}
+		eligibleMinipools = append(eligibleMinipools, &csMinipools[i])
+	}
+
+	// Get the fees for each minipool
+	ethTreasuryFee := big.NewInt(0)
+	nodeFee := big.NewInt(0)
+	rplTreasuryFee := big.NewInt(0)
+	mpCount := big.NewInt(int64(len(eligibleMinipools)))
+	for _, mp := range eligibleMinipools {
+		ethTreasuryFee.Add(ethTreasuryFee, mp.ConstellationData.EthTreasuryFee)
+		nodeFee.Add(nodeFee, mp.ConstellationData.NodeFee)
+		rplTreasuryFee.Add(rplTreasuryFee, mp.ConstellationData.RplTreasuryFee)
+	}
+
+	// Return the averages
+	ethTreasuryFee.Div(ethTreasuryFee, mpCount)
+	nodeFee.Div(nodeFee, mpCount)
+	rplTreasuryFee.Div(rplTreasuryFee, mpCount)
+	return ethTreasuryFee, nodeFee, rplTreasuryFee
 }
 
 // Cleanup after a unit test
