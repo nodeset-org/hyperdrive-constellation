@@ -35,9 +35,9 @@ type createMinipoolConfig struct {
 }
 
 type MinipoolData struct {
-	NodeAddress common.Address `json:"subNodeOperator"`
-	TreasuryFee *big.Int       `json:"treasuryFee"`
-	NodeFee     *big.Int       `json:"noFee"`
+	NodeAddress common.Address `abi:"subNodeOperator"`
+	TreasuryFee *big.Int       `abi:"treasuryFee"`
+	NodeFee     *big.Int       `abi:"noFee"`
 }
 
 type SuperNodeAccount struct {
