@@ -20,7 +20,7 @@ type ConstellationManager struct {
 	YieldDistributor    *constellation.YieldDistributor
 	WethVault           *constellation.WethVault
 	RplVault            *constellation.RplVault
-	XrEthAdminOracle    *constellation.XrEthAdminOracle
+	PoABeaconOracle     *constellation.PoABeaconOracle
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -59,7 +59,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	var yieldDistributorAddress common.Address
 	var wethVaultAddress common.Address
 	var rplVaultAddress common.Address
-	var xrEthAdminOracleAddress common.Address
+	var poaBeaconOracleAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
@@ -68,7 +68,7 @@ func (m *ConstellationManager) LoadContracts() error {
 		m.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		m.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
-		m.Directory.GetXrEthAdminOracleAddress(mc, &xrEthAdminOracleAddress)
+		m.Directory.GetPoABeaconOracleAddress(mc, &poaBeaconOracleAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -104,9 +104,9 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating RPL vault binding: %w", err)
 	}
-	xrEthAdminOracle, err := constellation.NewXrEthAdminOracle(xrEthAdminOracleAddress, m.ec, m.txMgr)
+	poaBeaconOracle, err := constellation.NewPoABeaconOracle(poaBeaconOracleAddress, m.ec, m.txMgr)
 	if err != nil {
-		return fmt.Errorf("error creating xrETH admin oracle binding: %w", err)
+		return fmt.Errorf("error creating PoA Beacon Oracle binding: %w", err)
 	}
 
 	// Update the bindings
@@ -117,7 +117,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.YieldDistributor = yieldDistributor
 	m.WethVault = wethVault
 	m.RplVault = rplVault
-	m.XrEthAdminOracle = xrEthAdminOracle
+	m.PoABeaconOracle = poaBeaconOracle
 	m.isLoaded = true
 	return nil
 }

@@ -137,9 +137,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Update the oracle report
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
 	newTime := time.Now().Add(timeToAdvance)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err := csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
+	txInfo, err := csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
@@ -185,9 +185,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	totalYieldAccrued = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	newTime = newTime.Add(time.Hour)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
-	sig, err = createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	sig, err = createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
+	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
@@ -515,9 +515,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Update the oracle report
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, nodesetTime, csMgr.XrEthAdminOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, nodesetTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.XrEthAdminOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, nodesetTime, deployerOpts)
+	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, nodesetTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
@@ -1102,7 +1102,7 @@ func getTokenPrice(t *testing.T, qMgr *eth.QueryManager, token contracts.IErc462
 }
 
 // Make a signature for xrETH oracle updates
-func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Time, xrEthAdminOracleAddress common.Address, chainID *big.Int, key *ecdsa.PrivateKey) ([]byte, error) {
+func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Time, poaBeaconOracleAddress common.Address, chainID *big.Int, key *ecdsa.PrivateKey) ([]byte, error) {
 	amountBytes := [32]byte{}
 	newTotalYieldAccrued.FillBytes(amountBytes[:])
 
@@ -1116,7 +1116,7 @@ func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Ti
 	message := crypto.Keccak256(
 		amountBytes[:],
 		timestampBytes[:],
-		xrEthAdminOracleAddress[:],
+		poaBeaconOracleAddress[:],
 		chainIdBytes[:],
 	)
 
