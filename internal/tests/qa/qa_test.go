@@ -456,9 +456,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 100 xrRPL
 	xRplRedeemAmount := eth.EthToWei(100)
-	rplDepositAmount = redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
-	require.Equal(t, xRplRedeemAmount, rplDepositAmount)
-	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplDepositAmount), rplDepositAmount.String())
+	rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	require.Equal(t, xRplRedeemAmount, rplReturned)
+	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
 
 	// Fast forward 1 day
 	secondsPerSlot := testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot
@@ -537,9 +537,42 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Do a merkle claim
 	merkleCfg := createMerkleClaimConfig(t, sp, bindings, rewardsSubmission)
 	constellationRewards := rewardsMap[csMgr.SuperNodeAccount.Address]
-	txInfo, err = csMgr.SuperNodeAccount.MerkleClaim(rewardsSubmission.RewardIndex, constellationRewards.CollateralRpl, constellationRewards.SmoothingPoolEth, constellationRewards.MerkleProof, merkleCfg, deployerOpts)
+	txInfo, err = csMgr.SuperNodeAccount.MerkleClaim(
+		[]*big.Int{rewardsSubmission.RewardIndex},
+		[]*big.Int{constellationRewards.CollateralRpl},
+		[]*big.Int{constellationRewards.SmoothingPoolEth},
+		[][]common.Hash{constellationRewards.MerkleProof},
+		merkleCfg,
+		deployerOpts,
+	)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Executed the Merkle claim")
+	t.Logf("Rewards amount: %.6f ETH (%s wei), %.6f RPL (%s wei)",
+		eth.WeiToEth(constellationRewards.SmoothingPoolEth),
+		constellationRewards.SmoothingPoolEth.String(),
+		eth.WeiToEth(constellationRewards.CollateralRpl),
+		constellationRewards.CollateralRpl.String(),
+	)
+
+	// Get the split for RPL rewards
+	originalAmount = new(big.Int).Sub(rplDepositAmount, rplReturned)
+	nodeOpShareOfRplRewards := new(big.Int).Mul(constellationRewards.CollateralRpl, merkleCfg.AverageRplTreasuryFee)
+	nodeOpShareOfRplRewards.Div(nodeOpShareOfRplRewards, oneEth)
+	xRplShareOfRewards := new(big.Int).Sub(constellationRewards.CollateralRpl, nodeOpShareOfRplRewards)
+	t.Logf("xRPL holders get %.6f RPL (%s wei), node ops get %.6f RPL (%s wei)",
+		eth.WeiToEth(xRplShareOfRewards), xRplShareOfRewards.String(),
+		eth.WeiToEth(nodeOpShareOfRplRewards), nodeOpShareOfRplRewards.String(),
+	)
+
+	// Verify the RPL:xRPL ratio
+	numerator = new(big.Int).Add(originalAmount, xRplShareOfRewards)
+	numerator.Mul(numerator, oneEth)
+	expectedRatio = new(big.Int).Div(numerator, originalAmount)
+	//expectedRatio.Sub(expectedRatio, common.Big1) // Compensate for rounding errors
+	xRplPriceAccordingToVault := getTokenPrice(t, qMgr, csMgr.RplVault)
+	require.Equal(t, expectedRatio, xRplPriceAccordingToVault)
+	t.Logf("The new RPL:xRPL price according to the token is %.10f (%s wei), which matches the expected value", eth.WeiToEth(xRplPriceAccordingToVault), xRplPriceAccordingToVault.String())
+
 }
 
 // Run test 15 of the QA suite

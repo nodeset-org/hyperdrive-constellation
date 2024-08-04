@@ -205,6 +205,6 @@ func (c *SuperNodeAccount) SetMaxValidators(maxValidators *big.Int, opts *bind.T
 	return c.txMgr.CreateTransactionInfo(c.contract, "setMaxValidators", opts, maxValidators)
 }
 
-func (c *SuperNodeAccount) MerkleClaim(rewardIndex *big.Int, amountRPL *big.Int, amountETH *big.Int, merkleProof []common.Hash, config *MerkleRewardsConfig, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+func (c *SuperNodeAccount) MerkleClaim(rewardIndex []*big.Int, amountRPL []*big.Int, amountETH []*big.Int, merkleProof [][]common.Hash, config *MerkleRewardsConfig, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "merkleClaim", opts, rewardIndex, amountRPL, amountETH, merkleProof, config)
 }
