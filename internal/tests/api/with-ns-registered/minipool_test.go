@@ -130,6 +130,7 @@ func sendEthAndAdvanceTime(t *testing.T, node *cstesting.ConstellationNode, addr
 // Simulate an ETH reward getting deposited to YieldDistributor
 func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode) {
 	sp := node.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	slotsToAdvance := 1200 * 60 * 60 / 12
 
@@ -139,7 +140,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		bindings.Weth.BalanceOf(mc, &wethBalanceNodeBefore, nodeAddress)
-		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, bindings.TreasuryAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryBefore, csMgr.Treasury.Address)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -176,7 +177,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		bindings.Weth.BalanceOf(mc, &wethBalanceNodeAfter, nodeAddress)
-		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, bindings.TreasuryAddress)
+		bindings.Weth.BalanceOf(mc, &wethBalanceTreasuryAfter, csMgr.Treasury.Address)
 		return nil
 	}, nil)
 	require.NoError(t, err)

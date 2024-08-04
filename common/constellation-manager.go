@@ -21,6 +21,7 @@ type ConstellationManager struct {
 	WethVault           *constellation.WethVault
 	RplVault            *constellation.RplVault
 	PoABeaconOracle     *constellation.PoABeaconOracle
+	Treasury            *constellation.Treasury
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -60,6 +61,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	var wethVaultAddress common.Address
 	var rplVaultAddress common.Address
 	var poaBeaconOracleAddress common.Address
+	var treasuryAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
@@ -69,6 +71,7 @@ func (m *ConstellationManager) LoadContracts() error {
 		m.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		m.Directory.GetPoABeaconOracleAddress(mc, &poaBeaconOracleAddress)
+		m.Directory.GetTreasuryAddress(mc, &treasuryAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -108,6 +111,10 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating PoA Beacon Oracle binding: %w", err)
 	}
+	treasury, err := constellation.NewTreasury(treasuryAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating treasury binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
@@ -118,6 +125,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.WethVault = wethVault
 	m.RplVault = rplVault
 	m.PoABeaconOracle = poaBeaconOracle
+	m.Treasury = treasury
 	m.isLoaded = true
 	return nil
 }

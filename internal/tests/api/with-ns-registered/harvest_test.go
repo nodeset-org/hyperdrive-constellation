@@ -17,6 +17,8 @@ func TestHarvest(t *testing.T) {
 	defer nodeset_cleanup(snapshotName)
 
 	// Make the bindings
+	sp := testMgr.GetNode().GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
@@ -38,5 +40,5 @@ func TestHarvest(t *testing.T) {
 	//require.NoError(t, err)
 	//t.Logf("Funded the YieldDistributor with %.6f WETH", eth.WeiToEth(fundAmount))
 
-	cstestutils.HarvestRewards(t, testMgr, mainNode, bindings.Weth, bindings.TreasuryAddress, nodeAddress, deployerOpts)
+	cstestutils.HarvestRewards(t, testMgr, mainNode, bindings.Weth, csMgr.Treasury.Address, nodeAddress, deployerOpts)
 }

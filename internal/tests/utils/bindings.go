@@ -40,7 +40,6 @@ type ContractBindings struct {
 	Weth                       *contracts.Weth
 	YieldDistributor           *constellation.YieldDistributor
 	RpSuperNode                *node.Node
-	TreasuryAddress            common.Address
 	AssetRouterAddress         common.Address
 	OperatorDistributorAddress common.Address
 }
@@ -101,7 +100,6 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	var rplVaultAddress common.Address
 	var wethVaultAddress common.Address
 	var wethAddress common.Address
-	var treasuryAddress common.Address
 	var assetRouterAddress common.Address
 	var operatorDistributorAddress common.Address
 	var yieldDistributorAddress common.Address
@@ -109,7 +107,6 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		csMgr.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		csMgr.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
-		csMgr.Directory.GetTreasuryAddress(mc, &treasuryAddress)
 		csMgr.Directory.GetAssetRouterAddress(mc, &assetRouterAddress)
 		csMgr.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
 		csMgr.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
@@ -155,7 +152,6 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 		RplVault:                   rplVault,
 		WethVault:                  wethVault,
 		Weth:                       weth,
-		TreasuryAddress:            treasuryAddress,
 		AssetRouterAddress:         assetRouterAddress,
 		OperatorDistributorAddress: operatorDistributorAddress,
 		RpSuperNode:                rpSuperNode,

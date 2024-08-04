@@ -174,6 +174,13 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 		setMinipoolToWithdrawn(t, sp, datas[i][0], deployerOpts)
 	}
 
+	// Attempt an NO claim - should fail since an interval isn't finalized yet
+	claimResp, err := nodes[0].GetApiClient().Node.ClaimRewards(common.Big0, common.Big0)
+	require.NoError(t, err)
+	require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
+	require.NotEmpty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
+	t.Logf("Attempt to claim rewards for node 0 failed as expected: %s", claimResp.Data.TxInfo.SimulationResult.SimulationError)
+
 	// Run the tick 3 times
 	for i := 0; i < 3; i++ {
 		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
@@ -410,6 +417,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Make the RP deposit pool way bigger to account for the minipool creation count
 	depositPoolSize := eth.EthToWei(2000)
 	txInfo, err = bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Bootstrap(depositPoolSize, deployerOpts)
+	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the maximum deposit pool size to %.2f ETH", eth.WeiToEth(depositPoolSize)))
 
 	// Deposit into the RP deposit pool
