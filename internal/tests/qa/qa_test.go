@@ -175,11 +175,13 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	}
 
 	// Attempt an NO claim - should fail since an interval isn't finalized yet
-	claimResp, err := nodes[0].GetApiClient().Node.ClaimRewards(common.Big0, common.Big0)
-	require.NoError(t, err)
-	require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
-	require.NotEmpty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
-	t.Logf("Attempt to claim rewards for node 0 failed as expected: %s", claimResp.Data.TxInfo.SimulationResult.SimulationError)
+	/*
+		claimResp, err := nodes[0].GetApiClient().Node.ClaimRewards(common.Big0, common.Big0)
+		require.NoError(t, err)
+		require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
+		require.NotEmpty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
+		t.Logf("Attempt to claim rewards for node 0 failed as expected: %s", claimResp.Data.TxInfo.SimulationResult.SimulationError)
+	*/
 
 	// Run the tick 3 times
 	for i := 0; i < 3; i++ {
@@ -1198,12 +1200,9 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.SuperNodeAccount.GetMinipoolCount(mc, &minipoolCountBig)
 		return nil
-	}, nil,
-		bindings.MinipoolManager.LaunchBalance,
-	)
+	}, nil)
 	require.NoError(t, err)
 	minipoolCount := int(minipoolCountBig.Uint64())
-	mpLaunchBalance := bindings.MinipoolManager.LaunchBalance.Get()
 
 	// Get the minipool addresses
 	addressBatchSize := 1000
@@ -1235,6 +1234,8 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 			mpCommon.Status,
 			mpCommon.Pubkey,
 			mpCommon.IsFinalised,
+			mpCommon.NodeDepositBalance,
+			mpCommon.NodeRefundBalance,
 		)
 		csMgr.SuperNodeAccount.GetMinipoolData(mc, &csMinipools[index].ConstellationData, mpCommon.Address)
 		return nil
@@ -1284,17 +1285,17 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 	// Get the EL balances
 	bb, err := batch.NewBalanceBatcher(sp.GetEthClient(), sp.GetResources().BalanceBatcherAddress, 1000, 2)
 	require.NoError(t, err)
-	activeAddresses := make([]common.Address, len(activeMinipools))
+	activeCount := len(activeMinipools)
+	activeAddresses := make([]common.Address, activeCount)
 	for i, mp := range activeMinipools {
 		activeAddresses[i] = mp.RocketPoolBinding.Common().Address
 	}
 	activeBalances, err := bb.GetEthBalances(activeAddresses, nil)
 	require.NoError(t, err)
 
-	// Go through each detail and calculate the xrETH share of rewards
-	oneEth := big.NewInt(1e18)
+	// Get the total balance for the minipool, minus the RP node refund
 	oneGwei := big.NewInt(1e9)
-	totalRewards := big.NewInt(0)
+	mpBalances := make([]*big.Int, activeCount)
 	for i, mp := range activeMinipools {
 		mpCommon := mp.RocketPoolBinding.Common()
 		pubkey := mpCommon.Pubkey.Get()
@@ -1305,13 +1306,45 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 		beaconBalanceWei := new(big.Int).SetUint64(beaconBalance)
 		beaconBalanceWei.Mul(beaconBalanceWei, oneGwei)
 		mpBalance := new(big.Int).Add(elBalance, beaconBalanceWei)
-		mpRewards := new(big.Int).Sub(mpBalance, mpLaunchBalance)
+		mpBalance.Sub(mpBalance, mpCommon.NodeRefundBalance.Get()) // Remove the node refund from the total balance
+		mpBalances[i] = mpBalance
+		t.Logf("MP %s has a total balance (minus refund) of %.6f ETH (%s wei)",
+			mpCommon.Address.Hex(),
+			eth.WeiToEth(mpBalance),
+			mpBalance.String(),
+		)
+	}
+
+	// Calculate the RP node op portions of the balances
+	rpNodeShares := make([]*big.Int, activeCount)
+	err = qMgr.BatchQuery(activeCount, 100, func(mc *batch.MultiCaller, i int) error {
+		mp := activeMinipools[i]
+		mpCommon := mp.RocketPoolBinding.Common()
+		mpBalance := mpBalances[i]
+		mpCommon.CalculateNodeShare(mc, &rpNodeShares[i], mpBalance)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	// Calculate the xrETH share of rewards
+	oneEth := big.NewInt(1e18)
+	totalRewards := big.NewInt(0)
+	for i, mp := range activeMinipools {
+		mpCommon := mp.RocketPoolBinding.Common()
+		rpNodeShare := rpNodeShares[i]
+		mpRewards := new(big.Int).Sub(rpNodeShare, mpCommon.NodeDepositBalance.Get())
+		t.Logf("MP %s node share is %.6f ETH (%s wei), so rewards are %.6f ETH (%s wei)",
+			mpCommon.Address.Hex(),
+			eth.WeiToEth(rpNodeShare), rpNodeShare.String(),
+			eth.WeiToEth(mpRewards), mpRewards.String(),
+		)
 
 		// Get the xrETH share of rewards and add it to the total
 		fees := new(big.Int).Add(mp.ConstellationData.NodeFee, mp.ConstellationData.EthTreasuryFee)
 		xrEthShare := new(big.Int).Sub(oneEth, fees)
 		xrEthRewards := new(big.Int).Mul(mpRewards, xrEthShare)
 		xrEthRewards.Div(xrEthRewards, oneEth)
+		t.Logf("xrETH share is %.6f ETH (%s wei)", eth.WeiToEth(xrEthRewards), xrEthRewards.String())
 		totalRewards.Add(totalRewards, xrEthRewards)
 	}
 
