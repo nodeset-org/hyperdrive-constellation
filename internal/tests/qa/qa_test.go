@@ -299,6 +299,26 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	requireApproxEqual(t, expectedRatio, xrEthPriceAccordingToVault)
 	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
 
+	// Get the stats for interval 1
+	var intervalStats constellation.Interval
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.YieldDistributor.GetIntervalByIndex(mc, &intervalStats, preTickInterval)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015) // Quick and dirty; CS NO share * RP NO share * (MP0 + MP1 + MP2)
+	expectedShareBig := eth.EthToWei(expectedShare)
+	requireApproxEqual(t, expectedShareBig, intervalStats.Amount)
+	nodeOpShare := new(big.Int).Div(intervalStats.Amount, intervalStats.NumOperators)
+	t.Logf("Interval %d had %.6f ETH (%s wei) across %d operators for %.6f ETH (%s wei) each",
+		preTickInterval.Uint64(),
+		eth.WeiToEth(intervalStats.Amount),
+		intervalStats.Amount.String(),
+		intervalStats.NumOperators.Uint64(),
+		eth.WeiToEth(nodeOpShare),
+		nodeOpShare.String(),
+	)
+
 	// Run NO claims
 	for i, node := range nodes {
 		preBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
@@ -315,6 +335,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 		postBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
 		require.NoError(t, err)
 		rewards := new(big.Int).Sub(postBalance, preBalance)
+		requireApproxEqual(t, nodeOpShare, rewards)
 		t.Logf("Node op %d claimed rewards and received %.6f ETH (%s wei)", i, eth.WeiToEth(rewards), rewards.String())
 	}
 
@@ -329,8 +350,11 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	postBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 	require.NoError(t, err)
-	rewards := new(big.Int).Sub(postBalance, preBalance)
-	t.Logf("Treasury claimed ETH rewards and received %.6f ETH (%s wei)", eth.WeiToEth(rewards), rewards.String())
+	treasuryRewards := new(big.Int).Sub(postBalance, preBalance)
+	expectedShare = 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015 + 0.005 + 0.005 + 0.01 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MP0 + MP1 + MP2 + MP3 + MP4 + MP0 again + MP1 again)
+	expectedShareBig = eth.EthToWei(expectedShare)
+	requireApproxEqual(t, expectedShareBig, treasuryRewards)
+	t.Logf("Treasury claimed ETH rewards and received %.6f ETH (%s wei)", eth.WeiToEth(treasuryRewards), treasuryRewards.String())
 }
 
 // Run test 4 of the QA suite

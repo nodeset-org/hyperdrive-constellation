@@ -69,6 +69,10 @@ func (c *YieldDistributor) GetCurrentInterval(mc *batch.MultiCaller, out **big.I
 	eth.AddCallToMulticaller(mc, c.contract, out, "currentInterval")
 }
 
+func (c *YieldDistributor) GetIntervalByIndex(mc *batch.MultiCaller, out *Interval, index *big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "intervals", index)
+}
+
 // ====================
 // === Transactions ===
 // ====================
