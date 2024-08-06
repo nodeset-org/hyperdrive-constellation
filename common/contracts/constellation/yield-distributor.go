@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -19,6 +20,11 @@ const (
 // ABI cache
 var yieldDistributorAbi abi.ABI
 var yieldDistributorOnce sync.Once
+
+type Interval struct {
+	Amount       *big.Int `abi:"amount"`
+	NumOperators *big.Int `abi:"numOperators"`
+}
 
 type YieldDistributor struct {
 	Address  common.Address
@@ -58,6 +64,10 @@ func NewYieldDistributor(address common.Address, ec eth.IExecutionClient, txMgr 
 // =============
 // === Calls ===
 // =============
+
+func (c *YieldDistributor) GetCurrentInterval(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "currentInterval")
+}
 
 // ====================
 // === Transactions ===
