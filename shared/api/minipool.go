@@ -100,6 +100,7 @@ type MinipoolCreateData struct {
 	InsufficientMinipoolCount       bool                   `json:"insufficientMinipoolCount"`
 	RocketPoolDepositingDisabled    bool                   `json:"rocketPoolDepositingDisabled"`
 	NodeSetDepositingDisabled       bool                   `json:"noteSetDepositingDisabled"`
+	MaxMinipoolsReached             bool                   `json:"maxMinipoolsReached"`
 	NodeBalance                     *big.Int               `json:"nodeBalance"`
 	LockupAmount                    *big.Int               `json:"lockupAmount"`
 	LockupTime                      time.Duration          `json:"lockupTime"`

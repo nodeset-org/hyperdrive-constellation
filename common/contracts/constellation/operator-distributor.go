@@ -83,6 +83,11 @@ func (c *OperatorDistributor) GetNextMinipool(mc *batch.MultiCaller, out *common
 // ====================
 
 // TODO: description
+func (c *OperatorDistributor) ProcessMinipool(address common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "processMinipool", opts, address)
+}
+
+// TODO: description
 func (c *OperatorDistributor) ProcessNextMinipool(opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "processNextMinipool", opts)
 }

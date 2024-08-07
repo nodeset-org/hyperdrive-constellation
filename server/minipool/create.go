@@ -82,11 +82,13 @@ type MinipoolCreateContext struct {
 	mpMgr              *minipool.MinipoolManager
 
 	// On-chain vars
-	lockThreshold      *big.Int
-	lockupTime         *big.Int
-	minipoolBondAmount *big.Int
-	isWhitelisted      bool
-	internalSalt       *big.Int
+	lockThreshold              *big.Int
+	lockupTime                 *big.Int
+	minipoolBondAmount         *big.Int
+	maxActiveValidatorsPerNode *big.Int
+	activeValidatorCount       *big.Int
+	isWhitelisted              bool
+	internalSalt               *big.Int
 }
 
 func (c *MinipoolCreateContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
@@ -165,6 +167,8 @@ func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
 	c.csMgr.SuperNodeAccount.LockupTime(mc, &c.lockupTime)
 	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
+	c.csMgr.SuperNodeAccount.GetMaxValidators(mc, &c.maxActiveValidatorsPerNode)
+	c.csMgr.Whitelist.GetNumberOfValidators(mc, &c.activeValidatorCount, c.nodeAddress)
 	eth.AddQueryablesToMulticall(mc,
 		c.pdaoMgr.Settings.Node.IsDepositingEnabled,
 		c.odaoMgr.Settings.Minipool.ScrubPeriod,
@@ -231,6 +235,9 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	}
 	data.InsufficientLiquidity = !hasSufficientLiquidity
 
+	// Check the minipool limit
+	data.MaxMinipoolsReached = c.activeValidatorCount.Cmp(c.maxActiveValidatorsPerNode) >= 0
+
 	// Get a deposit signature
 	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt, c.csMgr.SuperNodeAccount.Address)
 	if err != nil {
@@ -241,7 +248,7 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	// Check if we can deposit
 	data.NotWhitelistedWithConstellation = !c.isWhitelisted
 	data.RocketPoolDepositingDisabled = !c.pdaoMgr.Settings.Node.IsDepositingEnabled.Get()
-	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled)
+	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled || data.MaxMinipoolsReached)
 	if !data.CanCreate {
 		return types.ResponseStatus_Success, nil
 	}
