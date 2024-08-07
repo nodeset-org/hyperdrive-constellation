@@ -85,6 +85,12 @@ func (m *ConstellationTestManager) Constellation_DepositToRplVault(rplVault cont
 	if err != nil {
 		return err
 	}
+	for _, submission := range submissions {
+		if submission.GasLimit == 0 {
+			// Pad the gas limit for failed submissions so Geth doesn't re-simulate them
+			submission.GasLimit = 1000000
+		}
+	}
 
 	// Submit the TX's
 	newTxs, err := txMgr.BatchExecuteTransactions(submissions, &bind.TransactOpts{
@@ -139,6 +145,12 @@ func (m *ConstellationTestManager) Constellation_DepositToWethVault(weth *contra
 	}, false)
 	if err != nil {
 		return err
+	}
+	for _, submission := range submissions {
+		if submission.GasLimit == 0 {
+			// Pad the gas limit for failed submissions so Geth doesn't re-simulate them
+			submission.GasLimit = 1000000
+		}
 	}
 
 	// Submit the TX's

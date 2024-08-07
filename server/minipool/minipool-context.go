@@ -160,7 +160,7 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	// Get the number of minipools belonging to the node
 	var minipoolCount *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.Whitelist.GetNumberOfValidators(mc, &minipoolCount, walletStatus.Address.NodeAddress)
+		csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, walletStatus.Address.NodeAddress)
 		mpContext.GetState(node, mc)
 		return nil
 	}, callOpts)

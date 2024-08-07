@@ -168,7 +168,7 @@ func (t *StakeMinipoolsTask) getPrelaunchMinipools(walletAddress common.Address)
 
 	// Run a query
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		t.csMgr.Whitelist.GetNumberOfValidators(mc, &minipoolCount, walletAddress)
+		t.csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, walletAddress)
 		return nil
 	}, callOpts,
 		odaoMgr.Settings.Minipool.ScrubPeriod,

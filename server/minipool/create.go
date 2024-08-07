@@ -168,7 +168,7 @@ func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
 	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 	c.csMgr.SuperNodeAccount.GetMaxValidators(mc, &c.maxActiveValidatorsPerNode)
-	c.csMgr.Whitelist.GetNumberOfValidators(mc, &c.activeValidatorCount, c.nodeAddress)
+	c.csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &c.activeValidatorCount, c.nodeAddress)
 	eth.AddQueryablesToMulticall(mc,
 		c.pdaoMgr.Settings.Node.IsDepositingEnabled,
 		c.odaoMgr.Settings.Minipool.ScrubPeriod,
