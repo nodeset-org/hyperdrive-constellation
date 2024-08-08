@@ -30,6 +30,7 @@ import (
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/rewards"
+	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
 	"github.com/wealdtech/go-merkletree"
@@ -1090,6 +1091,47 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		t.Logf("Node op %d claimed rewards and received %.6f ETH (%s wei)", i, eth.WeiToEth(rewards), rewards.String())
 	}
 
+	// Run a treasury claim for ETH
+	treasuryRecipient := odaoOpts[0].From
+	preBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
+	require.NoError(t, err)
+
+	txInfo, err = csMgr.Treasury.ClaimEth(treasuryRecipient, adminOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, adminOpts, "Treasury claimed ETH rewards")
+
+	postBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
+	require.NoError(t, err)
+	treasuryRewards := new(big.Int).Sub(postBalance, preBalance)
+
+	expectedAmountFloat = 0.14788 * 0.3625 * (0.005*12 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MPs 0-11 EL rewards + MP5 BN rewards)
+	expectedAmount = eth.EthToWei(expectedAmountFloat)
+	expectedAmount.Add(expectedAmount, treasuryShareOfEthRewards) // Add SP rewards from interval 1
+	requireApproxEqual(t, expectedAmount, treasuryRewards)
+	t.Logf("Treasury claimed ETH rewards and received %.6f ETH (%s wei)", eth.WeiToEth(treasuryRewards), treasuryRewards.String())
+
+	// Run a treasury claim for RPL
+	treasuryRecipient = odaoOpts[0].From
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Rpl.BalanceOf(mc, &preBalance, treasuryRecipient)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+
+	rplContract, err := sp.GetRocketPoolManager().RocketPool.GetContract(rocketpool.ContractName_RocketTokenRPL)
+	require.NoError(t, err)
+	txInfo, err = csMgr.Treasury.ClaimToken(rplContract.Address, treasuryRecipient, adminOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, adminOpts, "Treasury claimed RPL rewards")
+
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		bindings.Rpl.BalanceOf(mc, &postBalance, treasuryRecipient)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	treasuryRewards = new(big.Int).Sub(postBalance, preBalance)
+	require.Equal(t, treasuryShareOfRplRewards, treasuryRewards)
+	t.Logf("Treasury claimed RPL rewards and received %.6f RPL (%s wei)", eth.WeiToEth(treasuryRewards), treasuryRewards.String())
 }
 
 // Run test 15 of the QA suite
