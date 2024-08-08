@@ -3,6 +3,7 @@ package csminipool
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/url"
 
@@ -15,6 +16,7 @@ import (
 	batch "github.com/rocket-pool/batch-query"
 	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/utils/input"
 	"github.com/rocket-pool/node-manager-core/wallet"
@@ -79,21 +81,72 @@ func (c *MinipoolExitDetailsContext) GetMinipoolDetails(mc *batch.MultiCaller, m
 	eth.AddQueryablesToMulticall(mc,
 		mpCommon.Status,
 		mpCommon.Pubkey,
+		mpCommon.IsFinalised,
 	)
 }
 
 func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolExitDetailsData, blockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	// Get the exit details
 	details := make([]csapi.MinipoolExitDetails, len(addresses))
+	eligiblePubkeys := make([]beacon.ValidatorPubkey, 0, len(addresses))
 	for i, mp := range mps {
-		mpCommonDetails := mp.Common()
-		status := mpCommonDetails.Status.Formatted()
+		mpCommon := mp.Common()
+		status := mpCommon.Status.Formatted()
 		mpDetails := csapi.MinipoolExitDetails{
-			Address:       mpCommonDetails.Address,
-			InvalidStatus: (status != rptypes.MinipoolStatus_Staking),
+			Address:               mpCommon.Address,
+			Pubkey:                mpCommon.Pubkey.Get(),
+			InvalidMinipoolStatus: (status != rptypes.MinipoolStatus_Staking),
+			AlreadyFinalized:      mpCommon.IsFinalised.Get(),
 		}
-		mpDetails.CanExit = !mpDetails.InvalidStatus
+		mpDetails.CanExit = !(mpDetails.InvalidMinipoolStatus || mpDetails.AlreadyFinalized)
 		details[i] = mpDetails
+		if mpDetails.CanExit {
+			eligiblePubkeys = append(eligiblePubkeys, mpCommon.Pubkey.Get())
+		}
+	}
+
+	// Get some Beacon details
+	bn := c.ServiceProvider.GetBeaconClient()
+	beaconCfg, err := bn.GetEth2Config(c.Context)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error getting Beacon config: %w", err)
+	}
+	beaconHead, err := bn.GetBeaconHead(c.Context)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error getting Beacon head: %w", err)
+	}
+
+	// Filter on Beacon status
+	filteredDetails := make([]csapi.MinipoolExitDetails, 0, len(mps))
+	statuses, err := bn.GetValidatorStatuses(c.Context, eligiblePubkeys, nil)
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error getting eligible validator statuses: %w", err)
+	}
+	for i, mp := range mps {
+		mpDetails := &details[i]
+		if !mpDetails.CanExit {
+			continue
+		}
+		pubkey := mp.Common().Pubkey.Get()
+		status := statuses[pubkey]
+		if status.Status != beacon.ValidatorState_ActiveOngoing {
+			// Covers validators that aren't seen on Beacon yet too
+			mpDetails.InvalidValidatorStatus = true
+			continue
+		}
+		if status.ActivationEpoch+beaconCfg.ShardCommitteePeriod > beaconHead.Epoch {
+			mpDetails.ValidatorTooYoung = true
+			continue
+		}
+
+		mpDetails.Index = status.Index
+		filteredDetails = append(filteredDetails, *mpDetails)
+	}
+
+	if c.Verbose {
+		data.Details = details
+	} else {
+		data.Details = filteredDetails
 	}
 
 	data.Details = details

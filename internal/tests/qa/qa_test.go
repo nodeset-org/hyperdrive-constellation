@@ -1040,7 +1040,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Finalize an interval
 	txInfo, err = csMgr.YieldDistributor.FinalizeInterval(deployerOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Finalized the next interval"))
+	testMgr.MineTx(t, txInfo, deployerOpts, "Finalized the next interval")
 
 	// Verify post-tick interval details
 	preTickInterval.Set(postTickInterval)

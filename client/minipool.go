@@ -2,6 +2,7 @@ package csclient
 
 import (
 	"math/big"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
@@ -51,6 +52,22 @@ func (r *MinipoolRequester) Create(salt *big.Int) (*types.ApiResponse[csapi.Mini
 		"salt": salt.String(),
 	}
 	return client.SendGetRequest[csapi.MinipoolCreateData](r, "create", "Create", args)
+}
+
+// Get details and transaction info of minipools that are eligible for exiting, optionally
+func (r *MinipoolRequester) GetExitDetails(verbose bool) (*types.ApiResponse[csapi.MinipoolExitDetailsData], error) {
+	args := map[string]string{
+		"verbose": strconv.FormatBool(verbose),
+	}
+	return client.SendGetRequest[csapi.MinipoolExitDetailsData](r, "exit/details", "GetExitDetails", args)
+}
+
+// Submit voluntary exits for minipool validators to the Beacon Chain
+func (r *MinipoolRequester) Exit(infos []csapi.MinipoolExitInfo) (*types.ApiResponse[types.SuccessData], error) {
+	body := csapi.MinipoolExitBody{
+		Infos: infos,
+	}
+	return client.SendPostRequest[types.SuccessData](r, "exit", "Exit", body)
 }
 
 // Get details and transaction info of minipools that are eligible for staking

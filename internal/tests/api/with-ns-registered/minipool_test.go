@@ -109,6 +109,8 @@ func TestDuplicateSalts(t *testing.T) {
 	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
 }
 
+/*
+
 // Utility function to send ETH and advance blockchain time
 func sendEthAndAdvanceTime(t *testing.T, node *cstesting.ConstellationNode, address common.Address, amount *big.Int, slotsToAdvance int) {
 	sp := node.GetServiceProvider()
@@ -186,6 +188,7 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 	require.Equal(t, 1, wethBalanceNodeAfter.Cmp(wethBalanceNodeBefore))
 	require.Equal(t, 1, wethBalanceTreasuryAfter.Cmp(wethBalanceTreasuryBefore))
 }
+*/
 
 // Makes a minipool, waits for the scrub check, then stakes it
 func createAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, salt *big.Int) {

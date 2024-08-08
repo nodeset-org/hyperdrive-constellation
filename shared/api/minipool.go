@@ -20,9 +20,16 @@ type MinipoolGetAvailableMinipoolCountData struct {
 }
 
 type MinipoolExitDetails struct {
-	Address       common.Address `json:"address"`
-	CanExit       bool           `json:"canExit"`
-	InvalidStatus bool           `json:"invalidStatus"`
+	Address                common.Address         `json:"address"`
+	Pubkey                 beacon.ValidatorPubkey `json:"pubkey"`
+	Index                  string                 `json:"index"`
+	CanExit                bool                   `json:"canExit"`
+	InvalidMinipoolStatus  bool                   `json:"invalidMinipoolStatus"`
+	AlreadyFinalized       bool                   `json:"alreadyFinalized"`
+	InvalidValidatorStatus bool                   `json:"invalidValidatorStatus"`
+	ValidatorTooYoung      bool                   `json:"validatorTooYoung"`
+	ActivationEpoch        uint64                 `json:"activationEpoch"`
+	EligibleExitEpoch      uint64                 `json:"eligibleExitEpoch"`
 }
 type MinipoolExitDetailsData struct {
 	Details []MinipoolExitDetails `json:"details"`
