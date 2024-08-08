@@ -32,7 +32,8 @@ type MinipoolExitDetails struct {
 	EligibleExitEpoch      uint64                 `json:"eligibleExitEpoch"`
 }
 type MinipoolExitDetailsData struct {
-	Details []MinipoolExitDetails `json:"details"`
+	Details      []MinipoolExitDetails `json:"details"`
+	CurrentEpoch uint64                `json:"currentEpoch"`
 }
 
 type MinipoolExitInfo struct {

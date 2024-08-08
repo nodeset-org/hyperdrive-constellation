@@ -95,7 +95,7 @@ func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps
 		mpDetails := csapi.MinipoolExitDetails{
 			Address:               mpCommon.Address,
 			Pubkey:                mpCommon.Pubkey.Get(),
-			InvalidMinipoolStatus: (status != rptypes.MinipoolStatus_Staking),
+			InvalidMinipoolStatus: (status != rptypes.MinipoolStatus_Staking && status != rptypes.MinipoolStatus_Dissolved),
 			AlreadyFinalized:      mpCommon.IsFinalised.Get(),
 		}
 		mpDetails.CanExit = !(mpDetails.InvalidMinipoolStatus || mpDetails.AlreadyFinalized)
@@ -115,6 +115,7 @@ func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting Beacon head: %w", err)
 	}
+	data.CurrentEpoch = beaconHead.Epoch
 
 	// Filter on Beacon status
 	filteredDetails := make([]csapi.MinipoolExitDetails, 0, len(mps))
@@ -131,10 +132,14 @@ func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps
 		status := statuses[pubkey]
 		if status.Status != beacon.ValidatorState_ActiveOngoing {
 			// Covers validators that aren't seen on Beacon yet too
+			mpDetails.CanExit = false
 			mpDetails.InvalidValidatorStatus = true
 			continue
 		}
-		if status.ActivationEpoch+beaconCfg.ShardCommitteePeriod > beaconHead.Epoch {
+		mpDetails.ActivationEpoch = status.ActivationEpoch
+		mpDetails.EligibleExitEpoch = status.ActivationEpoch + beaconCfg.ShardCommitteePeriod
+		if mpDetails.EligibleExitEpoch > beaconHead.Epoch {
+			mpDetails.CanExit = false
 			mpDetails.ValidatorTooYoung = true
 			continue
 		}
@@ -148,7 +153,5 @@ func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps
 	} else {
 		data.Details = filteredDetails
 	}
-
-	data.Details = details
 	return types.ResponseStatus_Success, nil
 }
