@@ -8,6 +8,7 @@ import (
 	"github.com/rocket-pool/node-manager-core/beacon"
 
 	"github.com/rocket-pool/node-manager-core/eth"
+	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
 	snapi "github.com/rocket-pool/smartnode/v2/shared/types/api"
 )
 
@@ -20,14 +21,17 @@ type MinipoolGetAvailableMinipoolCountData struct {
 }
 
 type MinipoolExitDetails struct {
-	Address                common.Address         `json:"address"`
-	Pubkey                 beacon.ValidatorPubkey `json:"pubkey"`
-	Index                  string                 `json:"index"`
 	CanExit                bool                   `json:"canExit"`
 	InvalidMinipoolStatus  bool                   `json:"invalidMinipoolStatus"`
 	AlreadyFinalized       bool                   `json:"alreadyFinalized"`
 	InvalidValidatorStatus bool                   `json:"invalidValidatorStatus"`
+	ValidatorNotSeenYet    bool                   `json:"validatorNotSeenYet"`
 	ValidatorTooYoung      bool                   `json:"validatorTooYoung"`
+	Address                common.Address         `json:"address"`
+	Pubkey                 beacon.ValidatorPubkey `json:"pubkey"`
+	Index                  string                 `json:"index"`
+	MinipoolStatus         rptypes.MinipoolStatus `json:"minipoolStatus"`
+	ValidatorStatus        beacon.ValidatorState  `json:"validatorStatus"`
 	ActivationEpoch        uint64                 `json:"activationEpoch"`
 	EligibleExitEpoch      uint64                 `json:"eligibleExitEpoch"`
 }
