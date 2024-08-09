@@ -31,6 +31,7 @@ type MinipoolExitDetails struct {
 	Pubkey                 beacon.ValidatorPubkey `json:"pubkey"`
 	Index                  string                 `json:"index"`
 	MinipoolStatus         rptypes.MinipoolStatus `json:"minipoolStatus"`
+	MinipoolStatusTime     time.Time              `json:"minipoolStatusTime"`
 	ValidatorStatus        beacon.ValidatorState  `json:"validatorStatus"`
 	ActivationEpoch        uint64                 `json:"activationEpoch"`
 	EligibleExitEpoch      uint64                 `json:"eligibleExitEpoch"`

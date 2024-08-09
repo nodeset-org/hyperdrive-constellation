@@ -80,6 +80,7 @@ func (c *MinipoolExitDetailsContext) GetMinipoolDetails(mc *batch.MultiCaller, m
 	mpCommon := mp.Common()
 	eth.AddQueryablesToMulticall(mc,
 		mpCommon.Status,
+		mpCommon.StatusTime,
 		mpCommon.Pubkey,
 		mpCommon.IsFinalised,
 	)
@@ -96,6 +97,7 @@ func (c *MinipoolExitDetailsContext) PrepareData(addresses []common.Address, mps
 			Address:               mpCommon.Address,
 			Pubkey:                mpCommon.Pubkey.Get(),
 			MinipoolStatus:        status,
+			MinipoolStatusTime:    mpCommon.StatusTime.Formatted(),
 			InvalidMinipoolStatus: (status != rptypes.MinipoolStatus_Staking && status != rptypes.MinipoolStatus_Dissolved),
 			AlreadyFinalized:      mpCommon.IsFinalised.Get(),
 		}
