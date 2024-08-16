@@ -12,15 +12,15 @@ import (
 
 // Manager for Constellation contract bindings
 type ConstellationManager struct {
-	Directory           *constellation.Directory
-	Whitelist           *constellation.Whitelist
-	SuperNodeAccount    *constellation.SuperNodeAccount
-	PriceFetcher        *constellation.PriceFetcher
-	OperatorDistributor *constellation.OperatorDistributor
-	WethVault           *constellation.WethVault
-	RplVault            *constellation.RplVault
-	PoABeaconOracle     *constellation.PoABeaconOracle
-	Treasury            *constellation.Treasury
+	Directory              *constellation.Directory
+	Whitelist              *constellation.Whitelist
+	SuperNodeAccount       *constellation.SuperNodeAccount
+	PriceFetcher           *constellation.PriceFetcher
+	OperatorDistributor    *constellation.OperatorDistributor
+	WethVault              *constellation.WethVault
+	RplVault               *constellation.RplVault
+	PoAConstellationOracle *constellation.PoAConstellationOracle
+	Treasury               *constellation.Treasury
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -68,9 +68,9 @@ func (m *ConstellationManager) LoadContracts() error {
 		m.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
 		m.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
-		m.Directory.GetPoABeaconOracleAddress(mc, &poaBeaconOracleAddress)
+		m.Directory.GetOracleAddress(mc, &poaBeaconOracleAddress)
 		m.Directory.GetTreasuryAddress(mc, &treasuryAddress)
-		m.Directory.GetNodeSetOperatorRewardsDistributorAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
+		m.Directory.GetOperatorRewardAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -102,7 +102,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating RPL vault binding: %w", err)
 	}
-	poaBeaconOracle, err := constellation.NewPoABeaconOracle(poaBeaconOracleAddress, m.ec, m.txMgr)
+	poaBeaconOracle, err := constellation.NewPoAConstellationOracle(poaBeaconOracleAddress, m.ec, m.txMgr)
 	if err != nil {
 		return fmt.Errorf("error creating PoA Beacon Oracle binding: %w", err)
 	}
@@ -118,7 +118,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.OperatorDistributor = operatorDistributor
 	m.WethVault = wethVault
 	m.RplVault = rplVault
-	m.PoABeaconOracle = poaBeaconOracle
+	m.PoAConstellationOracle = poaBeaconOracle
 	m.Treasury = treasury
 	m.isLoaded = true
 	return nil

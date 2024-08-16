@@ -161,11 +161,17 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	)
 
 	// Update the oracle report
+	var expectedOracleError *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.OperatorDistributor.GetOracleError(mc, &expectedOracleError)
+		return nil
+	}, nil)
+	require.NoError(t, err)
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
 	newTime := time.Now().Add(timeToAdvance)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err := csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
+	txInfo, err := csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
@@ -232,13 +238,18 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Run the tick 3 times
 	for i := 0; i < 3; i++ {
+		var mpCount *big.Int
+		var currentMpIndex *big.Int
 		err := qMgr.Query(func(mc *batch.MultiCaller) error {
 			csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
+			csMgr.SuperNodeAccount.GetMinipoolCount(mc, &mpCount)
+			csMgr.OperatorDistributor.GetCurrentMinipoolIndex(mc, &currentMpIndex)
 			return nil
 		}, nil)
 		require.NoError(t, err)
 		require.Equal(t, datas[expectedMpIndex][0].MinipoolAddress, nextMinipoolAddress)
 		t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
+		t.Logf("The minipool count is %d, next index = %d", mpCount.Int64(), currentMpIndex.Int64())
 
 		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
 		require.NoError(t, err)
@@ -246,18 +257,23 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 		printTickInfo(t, sp)
 		expectedMpIndex++
-		if expectedMpIndex >= len(datas) {
+		if expectedMpIndex >= len(datas)-1 { // Handling the fact that MP2 exited and got removed
 			expectedMpIndex = 0
 		}
 	}
 
 	// Update the xrETH Oracle again
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.OperatorDistributor.GetOracleError(mc, &expectedOracleError)
+		return nil
+	}, nil)
+	require.NoError(t, err)
 	totalYieldAccrued, oracleError = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	newTime = newTime.Add(time.Hour)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
-	sig, err = createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
+	sig, err = createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
+	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
@@ -269,7 +285,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Make sure the rewards contract got the correct amount
 	rewardsContractBalance, err := ec.BalanceAt(context.Background(), bindings.NodeSetOperatorRewardsDistributorAddress, nil)
 	require.NoError(t, err)
-	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015) // Quick and dirty; CS NO share * RP NO share * (MP0 + MP1 + MP2)
+	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015 + 0.005 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MP0-EL + MP1-EL + MP2 + MP3 + MP0-CL)
 	expectedShareBig := eth.EthToWei(expectedShare)
 	requireApproxEqual(t, expectedShareBig, rewardsContractBalance)
 	nodeOpShare := new(big.Int).Div(rewardsContractBalance, big.NewInt(int64(len(nodes))))
@@ -293,9 +309,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	postBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 	require.NoError(t, err)
 	treasuryRewards := new(big.Int).Sub(postBalance, preBalance)
-	expectedShare = 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015 + 0.005 + 0.005 + 0.01 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MP0 + MP1 + MP2 + MP3 + MP4 + MP0 again + MP1 again)
-	expectedShareBig = eth.EthToWei(expectedShare)
-	requireApproxEqual(t, expectedShareBig, treasuryRewards)
+	requireApproxEqual(t, expectedShareBig, treasuryRewards) // Expect the same amount as the NO share
 	t.Logf("Treasury claimed ETH rewards and received %.6f ETH (%s wei)", eth.WeiToEth(treasuryRewards), treasuryRewards.String())
 }
 
@@ -620,12 +634,18 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
 
 	// Update the oracle report
+	var expectedOracleError *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.OperatorDistributor.GetOracleError(mc, &expectedOracleError)
+		return nil
+	}, nil)
+	require.NoError(t, err)
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, nodesetTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, nodesetTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, nodesetTime, deployerOpts)
+	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, nodesetTime, deployerOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
+	testMgr.MineTx(t, txInfo, adminOpts, "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
 
 	// Verify the new ETH:xrETH price
@@ -737,11 +757,14 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	printTickInfo(t, sp)
 
 	// Set the ETH/RPL min and max ratios to 10% and 30%
-	tenPercentRatio := new(big.Int).Mul(rplPerEth, big.NewInt(1e17))
-	tenPercentRatio.Div(tenPercentRatio, oneEth)
-	thirtyPercentRatio := new(big.Int).Mul(rplPerEth, big.NewInt(3e17))
-	thirtyPercentRatio.Div(thirtyPercentRatio, oneEth)
-	setCoverageRatios(t, sp, tenPercentRatio, thirtyPercentRatio)
+	/*
+		tenPercentRatio := new(big.Int).Mul(rplPerEth, big.NewInt(1e17))
+		tenPercentRatio.Div(tenPercentRatio, oneEth)
+		thirtyPercentRatio := new(big.Int).Mul(rplPerEth, big.NewInt(3e17))
+		thirtyPercentRatio.Div(thirtyPercentRatio, oneEth)
+		setCoverageRatios(t, sp, tenPercentRatio, thirtyPercentRatio)
+	*/
+	setCoverageRatios(t, sp, big.NewInt(1e17), big.NewInt(3e17))
 	printTickInfo(t, sp)
 
 	// Set max minipools per node
@@ -882,14 +905,12 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	require.Equal(t, wave1Data[0][expectedMpIndex].MinipoolAddress, nextMinipoolAddress)
 	t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 
-	// Attempt to deposit into the RPL vault - should fail
+	// Deposit into the RPL vault
 	rplDepositAmount = eth.EthToWei(1000)
-	// Deposit RPL to the RPL vault
 	deployerOpts.Nonce = nil
 	err = testMgr.Constellation_DepositToRplVault(csMgr.RplVault, rplDepositAmount, deployerOpts, deployerOpts)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "failed with status 0")
-	t.Logf("Depositing into the RPL vault failed as expected: %v", err)
+	require.NoError(t, err)
+	t.Logf("Deposited %.6f ETH (%s wei) into the RPL vault", eth.WeiToEth(rplDepositAmount), rplDepositAmount.String())
 
 	// Attempt to deposit into the WETH vault - should fail
 	ethDepositAmount = eth.EthToWei(2000)
@@ -917,7 +938,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned2), rplReturned2.String())
 
 	// Verify post-tick interval details
-	expectedMpIndex = 4
+	expectedMpIndex = 5
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
 		return nil
@@ -935,6 +956,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	}
 
 	// Verify post-tick details
+	expectedMpIndex = 7 // Went up by 2 since we exited 2 minipools
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
 		return nil
@@ -1523,9 +1545,12 @@ func getTokenPrice(t *testing.T, qMgr *eth.QueryManager, token contracts.IErc462
 }
 
 // Make a signature for xrETH oracle updates
-func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Time, poaBeaconOracleAddress common.Address, chainID *big.Int, key *ecdsa.PrivateKey) ([]byte, error) {
+func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, expectedOracleError *big.Int, timestamp time.Time, poaBeaconOracleAddress common.Address, chainID *big.Int, key *ecdsa.PrivateKey) ([]byte, error) {
 	amountBytes := [32]byte{}
 	newTotalYieldAccrued.FillBytes(amountBytes[:])
+
+	expectedOracleErrorBytes := [32]byte{}
+	expectedOracleError.FillBytes(expectedOracleErrorBytes[:])
 
 	timestampBig := big.NewInt(timestamp.Unix())
 	timestampBytes := [32]byte{}
@@ -1536,6 +1561,7 @@ func createXrEthOracleSignature(newTotalYieldAccrued *big.Int, timestamp time.Ti
 
 	message := crypto.Keccak256(
 		amountBytes[:],
+		expectedOracleErrorBytes[:],
 		timestampBytes[:],
 		poaBeaconOracleAddress[:],
 		chainIdBytes[:],

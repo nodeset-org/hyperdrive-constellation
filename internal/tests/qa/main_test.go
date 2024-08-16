@@ -19,13 +19,18 @@ import (
 
 // Various singleton variables used for testing
 var (
-	testMgr      *cstesting.ConstellationTestManager
-	logger       *slog.Logger
-	nsEmail      string = "test@nodeset.io"
-	keygen       *keys.KeyGenerator
+	testMgr *cstesting.ConstellationTestManager
+	logger  *slog.Logger
+	nsEmail string = "test@nodeset.io"
+	keygen  *keys.KeyGenerator
+
+	// Constellation Deployer
 	deployerKey  *ecdsa.PrivateKey
 	deployerOpts *bind.TransactOpts
-	adminOpts    *bind.TransactOpts
+
+	// Constellation Admin
+	adminKey  *ecdsa.PrivateKey
+	adminOpts *bind.TransactOpts
 
 	// CS nodes
 	mainNode        *cstesting.ConstellationNode
@@ -87,7 +92,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Get the private key for the Constellation admin
-	adminKey, err := keygen.GetEthPrivateKey(1)
+	adminKey, err = keygen.GetEthPrivateKey(1)
 	if err != nil {
 		fail("error getting admin key: %v", err)
 	}

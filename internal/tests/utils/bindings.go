@@ -96,7 +96,7 @@ func CreateBindings(sp cscommon.IConstellationServiceProvider) (*ContractBinding
 	var nodeSetOperatorRewardsDistributorAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.Directory.GetWethAddress(mc, &wethAddress)
-		csMgr.Directory.GetNodeSetOperatorRewardsDistributorAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
+		csMgr.Directory.GetOperatorRewardAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
