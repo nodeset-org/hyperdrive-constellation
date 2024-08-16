@@ -116,7 +116,6 @@ type MinipoolCreateData struct {
 	MaxMinipoolsReached             bool                   `json:"maxMinipoolsReached"`
 	NodeBalance                     *big.Int               `json:"nodeBalance"`
 	LockupAmount                    *big.Int               `json:"lockupAmount"`
-	LockupTime                      time.Duration          `json:"lockupTime"`
 	MinipoolAddress                 common.Address         `json:"minipoolAddress"`
 	ValidatorPubkey                 beacon.ValidatorPubkey `json:"validatorPubkey"`
 	Index                           uint64                 `json:"index"`

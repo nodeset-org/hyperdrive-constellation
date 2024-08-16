@@ -23,7 +23,6 @@ func NewNodeHandler(logger *log.Logger, ctx context.Context, serviceProvider csc
 		serviceProvider: serviceProvider,
 	}
 	h.factories = []server.IContextFactory{
-		&nodeClaimRewardsContextFactory{h},
 		&nodeGetRegistrationStatusContextFactory{h},
 		&nodeRegisterContextFactory{h},
 	}

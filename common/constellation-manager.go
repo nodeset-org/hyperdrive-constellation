@@ -17,7 +17,6 @@ type ConstellationManager struct {
 	SuperNodeAccount    *constellation.SuperNodeAccount
 	PriceFetcher        *constellation.PriceFetcher
 	OperatorDistributor *constellation.OperatorDistributor
-	YieldDistributor    *constellation.YieldDistributor
 	WethVault           *constellation.WethVault
 	RplVault            *constellation.RplVault
 	PoABeaconOracle     *constellation.PoABeaconOracle
@@ -57,21 +56,21 @@ func (m *ConstellationManager) LoadContracts() error {
 	var superNodeAccountAddress common.Address
 	var priceFetcherAddress common.Address
 	var operatorDistributorAddress common.Address
-	var yieldDistributorAddress common.Address
 	var wethVaultAddress common.Address
 	var rplVaultAddress common.Address
 	var poaBeaconOracleAddress common.Address
 	var treasuryAddress common.Address
+	var nodeSetOperatorRewardsDistributorAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
 		m.Directory.GetPriceFetcherAddress(mc, &priceFetcherAddress)
 		m.Directory.GetOperatorDistributorAddress(mc, &operatorDistributorAddress)
-		m.Directory.GetYieldDistributorAddress(mc, &yieldDistributorAddress)
 		m.Directory.GetWethVaultAddress(mc, &wethVaultAddress)
 		m.Directory.GetRplVaultAddress(mc, &rplVaultAddress)
 		m.Directory.GetPoABeaconOracleAddress(mc, &poaBeaconOracleAddress)
 		m.Directory.GetTreasuryAddress(mc, &treasuryAddress)
+		m.Directory.GetNodeSetOperatorRewardsDistributorAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -95,10 +94,6 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating operator distributor binding: %w", err)
 	}
-	yieldDistributor, err := constellation.NewYieldDistributor(yieldDistributorAddress, m.ec, m.txMgr)
-	if err != nil {
-		return fmt.Errorf("error creating yield distributor binding: %w", err)
-	}
 	wethVault, err := constellation.NewWethVault(wethVaultAddress, m.ec, m.qMgr, m.txMgr, nil)
 	if err != nil {
 		return fmt.Errorf("error creating WETH vault binding: %w", err)
@@ -121,7 +116,6 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.SuperNodeAccount = superNodeAccount
 	m.PriceFetcher = priceFetcher
 	m.OperatorDistributor = operatorDistributor
-	m.YieldDistributor = yieldDistributor
 	m.WethVault = wethVault
 	m.RplVault = rplVault
 	m.PoABeaconOracle = poaBeaconOracle

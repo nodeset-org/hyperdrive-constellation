@@ -86,6 +86,8 @@ func TestDuplicateSalts(t *testing.T) {
 
 	// Make the bindings
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	sp := mainNode.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
@@ -97,11 +99,11 @@ func TestDuplicateSalts(t *testing.T) {
 
 	// Deposit RPL to the RPL vault
 	rplAmount := eth.EthToWei(3200)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
 	wethAmount := eth.EthToWei(90)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Try making another one with the same salt, it should fail
 	_, err = cs.Minipool.Create(standardSalt)
@@ -289,14 +291,14 @@ func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *
 	rplRequired.Add(rplRequired, common.Big1)        // Add 1 wei to the required amount to make it pass the greater check
 	//t.Logf("RPL required for 8 ETH bond is %.6f RPL (%s wei)", eth.WeiToEth(rplShortfall), rplShortfall.String())
 	rplAmount := rplRequired // eth.EthToWei(3200)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
 	ethRequired := new(big.Int).Mul(minipoolBond, big.NewInt(1e18))
 	ethRequired.Div(ethRequired, eth.EthToWei(0.9)) // TEMP: Add 10%, the required collateral - get this from the contracts later
 	ethRequired.Add(ethRequired, common.Big1)       // Add 1 wei to the required amount to make it pass the greater check
 	wethAmount := ethRequired                       // eth.EthToWei(90)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Register with Constellation
 	cstestutils.RegisterWithConstellation(t, testMgr, node)

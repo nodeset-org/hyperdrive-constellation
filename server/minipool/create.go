@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"net/url"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -83,7 +82,6 @@ type MinipoolCreateContext struct {
 
 	// On-chain vars
 	lockThreshold              *big.Int
-	lockupTime                 *big.Int
 	minipoolBondAmount         *big.Int
 	maxActiveValidatorsPerNode *big.Int
 	activeValidatorCount       *big.Int
@@ -164,7 +162,6 @@ func (c *MinipoolCreateContext) Initialize(walletStatus wallet.WalletStatus) (ty
 func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
 	c.rpSuperNodeBinding.GetExpectedMinipoolAddress(mc, &c.ExpectedMinipoolAddress, c.internalSalt)
 	c.csMgr.SuperNodeAccount.LockThreshold(mc, &c.lockThreshold)
-	c.csMgr.SuperNodeAccount.LockupTime(mc, &c.lockupTime)
 	c.csMgr.SuperNodeAccount.Bond(mc, &c.minipoolBondAmount)
 	c.csMgr.Whitelist.IsAddressInWhitelist(mc, &c.isWhitelisted, c.nodeAddress)
 	c.csMgr.SuperNodeAccount.GetMaxValidators(mc, &c.maxActiveValidatorsPerNode)
@@ -207,7 +204,6 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	}
 
 	// Check the node's balance (must have enough ETH for the lockup)
-	data.LockupTime = time.Duration(c.lockupTime.Uint64()) * time.Second
 	data.LockupAmount = c.lockThreshold
 	data.NodeBalance, err = c.ec.BalanceAt(c.Context, c.nodeAddress, nil)
 	if err != nil {

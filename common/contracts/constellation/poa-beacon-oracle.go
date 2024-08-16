@@ -15,12 +15,18 @@ import (
 )
 
 const (
-	poaBeaconOracleAbiString string = `[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint8","name":"version","type":"uint8"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"int256","name":"_amount","type":"int256"}],"name":"TotalYieldAccruedUpdated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"getDirectory","outputs":[{"internalType":"contract Directory","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getImplementation","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getLastUpdatedTotalYieldAccrued","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getTotalYieldAccrued","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"directoryAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_directoryAddress","type":"address"}],"name":"initializeOracle","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes","name":"_sig","type":"bytes"},{"internalType":"int256","name":"_newTotalYieldAccrued","type":"int256"},{"internalType":"uint256","name":"_sigTimeStamp","type":"uint256"}],"name":"setTotalYieldAccrued","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"}],"name":"upgradeTo","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]`
+	poaBeaconOracleAbiString string = `[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"address","name":"previousAdmin","type":"address"},{"indexed":false,"internalType":"address","name":"newAdmin","type":"address"}],"name":"AdminChanged","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"beacon","type":"address"}],"name":"BeaconUpgraded","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"uint8","name":"version","type":"uint8"}],"name":"Initialized","type":"event"},{"anonymous":false,"inputs":[{"indexed":false,"internalType":"int256","name":"_amount","type":"int256"}],"name":"TotalYieldAccruedUpdated","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"internalType":"address","name":"implementation","type":"address"}],"name":"Upgraded","type":"event"},{"inputs":[],"name":"getDirectory","outputs":[{"internalType":"contract Directory","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getImplementation","outputs":[{"internalType":"address","name":"","type":"address"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getLastUpdatedTotalYieldAccrued","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"getTotalYieldAccrued","outputs":[{"internalType":"int256","name":"","type":"int256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"address","name":"directoryAddress","type":"address"}],"name":"initialize","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"_directoryAddress","type":"address"}],"name":"initializeOracle","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[],"name":"proxiableUUID","outputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"bytes","name":"_sig","type":"bytes"},{"components":[{"internalType":"int256","name":"newTotalYieldAccrued","type":"int256"},{"internalType":"uint256","name":"currentOracleError","type":"uint256"},{"internalType":"uint256","name":"timeStamp","type":"uint256"}],"internalType":"struct PoABeaconOracle.PoAOracleSignatureData","name":"sigData","type":"tuple"}],"name":"setTotalYieldAccrued","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"}],"name":"upgradeTo","outputs":[],"stateMutability":"nonpayable","type":"function"},{"inputs":[{"internalType":"address","name":"newImplementation","type":"address"},{"internalType":"bytes","name":"data","type":"bytes"}],"name":"upgradeToAndCall","outputs":[],"stateMutability":"payable","type":"function"}]`
 )
 
 // ABI cache
 var poaBeaconOracleAbi abi.ABI
 var poaBeaconOracleOnce sync.Once
+
+type PoAOracleSignatureData struct {
+	NewTotalYieldAccrued *big.Int `abi:"newTotalYieldAccrued"`
+	CurrentOracleError   *big.Int `abi:"currentOracleError"`
+	Timestamp            *big.Int `abi:"timeStamp"`
+}
 
 type PoABeaconOracle struct {
 	Address  common.Address
@@ -71,8 +77,14 @@ func (c *PoABeaconOracle) GetTotalYieldAccrued(mc *batch.MultiCaller, out **big.
 // ====================
 
 // Sets the total yield Constellation has accrued as reported by the xrETH Oracle
-func (c *PoABeaconOracle) SetTotalYieldAccrued(newTotalYieldAccrued *big.Int, signature []byte, signatureTimestamp time.Time, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+func (c *PoABeaconOracle) SetTotalYieldAccrued(newTotalYieldAccrued *big.Int, currentOracleError *big.Int, signature []byte, signatureTimestamp time.Time, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	timestamp := signatureTimestamp.UTC().Unix()
 	timestampBig := big.NewInt(timestamp)
-	return c.txMgr.CreateTransactionInfo(c.contract, "setTotalYieldAccrued", opts, signature, newTotalYieldAccrued, timestampBig)
+
+	data := PoAOracleSignatureData{
+		NewTotalYieldAccrued: newTotalYieldAccrued,
+		CurrentOracleError:   currentOracleError,
+		Timestamp:            timestampBig,
+	}
+	return c.txMgr.CreateTransactionInfo(c.contract, "setTotalYieldAccrued", opts, signature, data)
 }

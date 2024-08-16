@@ -66,28 +66,17 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	printTickInfo(t, sp)
 
-	// Get the current interval
-	expectedInterval := common.Big1
-	var currentInterval *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &currentInterval)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	require.Equal(t, 0, expectedInterval.Cmp(currentInterval))
-	t.Logf("The current Constellation interval is %d as expected", currentInterval.Uint64())
-
 	// Make sure the contract state is clean
 	runPreflightChecks(t, bindings)
 
 	// Deposit RPL to the RPL vault
 	rplAmount := eth.EthToWei(4000)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 	printTickInfo(t, sp)
 
 	// Deposit WETH to the WETH vault
 	wethAmount := eth.EthToWei(100)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 	printTickInfo(t, sp)
 
 	// Set the available minipool count for the user
@@ -162,15 +151,21 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	elRewardsPerMinipool := eth.EthToWei(0.005)
 	beaconRewardsPerValidator := 1e7 // Beacon is in gwei
 	simulateBeaconRewards(t, sp, datas, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), deployerOpts)
-	totalYieldAccrued := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
-	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
+	totalYieldAccrued, oracleError := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
+	t.Logf(
+		"The new total yield accrued to report is %.10f (%s wei) and the error is %.10f (%s wei)",
+		eth.WeiToEth(totalYieldAccrued),
+		totalYieldAccrued.String(),
+		eth.WeiToEth(oracleError),
+		oracleError.String(),
+	)
 
 	// Update the oracle report
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
 	newTime := time.Now().Add(timeToAdvance)
 	sig, err := createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err := csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
+	txInfo, err := csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
@@ -186,7 +181,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Redeem 5 xrETH
 	xrEthRedeemAmount := eth.EthToWei(5)
-	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, false, deployerOpts)
+	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
 	expectedAmount := new(big.Int).Mul(xrEthRedeemAmount, xrEthPriceAccordingToVault)
 	expectedAmount.Div(expectedAmount, oneEth)
 	requireApproxEqual(t, expectedAmount, wethReturned)
@@ -204,7 +199,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Redeem 5 xRPL
 	xRplRedeemAmount := eth.EthToWei(5)
-	rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
 	expectedAmount = xRplRedeemAmount
 	require.Equal(t, expectedAmount, rplReturned)
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
@@ -223,13 +218,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		setMinipoolToWithdrawn(t, sp, datas[i][0], deployerOpts)
 	}
-
-	// Attempt an NO claim - should fail since an interval isn't finalized yet
-	claimResp, err := nodes[0].GetApiClient().Node.ClaimRewards(common.Big1, common.Big1)
-	require.NoError(t, err)
-	require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
-	require.NotEmpty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
-	t.Logf("Attempt to claim rewards for node 0 failed as expected: %s", claimResp.Data.TxInfo.SimulationResult.SimulationError)
+	t.Log("Exited the first 3 minipools")
 
 	// Fast forward time by a week
 	seconds := uint64(24 * 60 * 60 * 7)
@@ -240,16 +229,6 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	err = testMgr.CommitBlock()
 	require.NoError(t, err)
 	t.Logf("Fast forwarded 1 week")
-
-	// Get the current interval pre-tick
-	var preTickInterval *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &preTickInterval)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	require.Zero(t, expectedInterval.Cmp(preTickInterval))
-	t.Logf("The current Constellation interval is %d", preTickInterval.Uint64())
 
 	// Run the tick 3 times
 	for i := 0; i < 3; i++ {
@@ -265,20 +244,6 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 		require.NoError(t, err)
 		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Processed the next minipool (tick %d)", i+1))
 
-		var postTickInterval *big.Int
-		err = qMgr.Query(func(mc *batch.MultiCaller) error {
-			csMgr.YieldDistributor.GetCurrentInterval(mc, &postTickInterval)
-			return nil
-		}, nil)
-		require.NoError(t, err)
-		require.Equal(t, preTickInterval.Uint64()+1, postTickInterval.Uint64())
-		if i == 0 {
-			// Ensure the interval got incremented
-			t.Logf("Constellation interval has been increased to %d as expected", postTickInterval.Uint64())
-		} else {
-			// Ensure the interval didn;t get incremented
-			t.Logf("Constellation interval is still %d as expected", postTickInterval.Uint64())
-		}
 		printTickInfo(t, sp)
 		expectedMpIndex++
 		if expectedMpIndex >= len(datas) {
@@ -287,12 +252,12 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	}
 
 	// Update the xrETH Oracle again
-	totalYieldAccrued = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
+	totalYieldAccrued, oracleError = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	newTime = newTime.Add(time.Hour)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
 	sig, err = createXrEthOracleSignature(totalYieldAccrued, newTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, newTime, deployerOpts)
+	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 
@@ -301,45 +266,20 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	requireApproxEqual(t, expectedRatio, xrEthPriceAccordingToVault)
 	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
 
-	// Get the stats for interval 1
-	var intervalStats constellation.Interval
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetIntervalByIndex(mc, &intervalStats, preTickInterval)
-		return nil
-	}, nil)
+	// Make sure the rewards contract got the correct amount
+	rewardsContractBalance, err := ec.BalanceAt(context.Background(), bindings.NodeSetOperatorRewardsDistributorAddress, nil)
 	require.NoError(t, err)
 	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015) // Quick and dirty; CS NO share * RP NO share * (MP0 + MP1 + MP2)
 	expectedShareBig := eth.EthToWei(expectedShare)
-	requireApproxEqual(t, expectedShareBig, intervalStats.Amount)
-	nodeOpShare := new(big.Int).Div(intervalStats.Amount, intervalStats.NumOperators)
-	t.Logf("Interval %d had %.6f ETH (%s wei) across %d operators for %.6f ETH (%s wei) each",
-		preTickInterval.Uint64(),
-		eth.WeiToEth(intervalStats.Amount),
-		intervalStats.Amount.String(),
-		intervalStats.NumOperators.Uint64(),
+	requireApproxEqual(t, expectedShareBig, rewardsContractBalance)
+	nodeOpShare := new(big.Int).Div(rewardsContractBalance, big.NewInt(int64(len(nodes))))
+	t.Logf("Rewards contract has %.6f ETH (%s wei) across %d operators for %.6f ETH (%s wei) each",
+		eth.WeiToEth(rewardsContractBalance),
+		rewardsContractBalance.String(),
+		len(nodes),
 		eth.WeiToEth(nodeOpShare),
 		nodeOpShare.String(),
 	)
-
-	// Run NO claims
-	for i, node := range nodes {
-		preBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-
-		cs := node.GetApiClient()
-		claimResp, err := cs.Node.ClaimRewards(common.Big1, common.Big1)
-		require.NoError(t, err)
-		require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
-		require.Empty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
-
-		testMgr.MineTx(t, claimResp.Data.TxInfo, deployerOpts, fmt.Sprintf("Node op %d claimed rewards", i))
-
-		postBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-		rewards := new(big.Int).Sub(postBalance, preBalance)
-		requireApproxEqual(t, nodeOpShare, rewards)
-		t.Logf("Node op %d claimed rewards and received %.6f ETH (%s wei)", i, eth.WeiToEth(rewards), rewards.String())
-	}
 
 	// Run a treasury claim
 	treasuryRecipient := odaoOpts[0].From
@@ -369,6 +309,8 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	defer qa_cleanup(snapshotName)
 
 	// Get some services
+	sp := testMgr.GetNode().GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created bindings")
@@ -384,10 +326,10 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), 1)
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Build the minipool creation TXs
 	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, 1, nil, bindings.RpSuperNode)
@@ -422,6 +364,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	sp := testMgr.GetNode().GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
@@ -445,10 +388,10 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	wethAmount, rplAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools but no more
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
 
 	// Build the wave 1 minipool creation TXs
 	wave1Nodes := nodes[:5]
@@ -539,7 +482,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Deposit into the WETH Vault
 	ethDepositAmount := eth.EthToWei(1000)
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, ethDepositAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, ethDepositAmount, deployerOpts)
 
 	// Deposit into the RPL Vault
 	oneEth := big.NewInt(1e18)
@@ -548,7 +491,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	rplDepositAmount.Mul(rplDepositAmount, twentyPercent)
 	rplDepositAmount.Div(rplDepositAmount, oneEth)
 	rplDepositAmount.Div(rplDepositAmount, oneEth)
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
 
 	// Set the nodeset timestamp
 	nodesetTime := time.Now()
@@ -556,7 +499,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
 
 	// Create some subnodes
-	nodes, nodeAddresses, err := createNodesForTest(t, 2, eth.EthToWei(50))
+	nodes, _, err := createNodesForTest(t, 2, eth.EthToWei(50))
 	require.NoError(t, err)
 
 	// Set max minipools per node
@@ -610,14 +553,14 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 10 xrETH
 	xrEthRedeemAmount := eth.EthToWei(10)
-	wethReturned := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, false, deployerOpts)
+	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
 	require.Equal(t, xrEthRedeemAmount, wethReturned)
 	t.Logf("Redeemed %.6f xrETH (%s wei) for %.6f WETH (%s wei)", eth.WeiToEth(xrEthRedeemAmount), xrEthRedeemAmount.String(), eth.WeiToEth(wethReturned), wethReturned.String())
 	printTickInfo(t, sp)
 
 	// Redeem 100 xrRPL
 	xRplRedeemAmount := eth.EthToWei(100)
-	rplReturned := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
 	require.Equal(t, xRplRedeemAmount, rplReturned)
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
 	printTickInfo(t, sp)
@@ -673,14 +616,14 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	elRewardsPerMinipool := eth.EthToWei(0.005)
 	beaconRewardsPerValidator := 1e7 // Beacon is in gwei
 	simulateBeaconRewards(t, sp, wave1Data, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), deployerOpts)
-	totalYieldAccrued := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
+	totalYieldAccrued, oracleError := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
 
 	// Update the oracle report
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
 	sig, err := createXrEthOracleSignature(totalYieldAccrued, nodesetTime, csMgr.PoABeaconOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, sig, nodesetTime, deployerOpts)
+	txInfo, err = csMgr.PoABeaconOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, nodesetTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
@@ -702,16 +645,6 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	nodesetTime = nodesetTime.Add(secondsDuration)
 	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
 	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
-
-	// Verify pre-tick interval details
-	var preTickInterval *big.Int
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &preTickInterval)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	require.Equal(t, uint64(1), preTickInterval.Uint64())
-	t.Logf("Interval pre-tick is %d as expected", preTickInterval.Uint64())
 
 	// Do a merkle claim
 	merkleCfg := createMerkleClaimConfig(t, sp, bindings, rewardsSubmission)
@@ -736,17 +669,13 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Verify post-tick interval details
 	expectedMpIndex := 2
-	var postTickInterval *big.Int
 	var nextMinipoolAddress common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &postTickInterval)
 		return nil
 	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, wave1Data[0][expectedMpIndex].MinipoolAddress, nextMinipoolAddress)
-	require.Equal(t, preTickInterval.Uint64()+1, postTickInterval.Uint64())
-	t.Logf("Constellation interval has been increased to %d as expected", postTickInterval.Uint64())
 	t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 
 	// Get the split for RPL rewards
@@ -771,20 +700,14 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		eth.WeiToEth(treasuryShareOfEthRewards), treasuryShareOfEthRewards.String(),
 	)
 
-	// Verify interval rewards
-	var intervalStats constellation.Interval
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetIntervalByIndex(mc, &intervalStats, preTickInterval)
-		return nil
-	}, nil)
-	require.NoError(t, err)
-	requireApproxEqual(t, nodeOpShareOfEthRewards, intervalStats.Amount)
-	nodeOpShare := new(big.Int).Div(intervalStats.Amount, intervalStats.NumOperators)
-	t.Logf("Interval %d had %.6f ETH (%s wei) across %d operators for %.6f ETH (%s wei) each",
-		preTickInterval.Uint64(),
-		eth.WeiToEth(intervalStats.Amount),
-		intervalStats.Amount.String(),
-		intervalStats.NumOperators.Uint64(),
+	// Verify current rewards
+	rewardsContractBalance, err := ec.BalanceAt(context.Background(), bindings.NodeSetOperatorRewardsDistributorAddress, nil)
+	requireApproxEqual(t, nodeOpShareOfEthRewards, rewardsContractBalance)
+	nodeOpShare := new(big.Int).Div(rewardsContractBalance, big.NewInt(int64(len(nodes))))
+	t.Logf("Rewards contract has %.6f ETH (%s wei) across %d operators for %.6f ETH (%s wei) each",
+		eth.WeiToEth(rewardsContractBalance),
+		rewardsContractBalance.String(),
+		len(nodes),
 		eth.WeiToEth(nodeOpShare),
 		nodeOpShare.String(),
 	)
@@ -957,14 +880,13 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, wave1Data[0][expectedMpIndex].MinipoolAddress, nextMinipoolAddress)
-	require.Equal(t, preTickInterval.Uint64()+1, postTickInterval.Uint64())
 	t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 
 	// Attempt to deposit into the RPL vault - should fail
 	rplDepositAmount = eth.EthToWei(1000)
 	// Deposit RPL to the RPL vault
 	deployerOpts.Nonce = nil
-	err = testMgr.Constellation_DepositToRplVault(bindings.RplVault, rplDepositAmount, deployerOpts, deployerOpts)
+	err = testMgr.Constellation_DepositToRplVault(csMgr.RplVault, rplDepositAmount, deployerOpts, deployerOpts)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed with status 0")
 	t.Logf("Depositing into the RPL vault failed as expected: %v", err)
@@ -972,7 +894,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Attempt to deposit into the WETH vault - should fail
 	ethDepositAmount = eth.EthToWei(2000)
 	deployerOpts.Nonce = nil
-	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, bindings.WethVault, ethDepositAmount, deployerOpts)
+	err = testMgr.Constellation_DepositToWethVault(bindings.Weth, csMgr.WethVault, ethDepositAmount, deployerOpts)
 	deployerOpts.Nonce = nil
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed with status 0")
@@ -980,7 +902,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 8 xrETH
 	xrEthRedeemAmount = eth.EthToWei(8)
-	wethReturned2 := redeemToken(t, qMgr, txMgr, bindings.WethVault, xrEthRedeemAmount, false, deployerOpts)
+	wethReturned2 := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
 	expectedAmount := new(big.Int).Mul(xrEthRedeemAmount, expectedXrEthPrice)
 	expectedAmount.Div(expectedAmount, oneEth)
 	requireApproxEqual(t, expectedAmount, wethReturned2)
@@ -988,45 +910,20 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 100 xrRPL
 	xRplRedeemAmount = eth.EthToWei(100)
-	rplReturned2 := redeemToken(t, qMgr, txMgr, bindings.RplVault, xRplRedeemAmount, false, deployerOpts)
+	rplReturned2 := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
 	expectedAmount = new(big.Int).Mul(xRplRedeemAmount, expectedXRplPrice)
 	expectedAmount.Div(expectedAmount, oneEth)
 	requireApproxEqualWithTolerance(t, expectedAmount, rplReturned2, big.NewInt(100))
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned2), rplReturned2.String())
 
-	// Claim rewards for node ops 0-2 (5, 3, 4 minipools), interval 1 - all should be the same
-	claimers := nodes[0:3]
-	for i, node := range claimers {
-		preBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-
-		cs := node.GetApiClient()
-		claimResp, err := cs.Node.ClaimRewards(common.Big1, common.Big1)
-		require.NoError(t, err)
-		require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
-		require.Empty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
-
-		testMgr.MineTx(t, claimResp.Data.TxInfo, deployerOpts, fmt.Sprintf("Node op %d claimed rewards", i))
-
-		postBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-		rewards := new(big.Int).Sub(postBalance, preBalance)
-		//requireApproxEqual(t, nodeOpShare, rewards) // NOTE: removed because of a contract issue involving snapshotting rewards
-		t.Logf("Node op %d claimed rewards and received %.6f ETH (%s wei)", i, eth.WeiToEth(rewards), rewards.String())
-	}
-
 	// Verify post-tick interval details
-	expectedMpIndex = 7
-	preTickInterval.Set(postTickInterval)
+	expectedMpIndex = 4
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &postTickInterval)
 		return nil
 	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, wave1Data[expectedMpIndex/wave1MinipoolsPerNode][expectedMpIndex%wave1MinipoolsPerNode].MinipoolAddress, nextMinipoolAddress)
-	require.Equal(t, preTickInterval.Uint64(), postTickInterval.Uint64())
-	t.Logf("Constellation interval is still %d as expected", postTickInterval.Uint64())
 	t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 
 	// Tick all the minipools to collect rewards
@@ -1037,59 +934,22 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Executed tick %d", i))
 	}
 
-	// Finalize an interval
-	txInfo, err = csMgr.YieldDistributor.FinalizeInterval(deployerOpts)
-	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, "Finalized the next interval")
-
-	// Verify post-tick interval details
-	preTickInterval.Set(postTickInterval)
-	var interval2 constellation.Interval
+	// Verify post-tick details
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &postTickInterval)
-		csMgr.YieldDistributor.GetIntervalByIndex(mc, &interval2, common.Big2)
 		return nil
 	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, wave1Data[expectedMpIndex/wave1MinipoolsPerNode][expectedMpIndex%wave1MinipoolsPerNode].MinipoolAddress, nextMinipoolAddress)
-	require.Equal(t, preTickInterval.Uint64()+1, postTickInterval.Uint64())
-	t.Logf("Constellation interval has increased to %d as expected", postTickInterval.Uint64())
 	t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 
 	// Verify interval 2 amount
+	rewardsContractBalance2, err := ec.BalanceAt(context.Background(), bindings.NodeSetOperatorRewardsDistributorAddress, nil)
+	rewardsContractBalanceDelta := new(big.Int).Sub(rewardsContractBalance2, rewardsContractBalance)
 	expectedAmountFloat := 0.14788 * 0.3625 * (0.005*12 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MPs 0-11 EL rewards + MP5 BN rewards)
 	expectedAmount = eth.EthToWei(expectedAmountFloat)
-	requireApproxEqual(t, expectedAmount, interval2.Amount)
-	t.Logf("Interval 2 had %.6f ETH (%s wei) as expected", eth.WeiToEth(interval2.Amount), interval2.Amount.String())
-
-	// Run node claims again which different amounts this time
-	interval2EthPerNode := new(big.Int).Div(interval2.Amount, interval2.NumOperators)
-	nodeOpRewards := []*big.Int{
-		interval2EthPerNode,
-		new(big.Int).Mul(interval2EthPerNode, calculateNodeOpRewardsFactor(t, 3, float64(interval2.MaxValidators.Uint64()), 7.0)),
-		new(big.Int).Mul(interval2EthPerNode, calculateNodeOpRewardsFactor(t, 4, float64(interval2.MaxValidators.Uint64()), 7.0)),
-	}
-	nodeOpRewards[1].Div(nodeOpRewards[1], oneEth)
-	nodeOpRewards[2].Div(nodeOpRewards[2], oneEth)
-	for i, node := range claimers {
-		preBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-
-		cs := node.GetApiClient()
-		claimResp, err := cs.Node.ClaimRewards(common.Big2, common.Big2)
-		require.NoError(t, err)
-		require.True(t, claimResp.Data.TxInfo.SimulationResult.IsSimulated)
-		require.Empty(t, claimResp.Data.TxInfo.SimulationResult.SimulationError)
-
-		testMgr.MineTx(t, claimResp.Data.TxInfo, deployerOpts, fmt.Sprintf("Node op %d claimed rewards", i))
-
-		postBalance, err := ec.BalanceAt(context.Background(), nodeAddresses[i], nil)
-		require.NoError(t, err)
-		rewards := new(big.Int).Sub(postBalance, preBalance)
-		requireApproxEqual(t, nodeOpRewards[i], rewards)
-		t.Logf("Node op %d claimed rewards and received %.6f ETH (%s wei)", i, eth.WeiToEth(rewards), rewards.String())
-	}
+	requireApproxEqual(t, expectedAmount, rewardsContractBalanceDelta)
+	t.Logf("Interval 2 had %.6f ETH (%s wei) as expected", eth.WeiToEth(rewardsContractBalanceDelta), rewardsContractBalanceDelta.String())
 
 	// Run a treasury claim for ETH
 	treasuryRecipient := odaoOpts[0].From
@@ -1147,6 +1007,7 @@ func Test15_StakingTest(t *testing.T) {
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	sp := testMgr.GetNode().GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	t.Log("Created bindings")
@@ -1167,10 +1028,10 @@ func Test15_StakingTest(t *testing.T) {
 	wethAmount, rplDepositAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, bindings.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, bindings.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Create salts
 	salts := make([][]*big.Int, 15)
@@ -1740,15 +1601,17 @@ func simulateBeaconRewards(t *testing.T, sp cscommon.IConstellationServiceProvid
 }
 
 // Reference implementation for the xrETH oracle
-func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) *big.Int {
+func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) (*big.Int, *big.Int) {
 	// Services
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
 	// Get the total minipool count and minipool launch balance
 	var minipoolCountBig *big.Int
+	var oracleError *big.Int
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
 		csMgr.SuperNodeAccount.GetMinipoolCount(mc, &minipoolCountBig)
+		csMgr.OperatorDistributor.GetOracleError(mc, &oracleError)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -1898,7 +1761,7 @@ func calculateXrEthOracleTotalYieldAccrued(t *testing.T, sp cscommon.IConstellat
 		totalRewards.Add(totalRewards, xrEthRewards)
 	}
 
-	return totalRewards
+	return totalRewards, oracleError
 }
 
 // Sets a minipool to withdrawn on Beacon and sends the Beacon balance to it to simulate a full withdrawal
@@ -2380,15 +2243,13 @@ func printTickInfo(t *testing.T, sp cscommon.IConstellationServiceProvider) {
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
-	var currentInterval *big.Int
 	var nextMinipool common.Address
 	err := qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.YieldDistributor.GetCurrentInterval(mc, &currentInterval)
 		csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipool)
 		return nil
 	}, nil)
 	require.NoError(t, err)
-	t.Logf("Current interval is %d, next minipool to tick is %s", currentInterval.Uint64(), nextMinipool.Hex())
+	t.Logf("Next minipool to tick is %s", nextMinipool.Hex())
 }
 
 func calculateNodeOpRewardsFactor(t *testing.T, validatorCount float64, maxValidators float64, k float64) *big.Int {
