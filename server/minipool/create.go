@@ -16,6 +16,7 @@ import (
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	hdapi "github.com/nodeset-org/hyperdrive-daemon/shared/types/api"
+	v2constellation "github.com/nodeset-org/nodeset-client-go/api-v2/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
@@ -211,15 +212,6 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	}
 	data.InsufficientBalance = c.lockThreshold.Cmp(data.NodeBalance) > 0
 
-	// Check how many minipools can be deposited
-	availableResponse, err := hd.NodeSet_Constellation.GetAvailableMinipoolCount()
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error getting available minipool count: %w", err)
-	}
-	if availableResponse.Data.Count < 1 {
-		data.InsufficientMinipoolCount = true
-	}
-
 	// Check for sufficient liquidity
 	var hasSufficientLiquidity bool
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -235,16 +227,20 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	data.MaxMinipoolsReached = c.activeValidatorCount.Cmp(c.maxActiveValidatorsPerNode) >= 0
 
 	// Get a deposit signature
-	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt, c.csMgr.SuperNodeAccount.Address)
+	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt)
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
+		if errors.Is(err, v2constellation.ErrMissingExitMessage) {
+			data.MissingExitMessage = true
+		} else {
+			return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
+		}
 	}
 	data.NodeSetDepositingDisabled = false // TODO: once the spec is set up with the flag, put it into this check
 
 	// Check if we can deposit
 	data.NotWhitelistedWithConstellation = !c.isWhitelisted
 	data.RocketPoolDepositingDisabled = !c.pdaoMgr.Settings.Node.IsDepositingEnabled.Get()
-	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.InsufficientMinipoolCount || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled || data.MaxMinipoolsReached)
+	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.MissingExitMessage || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled || data.MaxMinipoolsReached)
 	if !data.CanCreate {
 		return types.ResponseStatus_Success, nil
 	}
@@ -298,7 +294,6 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 		depositDataRoot,
 		c.Salt,
 		c.ExpectedMinipoolAddress,
-		sigResponse.Data.Time,
 		sigResponse.Data.Signature,
 		newOpts,
 	)

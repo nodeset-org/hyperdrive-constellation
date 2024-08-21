@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
+	"github.com/nodeset-org/nodeset-client-go/server-mock/db"
 	"github.com/nodeset-org/osha/keys"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/wallet"
@@ -115,12 +116,15 @@ func TestMain(m *testing.M) {
 	}
 
 	// Set up the nodeset.io mock
+	res := sp.GetResources()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
-	err = nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
-	if err != nil {
-		fail("error setting available minipool count for user: %v", err)
-	}
+	nsMgr.SetDeployment(&db.Deployment{
+		DeploymentID:     res.DeploymentName,
+		WhitelistAddress: csMgr.Whitelist.Address,
+		SuperNodeAddress: csMgr.SuperNodeAccount.Address,
+		ChainID:          new(big.Int).SetUint64(uint64(res.ChainID)),
+	})
 
 	// Bootstrap the oDAO - indices are addresses 10-12
 	odaoNodes, odaoOpts, err = testMgr.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, deployerOpts)

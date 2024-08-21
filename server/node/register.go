@@ -73,7 +73,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	}
 
 	// Request a registration signature - note this will use the wallet address, not the node address
-	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature(csMgr.Whitelist.Address)
+	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature()
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting registration signature: %w", err)
 	}
@@ -91,11 +91,10 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	sigHex := utils.EncodeHexWithPrefix(sigResponse.Data.Signature)
 	logger.Info("Registration signature",
 		slog.String("signature", sigHex),
-		slog.Time("time", sigResponse.Data.Time),
 	)
 
 	// Get the registration TX
-	data.TxInfo, err = csMgr.Whitelist.AddOperator(walletStatus.Wallet.WalletAddress, sigResponse.Data.Time, sigResponse.Data.Signature, opts)
+	data.TxInfo, err = csMgr.Whitelist.AddOperator(walletStatus.Wallet.WalletAddress, sigResponse.Data.Signature, opts)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating registration TX: %w", err)
 	}

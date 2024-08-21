@@ -48,8 +48,6 @@ type ConstellationSettings struct {
 
 // A collection of network-specific resources and getters for them
 type ConstellationResources struct {
-	*hdconfig.HyperdriveResources
-
 	// The Constellation directory contract address, which houses all of the other contract addresses
 	Directory *common.Address `yaml:"directory" json:"directory"`
 

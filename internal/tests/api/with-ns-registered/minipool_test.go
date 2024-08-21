@@ -20,44 +20,6 @@ var (
 	standardSalt *big.Int = big.NewInt(0x90de5e7)
 )
 
-// Test getting the available minipool count when there are no minipools available
-func TestMinipoolGetAvailableMinipoolCount_Zero(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
-
-	// Check the available minipool count
-	cs := mainNode.GetApiClient()
-	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
-	require.NoError(t, err)
-	require.Equal(t, 0, countResponse.Data.Count)
-}
-
-// Test getting the available minipool count when there is one minipool available
-func TestMinipoolGetAvailableMinipoolCount_One(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
-
-	// Set up the NodeSet mock server
-	expectedMinipoolCount := 1
-	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	err = nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, expectedMinipoolCount)
-	require.NoError(t, err)
-
-	// Check the available minipool count
-	cs := mainNode.GetApiClient()
-	countResponse, err := cs.Minipool.GetAvailableMinipoolCount()
-	require.NoError(t, err)
-	require.Equal(t, expectedMinipoolCount, countResponse.Data.Count)
-}
-
 // Run a full cycle test of provisioning RP and Constellation, then depositing and staking a minipool
 func TestMinipoolDepositAndStake(t *testing.T) {
 	// Take a snapshot, revert at the end
@@ -71,7 +33,7 @@ func TestMinipoolDepositAndStake(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Created contract bindings")
 
-	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
+	createAndStakeMinipool(t, bindings, mainNode, mainNodeAddress, standardSalt)
 	//simulateEthRewardToYieldDistributor(t, bindings, mainNode)
 }
 
@@ -95,7 +57,7 @@ func TestDuplicateSalts(t *testing.T) {
 	cs := mainNode.GetApiClient()
 
 	// Make a normal minipool
-	createAndStakeMinipool(t, bindings, mainNode, standardSalt)
+	createAndStakeMinipool(t, bindings, mainNode, mainNodeAddress, standardSalt)
 
 	// Deposit RPL to the RPL vault
 	rplAmount := eth.EthToWei(3200)
@@ -193,9 +155,9 @@ func simulateEthRewardToYieldDistributor(t *testing.T, bindings *cstestutils.Con
 */
 
 // Makes a minipool, waits for the scrub check, then stakes it
-func createAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, salt *big.Int) {
+func createAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int) {
 	// Create the minipool
-	mp := createMinipool(t, bindings, node, salt)
+	mp := createMinipool(t, bindings, node, nodeAddress, salt)
 
 	// Get the scrub period
 	sp := node.GetServiceProvider()
@@ -220,7 +182,7 @@ func createAndStakeMinipool(t *testing.T, bindings *cstestutils.ContractBindings
 }
 
 // Makes a minipool
-func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, salt *big.Int) minipool.IMinipool {
+func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int) minipool.IMinipool {
 	// Get some services
 	sp := node.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
@@ -303,13 +265,7 @@ func createMinipool(t *testing.T, bindings *cstestutils.ContractBindings, node *
 	// Register with Constellation
 	cstestutils.RegisterWithConstellation(t, testMgr, node)
 
-	// Set the available minipool count
-	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	err = nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
-	require.NoError(t, err)
-	t.Log("Set up the NodeSet mock server")
-
 	// Deposit to make a minipool
-	mp := cstestutils.CreateMinipool(t, testMgr, node, salt, bindings.RpSuperNode, bindings.MinipoolManager)
+	mp := cstestutils.CreateMinipool(t, testMgr, node, nodeAddress, salt, bindings.RpSuperNode, bindings.MinipoolManager)
 	return mp
 }

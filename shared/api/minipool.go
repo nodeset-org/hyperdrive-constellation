@@ -110,7 +110,7 @@ type MinipoolCreateData struct {
 	InsufficientLiquidity           bool                   `json:"insufficientLiquidity"`
 	NotRegisteredWithNodeSet        bool                   `json:"notRegisteredWithNodeSet"`
 	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
-	InsufficientMinipoolCount       bool                   `json:"insufficientMinipoolCount"`
+	MissingExitMessage              bool                   `json:"missingExitMessage"`
 	RocketPoolDepositingDisabled    bool                   `json:"rocketPoolDepositingDisabled"`
 	NodeSetDepositingDisabled       bool                   `json:"noteSetDepositingDisabled"`
 	MaxMinipoolsReached             bool                   `json:"maxMinipoolsReached"`

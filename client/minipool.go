@@ -40,12 +40,6 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 	return client.SendGetRequest[csapi.MinipoolCloseDetailsData](r, "close/details", "GetCloseDetails", nil)
 }
 
-// Get the number of minipools that can currently be created by the node
-func (r *MinipoolRequester) GetAvailableMinipoolCount() (*types.ApiResponse[csapi.MinipoolGetAvailableMinipoolCountData], error) {
-	args := map[string]string{}
-	return client.SendGetRequest[csapi.MinipoolGetAvailableMinipoolCountData](r, "get-available-minipool-count", "GetAvailableMinipoolCount", args)
-}
-
 // Deposit to Constellation to create a new minipool
 func (r *MinipoolRequester) Create(salt *big.Int) (*types.ApiResponse[csapi.MinipoolCreateData], error) {
 	args := map[string]string{

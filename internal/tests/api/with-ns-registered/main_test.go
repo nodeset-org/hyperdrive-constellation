@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
+	"github.com/nodeset-org/nodeset-client-go/server-mock/db"
 	"github.com/nodeset-org/osha/keys"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/wallet"
@@ -22,14 +23,14 @@ var (
 	testMgr      *cstesting.ConstellationTestManager
 	wg           *sync.WaitGroup
 	logger       *slog.Logger
-	nodeAddress  common.Address
 	nsEmail      string = "test@nodeset.io"
 	keygen       *keys.KeyGenerator
 	deployerOpts *bind.TransactOpts
 	adminOpts    *bind.TransactOpts
 
 	// Primary CS node
-	mainNode *cstesting.ConstellationNode
+	mainNode        *cstesting.ConstellationNode
+	mainNodeAddress common.Address
 
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
@@ -57,7 +58,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fail("error generating wallet: %v", err)
 	}
-	nodeAddress = recoverResponse.Data.AccountAddress
+	mainNodeAddress = recoverResponse.Data.AccountAddress
 
 	// Make a NodeSet account
 	nsServer := testMgr.GetNodeSetMockServer().GetManager()
@@ -65,7 +66,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fail("error adding user to nodeset: %v", err)
 	}
-	err = nsServer.WhitelistNodeAccount(nsEmail, nodeAddress)
+	err = nsServer.WhitelistNodeAccount(nsEmail, mainNodeAddress)
 	if err != nil {
 		fail("error adding node account to nodeset: %v", err)
 	}
@@ -119,8 +120,15 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fail("error loading Constellation contracts: %v", err)
 	}
+	res := sp.GetResources()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
+	nsMgr.SetDeployment(&db.Deployment{
+		DeploymentID:     res.DeploymentName,
+		WhitelistAddress: csMgr.Whitelist.Address,
+		SuperNodeAddress: csMgr.SuperNodeAccount.Address,
+		ChainID:          new(big.Int).SetUint64(uint64(res.ChainID)),
+	})
 
 	// Bootstrap the oDAO - indices are addresses 10-12
 	odaoNodes, odaoOpts, err = testMgr.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, deployerOpts)

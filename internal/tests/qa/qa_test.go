@@ -79,15 +79,10 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 	printTickInfo(t, sp)
 
-	// Set the available minipool count for the user
-	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	err = nsMgr.SetAvailableConstellationMinipoolCount(nsEmail, 1)
-	require.NoError(t, err)
-	t.Log("Set up the NodeSet mock server")
-
 	// Build the minipool creation TXs
 	minipoolsPerNode := 1
-	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, minipoolsPerNode, nil, bindings.RpSuperNode)
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, minipoolsPerNode, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -324,13 +319,14 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 
 	// Get some services
 	sp := testMgr.GetNode().GetServiceProvider()
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	csMgr := sp.GetConstellationManager()
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
 	// Create some subnodes
-	nodes, _, err := createNodesForTest(t, 1, eth.EthToWei(100))
+	nodes, nodeAddresses, err := createNodesForTest(t, 1, eth.EthToWei(100))
 	require.NoError(t, err)
 
 	// Make sure the contract state is clean
@@ -346,7 +342,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Build the minipool creation TXs
-	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, 1, nil, bindings.RpSuperNode)
+	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, 1, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -378,12 +374,13 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	sp := testMgr.GetNode().GetServiceProvider()
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	csMgr := sp.GetConstellationManager()
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
 	// Create some subnodes
-	nodes, _, err := createNodesForTest(t, 14, eth.EthToWei(50))
+	nodes, nodeAddresses, err := createNodesForTest(t, 14, eth.EthToWei(50))
 	require.NoError(t, err)
 
 	// Make sure the contract state is clean
@@ -409,8 +406,9 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 	// Build the wave 1 minipool creation TXs
 	wave1Nodes := nodes[:5]
+	wave1Addresses := nodeAddresses[:5]
 	wave1Salts := salts[:5]
-	_, wave1Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave1Nodes, 1, wave1Salts, bindings.RpSuperNode)
+	_, wave1Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave1Nodes, wave1Addresses, 1, wave1Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -427,8 +425,9 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 	// Build the wave 2 minipool creation TXs
 	wave2Nodes := nodes[5:10]
+	wave2Addresses := nodeAddresses[5:10]
 	wave2Salts := salts[5:10]
-	_, wave2Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave2Nodes, 1, wave2Salts, bindings.RpSuperNode)
+	_, wave2Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave2Nodes, wave2Addresses, 1, wave2Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -507,13 +506,8 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	rplDepositAmount.Div(rplDepositAmount, oneEth)
 	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
 
-	// Set the nodeset timestamp
-	nodesetTime := time.Now()
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
-
 	// Create some subnodes
-	nodes, _, err := createNodesForTest(t, 2, eth.EthToWei(50))
+	nodes, nodeAddresses, err := createNodesForTest(t, 2, eth.EthToWei(50))
 	require.NoError(t, err)
 
 	// Set max minipools per node
@@ -538,7 +532,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool")
 
 	// Create minipools
-	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nodes, wave1MinipoolsPerNode, nil, bindings.RpSuperNode)
+	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, wave1MinipoolsPerNode, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -590,10 +584,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Fast forwarded 1 day")
 
-	// Set the nodeset timestamp
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	// Update the timestamp for signatures
+	sigTime := time.Now()
+	sigTime = sigTime.Add(secondsDuration)
 
 	// Build wave 1 minipools stake TXs
 	wave1StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, nodes, wave1Data)
@@ -621,10 +614,8 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Fast forwarded 1 week")
 
-	// Set the nodeset timestamp
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	// Update the timestamp for signatures
+	sigTime = sigTime.Add(secondsDuration)
 
 	// Assume 0.010 ETH in rewards on Beacon and 0.005 on the EL per validator
 	elRewardsPerMinipool := eth.EthToWei(0.005)
@@ -641,9 +632,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, nodesetTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, sigTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, nodesetTime, deployerOpts)
+	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, sigTime, deployerOpts)
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, adminOpts, "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
@@ -660,11 +651,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Run an RP rewards interval
 	rewardsMap, rewardsSubmission, slotsFastForwarded := executeRpRewardsInterval(t, sp, bindings)
 
-	// Set the nodeset timestamp
+	// Update the timestamp for signatures
 	secondsDuration = time.Duration(slotsFastForwarded*secondsPerSlot) * time.Second
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	sigTime = sigTime.Add(secondsDuration)
 
 	// Do a merkle claim
 	merkleCfg := createMerkleClaimConfig(t, sp, bindings, rewardsSubmission)
@@ -777,6 +766,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Node 1 and 2 should make 1 more minipool each
 	wave2MinipoolsPerNode := wave2MaxMinipoolsPerNode - wave1MinipoolsPerNode
 	wave2Nodes := nodes[:2]
+	wave2NodeAddresses := nodeAddresses[:2]
 	wave2Salts := make([][]*big.Int, len(wave2Nodes))
 	wave2Offset := wave1MinipoolsPerNode * len(nodes)
 	for i := 0; i < len(wave2Nodes); i++ {
@@ -786,7 +776,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		}
 		wave2Salts[i] = saltsPerNode
 	}
-	wave2Data, wave2CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave2Nodes, wave2MinipoolsPerNode, wave2Salts, bindings.RpSuperNode)
+	wave2Data, wave2CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave2Nodes, wave2NodeAddresses, wave2MinipoolsPerNode, wave2Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -848,10 +838,8 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Fast forwarded 1 day")
 
-	// Set the nodeset timestamp
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	// Update the timestamp for signatures
+	sigTime = sigTime.Add(secondsDuration)
 
 	// Build wave 2 minipools stake TXs
 	wave2StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave2Nodes, wave2Data)
@@ -1034,13 +1022,11 @@ func Test15_StakingTest(t *testing.T) {
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	t.Log("Created bindings")
 
-	// Set the nodeset timestamp
-	nodesetTime := time.Now()
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	// Update the timestamp for signatures
+	sigTime := time.Now()
 
 	// Create some subnodes
-	nodes, _, err := createNodesForTest(t, 14, eth.EthToWei(1.1))
+	nodes, nodeAddresses, err := createNodesForTest(t, 14, eth.EthToWei(1.1))
 	require.NoError(t, err)
 
 	// Make sure the contract state is clean
@@ -1066,8 +1052,9 @@ func Test15_StakingTest(t *testing.T) {
 
 	// Build the wave 1 minipool creation TXs
 	wave1Nodes := nodes[:5]
+	wave1NodeAddresses := nodeAddresses[:5]
 	wave1Salts := salts[:5]
-	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave1Nodes, 1, wave1Salts, bindings.RpSuperNode)
+	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave1Nodes, wave1NodeAddresses, 1, wave1Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -1100,10 +1087,8 @@ func Test15_StakingTest(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Mined a block")
 
-	// Set the nodeset timestamp
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
+	// Update the timestamp for signatures
+	sigTime = sigTime.Add(secondsDuration)
 
 	// Send ETH to the RP deposit pool again
 	err = qMgr.Query(nil, nil, bindings.DepositPoolManager.Balance)
@@ -1122,8 +1107,9 @@ func Test15_StakingTest(t *testing.T) {
 
 	// Build the wave 2 minipool creation TXs
 	wave2Nodes := nodes[5:10]
+	wave2NodeAddresses := nodeAddresses[5:10]
 	wave2Salts := salts[5:10]
-	wave2Data, wave2CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, wave2Nodes, 1, wave2Salts, bindings.RpSuperNode)
+	wave2Data, wave2CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave2Nodes, wave2NodeAddresses, 1, wave2Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -1157,11 +1143,6 @@ func Test15_StakingTest(t *testing.T) {
 	err = testMgr.CommitBlock()
 	require.NoError(t, err)
 	t.Log("Mined a block")
-
-	// Set the nodeset timestamp
-	nodesetTime = nodesetTime.Add(secondsDuration)
-	nsMgr.SetManualSignatureTimestamp(&nodesetTime)
-	t.Logf("Set the nodeset timestamp to %s", nodesetTime)
 
 	// Send ETH to the RP deposit pool again
 	fundTxInfo, err = bindings.DepositPoolManager.Deposit(fundOpts)
