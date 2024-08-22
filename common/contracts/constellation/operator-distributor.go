@@ -82,8 +82,8 @@ func (c *OperatorDistributor) GetOracleError(mc *batch.MultiCaller, out **big.In
 	eth.AddCallToMulticaller(mc, c.contract, out, "oracleError")
 }
 
-func (c *OperatorDistributor) GetCurrentMinipoolIndex(mc *batch.MultiCaller, out **big.Int) {
-	eth.AddCallToMulticaller(mc, c.contract, out, "currentMinipool")
+func (c *OperatorDistributor) GetNextMinipoolIndex(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getNextMinipoolIndex")
 }
 
 // ====================

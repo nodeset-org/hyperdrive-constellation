@@ -48,7 +48,7 @@ func (r *MinipoolRequester) Create(salt *big.Int) (*types.ApiResponse[csapi.Mini
 	return client.SendGetRequest[csapi.MinipoolCreateData](r, "create", "Create", args)
 }
 
-// Get details and transaction info of minipools that are eligible for exiting, optionally
+// Get details of minipools that are eligible for exiting, optionally listing all minipools instead (even ones that are not eligible)
 func (r *MinipoolRequester) GetExitDetails(verbose bool) (*types.ApiResponse[csapi.MinipoolExitDetailsData], error) {
 	args := map[string]string{
 		"verbose": strconv.FormatBool(verbose),
@@ -74,6 +74,12 @@ func (r *MinipoolRequester) Stake() (*types.ApiResponse[csapi.MinipoolStakeData]
 func (r *MinipoolRequester) Status() (*types.ApiResponse[csapi.MinipoolStatusData], error) {
 	args := map[string]string{}
 	return client.SendGetRequest[csapi.MinipoolStatusData](r, "status", "Status", args)
+}
+
+// Get details for exiting all validators with local private keys stored in the Constellation keystore, regardless of minipool status
+func (r *MinipoolRequester) GetLocalExitDetails() (*types.ApiResponse[csapi.MinipoolExitDetailsData], error) {
+	args := map[string]string{}
+	return client.SendGetRequest[csapi.MinipoolExitDetailsData](r, "local-exit/details", "GetLocalExitDetails", args)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

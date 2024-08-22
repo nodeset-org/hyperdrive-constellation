@@ -31,7 +31,7 @@ const (
 	BalanceBatcherAddressString string = "0x0b48aF34f4c854F5ae1A3D587da471FeA45bAD52"
 )
 
-// GetTestResources returns a new ConstellationResources instance with test network values
+// Returns a new ConstellationResources instance with test network values
 func getTestResources(hdResources *hdconfig.MergedResources) *csconfig.MergedResources {
 	csRes := &csconfig.MergedResources{
 		MergedResources: hdResources,

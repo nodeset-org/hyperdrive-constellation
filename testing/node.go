@@ -105,12 +105,12 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	hdClient := hdNode.GetApiClient()
 
 	// Make Constellation resources
-	csResources := getTestResources(hdSp.GetResources())
-	csCfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
+	resources := getTestResources(hdSp.GetResources())
+	cfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating Constellation config: %v", err)
 	}
-	csCfg.ApiPort.Value = port
+	cfg.ApiPort.Value = port
 
 	// Make sure the module directory exists
 	moduleDir := filepath.Join(hdCfg.UserDataPath.Value, hdconfig.ModulesName, csconfig.ModuleName)
@@ -123,7 +123,7 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	moduleSp, err := hdservices.NewModuleServiceProviderFromArtifacts(
 		hdClient,
 		hdCfg,
-		csCfg,
+		cfg,
 		hdSp.GetResources(),
 		moduleDir,
 		csconfig.ModuleName,
@@ -134,7 +134,7 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	if err != nil {
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources)
+	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, cfg, resources)
 	if err != nil {
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)
 	}

@@ -75,8 +75,22 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	printTickInfo(t, sp)
 
 	// Deposit WETH to the WETH vault
+	oneEth := big.NewInt(1e18)
 	wethAmount := eth.EthToWei(100)
+	var xrEthBalance *big.Int
+	var mintFee *big.Int
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		csMgr.WethVault.BalanceOf(mc, &xrEthBalance, deployerOpts.From)
+		csMgr.WethVault.GetMintFee(mc, &mintFee)
+		return nil
+	}, nil)
+	require.NoError(t, err)
+	feeAmount := new(big.Int).Mul(wethAmount, mintFee)
+	feeAmount.Div(feeAmount, oneEth)
+	expectedAmount := new(big.Int).Sub(wethAmount, feeAmount)
+	require.Equal(t, expectedAmount, xrEthBalance)
+	t.Logf("Deployer xrETH balance is now %.6f (%s wei)", eth.WeiToEth(xrEthBalance), xrEthBalance.String())
 	printTickInfo(t, sp)
 
 	// Build the minipool creation TXs
@@ -111,7 +125,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	}
 	t.Log("Verified minipools")
 	printTickInfo(t, sp)
-	expectedMpIndex := 0
+	expectedMpIndex := 1
 
 	// Get some state
 	var nextMinipoolAddress common.Address
@@ -172,10 +186,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	printTickInfo(t, sp)
 
 	// Verify the new ETH:xrETH price
-	oneEth := big.NewInt(1e18)
-	numerator := new(big.Int).Add(wethAmount, totalYieldAccrued)
+	numerator := new(big.Int).Add(xrEthBalance, totalYieldAccrued)
 	numerator.Mul(numerator, oneEth)
-	expectedRatio := new(big.Int).Div(numerator, wethAmount)
+	expectedRatio := new(big.Int).Div(numerator, xrEthBalance)
 	xrEthPriceAccordingToVault := getTokenPrice(t, qMgr, csMgr.WethVault)
 	requireApproxEqual(t, expectedRatio, xrEthPriceAccordingToVault)
 	t.Logf("The new ETH:xrETH price according to the token is %.10f (%s wei)", eth.WeiToEth(xrEthPriceAccordingToVault), xrEthPriceAccordingToVault.String())
@@ -183,7 +196,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Redeem 5 xrETH
 	xrEthRedeemAmount := eth.EthToWei(5)
 	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
-	expectedAmount := new(big.Int).Mul(xrEthRedeemAmount, xrEthPriceAccordingToVault)
+	expectedAmount = new(big.Int).Mul(xrEthRedeemAmount, xrEthPriceAccordingToVault)
 	expectedAmount.Div(expectedAmount, oneEth)
 	requireApproxEqual(t, expectedAmount, wethReturned)
 	t.Logf("Redeemed %.6f xrETH (%s wei) for %.6f WETH (%s wei)", eth.WeiToEth(xrEthRedeemAmount), xrEthRedeemAmount.String(), eth.WeiToEth(wethReturned), wethReturned.String())
@@ -234,17 +247,17 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Run the tick 3 times
 	for i := 0; i < 3; i++ {
 		var mpCount *big.Int
-		var currentMpIndex *big.Int
+		var nextMpIndex *big.Int
 		err := qMgr.Query(func(mc *batch.MultiCaller) error {
 			csMgr.OperatorDistributor.GetNextMinipool(mc, &nextMinipoolAddress)
 			csMgr.SuperNodeAccount.GetMinipoolCount(mc, &mpCount)
-			csMgr.OperatorDistributor.GetCurrentMinipoolIndex(mc, &currentMpIndex)
+			csMgr.OperatorDistributor.GetNextMinipoolIndex(mc, &nextMpIndex)
 			return nil
 		}, nil)
 		require.NoError(t, err)
 		require.Equal(t, datas[expectedMpIndex][0].MinipoolAddress, nextMinipoolAddress)
 		t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
-		t.Logf("The minipool count is %d, next index = %d", mpCount.Int64(), currentMpIndex.Int64())
+		t.Logf("The minipool count is %d, next index = %d", mpCount.Int64(), nextMpIndex.Int64())
 
 		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
 		require.NoError(t, err)
@@ -252,7 +265,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 		printTickInfo(t, sp)
 		expectedMpIndex++
-		if expectedMpIndex >= len(datas)-1 { // Handling the fact that MP2 exited and got removed
+		if expectedMpIndex >= len(datas) { // Handling the fact that MP2 exited and got removed
 			expectedMpIndex = 0
 		}
 	}
@@ -280,7 +293,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Make sure the rewards contract got the correct amount
 	rewardsContractBalance, err := ec.BalanceAt(context.Background(), bindings.NodeSetOperatorRewardsDistributorAddress, nil)
 	require.NoError(t, err)
-	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.015 + 0.005 + 0.01) // Quick and dirty; CS NO share * RP NO share * (MP0-EL + MP1-EL + MP2 + MP3 + MP0-CL)
+	expectedShare := 0.14788 * 0.3625 * (0.005 + 0.005 + 0.005 + 0.005 + 0.015) // Quick and dirty; CS NO share * RP NO share * (MP1-EL + MP2-EL + MP3 + MP4 + MP0-EL+CL)
 	expectedShareBig := eth.EthToWei(expectedShare)
 	requireApproxEqual(t, expectedShareBig, rewardsContractBalance)
 	nodeOpShare := new(big.Int).Div(rewardsContractBalance, big.NewInt(int64(len(nodes))))
@@ -2213,7 +2226,7 @@ func getAvgFeesForBlock(t *testing.T, sp cscommon.IConstellationServiceProvider,
 	for _, mp := range eligibleMinipools {
 		ethTreasuryFee.Add(ethTreasuryFee, mp.ConstellationData.EthTreasuryFee)
 		nodeFee.Add(nodeFee, mp.ConstellationData.NodeFee)
-		rplTreasuryFee.Add(rplTreasuryFee, mp.ConstellationData.RplTreasuryFee)
+		rplTreasuryFee.Add(rplTreasuryFee, mp.ConstellationData.EthTreasuryFee) // TODO: Figure out how to do this IRL
 	}
 
 	// Return the averages

@@ -165,6 +165,12 @@ func (w *Wallet) LoadValidatorKey(pubkey beacon.ValidatorPubkey) (*eth2types.BLS
 	return w.validatorManager.LoadKey(pubkey)
 }
 
+/*
+func (w *Wallet) GetAllLocalValidatorKeys() ([]*eth2types.BLSPrivateKey, error) {
+	return w.validatorManager.LoadKey(pubkey)
+}
+*/
+
 // Recover a validator key by public key
 func (w *Wallet) RecoverValidatorKey(pubkey beacon.ValidatorPubkey, startIndex uint64, maxAttempts uint64) (uint64, error) {
 	client := w.sp.GetHyperdriveClient()

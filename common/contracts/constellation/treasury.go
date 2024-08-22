@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 )
 
@@ -57,6 +58,10 @@ func NewTreasury(address common.Address, ec eth.IExecutionClient, txMgr *eth.Tra
 // =============
 // === Calls ===
 // =============
+
+func (c *Treasury) HasRole(mc *batch.MultiCaller, out *bool, role [32]byte, account common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "hasRole", role, account)
+}
 
 // ====================
 // === Transactions ===

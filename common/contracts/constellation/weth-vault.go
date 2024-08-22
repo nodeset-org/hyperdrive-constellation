@@ -88,6 +88,10 @@ func (c *WethVault) GetTvlRatioEthRpl(mc *batch.MultiCaller, out **big.Int, newD
 	eth.AddCallToMulticaller(mc, c.contract, out, "tvlRatioEthRpl", newDeposit, isWeth)
 }
 
+func (c *WethVault) GetMintFee(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "mintFee")
+}
+
 // ====================
 // === Transactions ===
 // ====================
