@@ -80,6 +80,14 @@ func (c *RplVault) GetLiquidityReservePercent(mc *batch.MultiCaller, out **big.I
 	eth.AddCallToMulticaller(mc, c.contract, out, "liquidityReservePercent")
 }
 
+func (c *RplVault) GetMissingLiquidityAfterDeposit(mc *batch.MultiCaller, out **big.Int, deposit *big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getMissingLiquidityAfterDeposit", deposit)
+}
+
+func (c *RplVault) GetTotalAssets(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "totalAssets")
+}
+
 // ====================
 // === Transactions ===
 // ====================

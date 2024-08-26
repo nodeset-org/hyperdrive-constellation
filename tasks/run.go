@@ -41,6 +41,8 @@ type TaskLoop struct {
 	logger *log.Logger
 	sp     cscommon.IConstellationServiceProvider
 	wg     *sync.WaitGroup
+	csMgr  *cscommon.ConstellationManager
+	rpMgr  *cscommon.RocketPoolManager
 
 	// Tasks
 	stakeMinipools *StakeMinipoolsTask
@@ -58,6 +60,8 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 		logger:         logger,
 		ctx:            ctx,
 		wg:             wg,
+		csMgr:          sp.GetConstellationManager(),
+		rpMgr:          sp.GetRocketPoolManager(),
 		stakeMinipools: NewStakeMinipoolsTask(ctx, sp, logger),
 
 		wasExecutionClientSynced: true,
@@ -222,6 +226,14 @@ func (t *TaskLoop) sleepAndReturnReadyResult() waitUntilReadyResult {
 // Runs an iteration of the node tasks.
 // Returns true if the task loop should exit, false if it should continue.
 func (t *TaskLoop) runTasks(walletStatus *wallet.WalletStatus) bool {
+	// Create a network snapshot
+	/*
+		snapshot, err := t.createNetworkSnapshot.Run(walletStatus)
+		if err != nil {
+			t.logger.Error(err.Error())
+			return utils.SleepWithCancel(t.ctx, tasksInterval)
+		}
+	*/
 	// Stake minipools that are ready
 	if err := t.stakeMinipools.Run(walletStatus); err != nil {
 		t.logger.Error(err.Error())

@@ -21,6 +21,7 @@ type ConstellationManager struct {
 	RplVault               *constellation.RplVault
 	PoAConstellationOracle *constellation.PoAConstellationOracle
 	Treasury               *constellation.Treasury
+	MerkleClaimStreamer    *constellation.MerkleClaimStreamer
 
 	// Internal fields
 	ec       eth.IExecutionClient
@@ -61,6 +62,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	var poaBeaconOracleAddress common.Address
 	var treasuryAddress common.Address
 	var nodeSetOperatorRewardsDistributorAddress common.Address
+	var merkleClaimStreamerAddress common.Address
 	err := m.qMgr.Query(func(mc *batch.MultiCaller) error {
 		m.Directory.GetWhitelistAddress(mc, &whitelistAddress)
 		m.Directory.GetSuperNodeAddress(mc, &superNodeAccountAddress)
@@ -71,6 +73,7 @@ func (m *ConstellationManager) LoadContracts() error {
 		m.Directory.GetOracleAddress(mc, &poaBeaconOracleAddress)
 		m.Directory.GetTreasuryAddress(mc, &treasuryAddress)
 		m.Directory.GetOperatorRewardAddress(mc, &nodeSetOperatorRewardsDistributorAddress)
+		m.Directory.GetMerkleClaimStreamerAddress(mc, &merkleClaimStreamerAddress)
 		return nil
 	}, nil)
 	if err != nil {
@@ -110,6 +113,10 @@ func (m *ConstellationManager) LoadContracts() error {
 	if err != nil {
 		return fmt.Errorf("error creating treasury binding: %w", err)
 	}
+	merkleClaimStreamer, err := constellation.NewMerkleClaimStreamer(merkleClaimStreamerAddress, m.ec, m.txMgr)
+	if err != nil {
+		return fmt.Errorf("error creating merkle claim streamer binding: %w", err)
+	}
 
 	// Update the bindings
 	m.Whitelist = whitelist
@@ -120,6 +127,7 @@ func (m *ConstellationManager) LoadContracts() error {
 	m.RplVault = rplVault
 	m.PoAConstellationOracle = poaBeaconOracle
 	m.Treasury = treasury
+	m.MerkleClaimStreamer = merkleClaimStreamer
 	m.isLoaded = true
 	return nil
 }

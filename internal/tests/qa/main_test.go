@@ -36,6 +36,7 @@ var (
 	// CS nodes
 	mainNode        *cstesting.ConstellationNode
 	mainNodeAddress common.Address
+	mainNodeOpts    *bind.TransactOpts
 
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
@@ -100,6 +101,16 @@ func TestMain(m *testing.M) {
 	adminOpts, err = bind.NewKeyedTransactorWithChainID(adminKey, big.NewInt(int64(chainID)))
 	if err != nil {
 		fail("error creating admin transactor: %v", err)
+	}
+
+	// Get the private key for the main node
+	mainNodeKey, err := keygen.GetEthPrivateKey(uint(index))
+	if err != nil {
+		fail("error getting main node key: %v", err)
+	}
+	mainNodeOpts, err = bind.NewKeyedTransactorWithChainID(mainNodeKey, big.NewInt(int64(chainID)))
+	if err != nil {
+		fail("error creating main node transactor: %v", err)
 	}
 
 	// Set up the services

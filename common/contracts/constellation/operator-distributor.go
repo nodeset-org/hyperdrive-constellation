@@ -86,6 +86,14 @@ func (c *OperatorDistributor) GetNextMinipoolIndex(mc *batch.MultiCaller, out **
 	eth.AddCallToMulticaller(mc, c.contract, out, "getNextMinipoolIndex")
 }
 
+func (c *OperatorDistributor) GetTvlRpl(mc *batch.MultiCaller, out **big.Int) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getTvlRpl")
+}
+
+func (c *OperatorDistributor) GetImplementation(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getImplementation")
+}
+
 // ====================
 // === Transactions ===
 // ====================
@@ -113,4 +121,8 @@ func (c *OperatorDistributor) ProvisionLiquiditiesForMinipoolCreation(newMinipoo
 // Sets Constellation's target stake ratio
 func (c *OperatorDistributor) SetTargetStakeRatio(ratio *big.Int, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
 	return c.txMgr.CreateTransactionInfo(c.contract, "setTargetStakeRatio", opts, ratio)
+}
+
+func (c *OperatorDistributor) UpgradeTo(newImplementation common.Address, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "upgradeTo", opts, newImplementation)
 }

@@ -27,17 +27,8 @@ import (
 	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
 )
 
-const (
-	minipoolAddressQueryBatchSize int = 1000
-	minipoolDetailsBatchSize      int = 100
-)
-
-var (
-	oneGwei *big.Int = big.NewInt(1e9)
-)
-
-// Stake minipools task
-type StakeMinipoolsTask struct {
+// Submit signed exits task
+type SubmitSignedExitsTask struct {
 	sp             cscommon.IConstellationServiceProvider
 	logger         *slog.Logger
 	ctx            context.Context
@@ -54,33 +45,54 @@ type StakeMinipoolsTask struct {
 	maxPriorityFee *big.Int
 	launchTimeout  time.Duration
 	stakeValueGwei uint64
+
+	// Cache of minipools that have had signed exits sent to NodeSet
+	signedExitsSent map[common.Address]bool
+
+	// Cache of minipools that have missing signed exits still
+	signedExitsMissing map[common.Address]bool
 }
 
-// Create a stake minipools task
-func NewStakeMinipoolsTask(ctx context.Context, sp cscommon.IConstellationServiceProvider, logger *log.Logger) *StakeMinipoolsTask {
+// Create a submit signed exits task
+func NewSubmitSignedExitsTask(ctx context.Context, sp cscommon.IConstellationServiceProvider, logger *log.Logger) *SubmitSignedExitsTask {
 	hdCfg := sp.GetHyperdriveConfig()
 	log := logger.With(slog.String(keys.TaskKey, "Minipool Stake"))
 	maxFee, maxPriorityFee := tx.GetAutoTxInfo(hdCfg, log)
-	return &StakeMinipoolsTask{
-		ctx:            ctx,
-		sp:             sp,
-		logger:         log,
-		cfg:            sp.GetConfig(),
-		res:            sp.GetResources(),
-		w:              sp.GetWallet(),
-		csMgr:          sp.GetConstellationManager(),
-		rpMgr:          sp.GetRocketPoolManager(),
-		bc:             sp.GetBeaconClient(),
-		gasThreshold:   hdCfg.AutoTxGasThreshold.Value,
-		maxFee:         maxFee,
-		maxPriorityFee: maxPriorityFee,
+	return &SubmitSignedExitsTask{
+		ctx:                ctx,
+		sp:                 sp,
+		logger:             log,
+		cfg:                sp.GetConfig(),
+		res:                sp.GetResources(),
+		w:                  sp.GetWallet(),
+		csMgr:              sp.GetConstellationManager(),
+		rpMgr:              sp.GetRocketPoolManager(),
+		bc:                 sp.GetBeaconClient(),
+		gasThreshold:       hdCfg.AutoTxGasThreshold.Value,
+		maxFee:             maxFee,
+		maxPriorityFee:     maxPriorityFee,
+		signedExitsSent:    make(map[common.Address]bool),
+		signedExitsMissing: make(map[common.Address]bool),
 	}
 }
 
 // Stake prelaunch minipools
-func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
+func (t *SubmitSignedExitsTask) Run(walletStatus *wallet.WalletStatus) error {
 	// Log
-	t.logger.Info("Starting check for minipools to launch.")
+	t.logger.Info("Starting check for missing signed exits.")
+
+	// Refresh RP
+	err := t.rpMgr.RefreshRocketPoolContracts()
+	if err != nil {
+		return fmt.Errorf("error refreshing Rocket Pool contracts: %w", err)
+	}
+	t.rp = t.rpMgr.RocketPool
+
+	// Refresh Constellation
+	err = t.csMgr.LoadContracts()
+	if err != nil {
+		return fmt.Errorf("error loading Constellation contracts: %w", err)
+	}
 
 	// Get transactor
 	walletAddress := walletStatus.Wallet.WalletAddress
@@ -126,7 +138,7 @@ func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
 }
 
 // Get prelaunch minipools
-func (t *StakeMinipoolsTask) getPrelaunchMinipools(walletAddress common.Address) ([]minipool.IMinipool, error) {
+func (t *SubmitSignedExitsTask) getPrelaunchMinipools(walletAddress common.Address) ([]minipool.IMinipool, error) {
 	// Make some bindings
 	var minipoolCount *big.Int
 	qMgr := t.sp.GetQueryManager()
@@ -228,7 +240,7 @@ func (t *StakeMinipoolsTask) getPrelaunchMinipools(walletAddress common.Address)
 }
 
 // Get submission info for staking a minipool
-func (t *StakeMinipoolsTask) createStakeMinipoolTx(mp minipool.IMinipool, walletAddress common.Address) (*eth.TransactionSubmission, error) {
+func (t *SubmitSignedExitsTask) createStakeMinipoolTx(mp minipool.IMinipool, walletAddress common.Address) (*eth.TransactionSubmission, error) {
 	mpCommon := mp.Common()
 
 	// Log
@@ -272,7 +284,7 @@ func (t *StakeMinipoolsTask) createStakeMinipoolTx(mp minipool.IMinipool, wallet
 }
 
 // Stake all available minipools
-func (t *StakeMinipoolsTask) stakeMinipools(submissions []*eth.TransactionSubmission, minipools []minipool.IMinipool) (bool, error) {
+func (t *SubmitSignedExitsTask) stakeMinipools(submissions []*eth.TransactionSubmission, minipools []minipool.IMinipool) (bool, error) {
 	// Get the max fee
 	maxFee := t.maxFee
 	if maxFee == nil || maxFee.Uint64() == 0 {

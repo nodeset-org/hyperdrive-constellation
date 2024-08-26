@@ -26,6 +26,21 @@ type Directory struct {
 	txMgr    *eth.TransactionManager
 }
 
+type Protocol struct {
+	Whitelist           common.Address `json:"whitelist" abi:"whitelist"`
+	WethVault           common.Address `json:"wethVault" abi:"wethVault"`
+	RplVault            common.Address `json:"rplVault" abi:"rplVault"`
+	OperatorDistributor common.Address `json:"operatorDistributor" abi:"operatorDistributor"`
+	MerkleClaimStreamer common.Address `json:"merkleClaimStreamer" abi:"merkleClaimStreamer"`
+	OperatorReward      common.Address `json:"operatorReward" abi:"operatorReward"`
+	Oracle              common.Address `json:"oracle" abi:"oracle"`
+	PriceFetcher        common.Address `json:"priceFetcher" abi:"priceFetcher"`
+	SuperNode           common.Address `json:"superNode" abi:"superNode"`
+	RocketStorage       common.Address `json:"rocketStorage" abi:"rocketStorage"`
+	Weth                common.Address `json:"weth" abi:"weth"`
+	Sanctions           common.Address `json:"sanctions" abi:"sanctions"`
+}
+
 // Create a new Directory instance
 func NewDirectory(address common.Address, ec eth.IExecutionClient, txMgr *eth.TransactionManager) (*Directory, error) {
 	// Parse the ABI
@@ -105,4 +120,16 @@ func (c *Directory) GetOracleAddress(mc *batch.MultiCaller, out *common.Address)
 
 func (c *Directory) GetOperatorRewardAddress(mc *batch.MultiCaller, out *common.Address) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "getOperatorRewardAddress")
+}
+
+func (c *Directory) GetMerkleClaimStreamerAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getMerkleClaimStreamerAddress")
+}
+
+// ====================
+// === Transactions ===
+// ====================
+
+func (c *Directory) SetAll(protocol Protocol, opts *bind.TransactOpts) (*eth.TransactionInfo, error) {
+	return c.txMgr.CreateTransactionInfo(c.contract, "setAll", opts, protocol)
 }

@@ -55,17 +55,26 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 	qMgr := sp.GetQueryManager()
 	csMgr := sp.GetConstellationManager()
 
+	// Get the xRPL balance before depositing
+	var xRplBalance *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		rplVault.BalanceOf(mc, &xRplBalance, opts.From)
+		return nil
+	}, nil)
+
 	// Deposit RPL to the RPL vault
-	err := testMgr.Constellation_DepositToRplVault(rplVault, amount, opts, opts)
+	err = testMgr.Constellation_DepositToRplVault(rplVault, amount, opts, opts)
 	require.NoError(t, err)
 	t.Logf("Deposited %.6f RPL into the RPL vault", eth.WeiToEth(amount))
 
-	// Verify OperatorDistributor RPL balance has been updated
+	// Verify balances have been updated
 	var odRplBalance *big.Int
 	var rvRplBalance *big.Int
+	var newXrplBalance *big.Int
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
 		rpl.BalanceOf(mc, &odRplBalance, csMgr.OperatorDistributor.Address)
 		rpl.BalanceOf(mc, &rvRplBalance, rplVault.Address())
+		rplVault.BalanceOf(mc, &newXrplBalance, opts.From)
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -73,6 +82,11 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 	t.Logf("OperatorDistributor's RPL balance is now %.6f (%s wei)", eth.WeiToEth(odRplBalance), odRplBalance.String())
 	require.Equal(t, 1, rvRplBalance.Cmp(common.Big0))
 	t.Logf("RPL vault's RPL balance is now %.6f (%s wei)", eth.WeiToEth(rvRplBalance), rvRplBalance.String())
+	require.Equal(t, 1, newXrplBalance.Cmp(xRplBalance))
+	t.Logf("Sender's xRPL balance went up from %.6f (%s wei) to %.6f (%s wei)",
+		eth.WeiToEth(xRplBalance), xRplBalance.String(),
+		eth.WeiToEth(newXrplBalance), newXrplBalance.String(),
+	)
 }
 
 // Deposits WETH to the WETH vault and verifies the contract balances have been updated
@@ -103,7 +117,7 @@ func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManage
 }
 
 // Creates the TX for creating a new minipool, and verifies it simulated successfully
-func BuildAndVerifyCreateMinipoolTx(t *testing.T, nsMgr *manager.NodeSetMockManager, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node) *csapi.MinipoolCreateData {
+func BuildAndVerifyCreateMinipoolTx(t *testing.T, nsMgr *manager.NodeSetMockManager, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node, shouldSucceed bool) *csapi.MinipoolCreateData {
 	// Bindings
 	cs := csNode.GetApiClient()
 
@@ -111,8 +125,10 @@ func BuildAndVerifyCreateMinipoolTx(t *testing.T, nsMgr *manager.NodeSetMockMana
 	depositResponse, err := cs.Minipool.Create(salt)
 	require.NoError(t, err)
 	require.True(t, depositResponse.Data.CanCreate)
-	require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
-	require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
+	if shouldSucceed {
+		require.True(t, depositResponse.Data.TxInfo.SimulationResult.IsSimulated)
+		require.Empty(t, depositResponse.Data.TxInfo.SimulationResult.SimulationError)
+	}
 	t.Logf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
 
 	// Increment the nonce for the node
@@ -133,7 +149,7 @@ func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nsMgr *manager.NodeSetMockMan
 			} else {
 				salt = big.NewInt(int64(mpsPerNode*i + j)) // Sequential salts; only works if this function is called once
 			}
-			data := BuildAndVerifyCreateMinipoolTx(t, nsMgr, node, addresses[i], salt, rpSuperNode)
+			data := BuildAndVerifyCreateMinipoolTx(t, nsMgr, node, addresses[i], salt, rpSuperNode, j == 0)
 			datasForNode[j] = data
 			SaveValidatorKey(t, node, data)
 		}
@@ -148,6 +164,9 @@ func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nsMgr *manager.NodeSetMockMan
 		hd := node.GetHyperdriveNode().GetApiClient()
 		for j, data := range datas[i] {
 			submission, _ := eth.CreateTxSubmissionFromInfo(data.TxInfo, nil)
+			if submission.GasLimit == 0 {
+				submission.GasLimit = 5000000 // Explicit limit for creations that failed simulation on purpose
+			}
 			response, err := hd.Tx.SubmitTx(submission, nil, eth.GweiToWei(10), eth.GweiToWei(0.5))
 			require.NoError(t, err)
 			hashesForNode[j] = response.Data.TxHash
@@ -204,7 +223,7 @@ func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	previousMpCount := rpSuperNode.MinipoolCount.Formatted()
 	t.Logf("Supernode has %d minipools", previousMpCount)
 
-	data := BuildAndVerifyCreateMinipoolTx(t, testMgr.GetNodeSetMockServer().GetManager(), csNode, nodeAddress, salt, rpSuperNode)
+	data := BuildAndVerifyCreateMinipoolTx(t, testMgr.GetNodeSetMockServer().GetManager(), csNode, nodeAddress, salt, rpSuperNode, true)
 	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo, "Deposited and made a minipool")
 
 	// Save the key

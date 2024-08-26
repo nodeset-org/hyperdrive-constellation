@@ -91,6 +91,14 @@ func (c *SuperNodeAccount) SubNodeOperatorHasMinipool(mc *batch.MultiCaller, out
 	eth.AddCallToMulticaller(mc, c.contract, out, "subNodeOperatorHasMinipool", key)
 }
 
+func (c *SuperNodeAccount) GetSubNodeMinipoolCount(mc *batch.MultiCaller, out **big.Int, subNode common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getMinipoolCount", subNode)
+}
+
+func (c *SuperNodeAccount) GetSubNodeMinipools(mc *batch.MultiCaller, out *[]common.Address, subNode common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getMinipools", subNode)
+}
+
 func (c *SuperNodeAccount) GetSubNodeMinipoolAt(mc *batch.MultiCaller, out *common.Address, subNode common.Address, index *big.Int) {
 	eth.AddCallToMulticaller(mc, c.contract, out, "__subNodeOperatorMinipools__", subNode, index)
 }
