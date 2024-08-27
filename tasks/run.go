@@ -19,7 +19,7 @@ import (
 // Config
 const (
 	tasksInterval time.Duration = time.Minute * 5
-	taskCooldown  time.Duration = time.Second * 10
+	taskCooldown  time.Duration = time.Second
 
 	ErrorColor             = color.FgRed
 	WarningColor           = color.FgYellow
@@ -45,7 +45,9 @@ type TaskLoop struct {
 	rpMgr  *cscommon.RocketPoolManager
 
 	// Tasks
-	stakeMinipools *StakeMinipoolsTask
+	createNetworkSnapshot *NetworkSnapshotTask
+	stakeMinipools        *StakeMinipoolsTask
+	sendExitData          *SubmitSignedExitsTask
 
 	// Internal
 	wasExecutionClientSynced bool
@@ -56,13 +58,15 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 	logger := sp.GetTasksLogger()
 	ctx := logger.CreateContextWithLogger(sp.GetBaseContext())
 	taskLoop := &TaskLoop{
-		sp:             sp,
-		logger:         logger,
-		ctx:            ctx,
-		wg:             wg,
-		csMgr:          sp.GetConstellationManager(),
-		rpMgr:          sp.GetRocketPoolManager(),
-		stakeMinipools: NewStakeMinipoolsTask(ctx, sp, logger),
+		sp:                    sp,
+		logger:                logger,
+		ctx:                   ctx,
+		wg:                    wg,
+		csMgr:                 sp.GetConstellationManager(),
+		rpMgr:                 sp.GetRocketPoolManager(),
+		createNetworkSnapshot: NewNetworkSnapshotTask(ctx, sp, logger),
+		stakeMinipools:        NewStakeMinipoolsTask(ctx, sp, logger),
+		sendExitData:          NewSubmitSignedExitsTask(ctx, sp, logger),
 
 		wasExecutionClientSynced: true,
 		wasBeaconClientSynced:    true,
@@ -227,27 +231,24 @@ func (t *TaskLoop) sleepAndReturnReadyResult() waitUntilReadyResult {
 // Returns true if the task loop should exit, false if it should continue.
 func (t *TaskLoop) runTasks(walletStatus *wallet.WalletStatus) bool {
 	// Create a network snapshot
-	/*
-		snapshot, err := t.createNetworkSnapshot.Run(walletStatus)
-		if err != nil {
-			t.logger.Error(err.Error())
-			return utils.SleepWithCancel(t.ctx, tasksInterval)
-		}
-	*/
+	snapshot, err := t.createNetworkSnapshot.Run(walletStatus)
+	if err != nil {
+		t.logger.Error(err.Error())
+		return utils.SleepWithCancel(t.ctx, tasksInterval)
+	}
+
 	// Stake minipools that are ready
-	if err := t.stakeMinipools.Run(walletStatus); err != nil {
+	if err := t.stakeMinipools.Run(snapshot); err != nil {
 		t.logger.Error(err.Error())
 	}
-	/*
-		if utils.SleepWithCancel(t.ctx, taskCooldown) {
-			return true
-		}
+	if utils.SleepWithCancel(t.ctx, taskCooldown) {
+		return true
+	}
 
-		// Submit missing exit messages to the NodeSet server
-		if err := t.sendExitData.Run(); err != nil {
-			t.logger.Error(err.Error())
-		}
-	*/
+	// Submit missing exit messages to the NodeSet server
+	if err := t.sendExitData.Run(snapshot); err != nil {
+		t.logger.Error(err.Error())
+	}
 
 	return utils.SleepWithCancel(t.ctx, tasksInterval)
 }

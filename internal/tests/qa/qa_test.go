@@ -25,6 +25,7 @@ import (
 	"github.com/nodeset-org/nodeset-client-go/utils"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/beacon"
+	"github.com/rocket-pool/node-manager-core/beacon/ssz_types"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
@@ -32,6 +33,7 @@ import (
 	"github.com/rocket-pool/rocketpool-go/v2/rewards"
 	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
+	eth2types "github.com/wealdtech/go-eth2-types/v2"
 	"github.com/wealdtech/go-merkletree"
 	"github.com/wealdtech/go-merkletree/keccak256"
 )
@@ -1243,6 +1245,11 @@ func TestGetMinipools(t *testing.T) {
 	require.NoError(t, err)
 	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the deposit pool size to %.2f ETH", eth.WeiToEth(dpSize)))
 
+	// Make the global minipool count large enough
+	txInfo, err = bindings.ProtocolDaoManager.Settings.Minipool.MaximumCount.Bootstrap(big.NewInt(int64(minipoolCount)), deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the global minipool count to %d", minipoolCount))
+
 	// Do enough deposits to fill the deposit pool
 	maxDeposit := eth.EthToWei(8000)
 	deposited := big.NewInt(0)
@@ -1305,12 +1312,14 @@ func TestGetMinipools(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("Got the expected minipool addresses")
 
+	// Make the first BLS key
+	blsKey, err := keygen.GetBlsPrivateKey(0)
+	require.NoError(t, err)
+
 	// Build the minipool creation TXs
 	prelaunchValueGwei := 1e9
 	mainNodeOpts.Value = eth.GweiToWei(prelaunchValueGwei)
 	txInfos := make([]*eth.TransactionInfo, minipoolCount)
-	var depositDataRoot *common.Hash
-	var blsSig beacon.ValidatorSignature
 	for i := 0; i < minipoolCount; i++ {
 		// Make the pubkey based on the salt
 		salt := salts[i]
@@ -1327,29 +1336,26 @@ func TestGetMinipools(t *testing.T) {
 		nsMgr.IncrementSuperNodeNonce(mainNodeAddress)
 
 		// Make a dummy deposit data
-		if depositDataRoot == nil {
-			// Make the first BLS key
-			blsKey, err := keygen.GetBlsPrivateKey(0)
-			require.NoError(t, err)
-			depositData, err := validator.GetDepositData(blsKey, withdrawalCreds, beaconCfg.GenesisForkVersion, uint64(prelaunchValueGwei), res.EthNetworkName)
-			require.NoError(t, err)
-			root := common.Hash(depositData.DepositDataRoot)
-			depositDataRoot = &root
-			blsSig = beacon.ValidatorSignature(depositData.Signature)
-		}
+		depositData, err := createDepositData(blsKey, pubkey, withdrawalCreds, beaconCfg.GenesisForkVersion, uint64(prelaunchValueGwei), res.EthNetworkName)
+		require.NoError(t, err)
+		root := common.Hash(depositData.DepositDataRoot)
+		depositDataRoot := root
+		blsSig := beacon.ValidatorSignature(depositData.Signature)
 
 		// Make the TX, reusing the dummy deposit data for all validators for speed
 		txInfos[i], err = csMgr.SuperNodeAccount.CreateMinipool(
 			pubkey,
 			blsSig,
-			*depositDataRoot,
+			depositDataRoot,
 			salt,
 			expectedAddress,
 			sig,
 			mainNodeOpts,
 		)
 		require.NoError(t, err)
+		//testMgr.MineTx(t, txInfos[i], mainNodeOpts, fmt.Sprintf("Created minipool %d", i))
 	}
+
 	t.Log("Built the minipool creation TXs")
 
 	// Submit 10 TXs at a time
@@ -1367,9 +1373,12 @@ func TestGetMinipools(t *testing.T) {
 		submissions := make([]*eth.TransactionSubmission, len(txInfoBatch))
 		for i, txInfo := range txInfoBatch {
 			submission, _ := eth.CreateTxSubmissionFromInfo(txInfo, nil)
-			if submission.GasLimit == 0 {
-				submission.GasLimit = 3e7 // Hard code to 3 million for failed simulations
-			}
+			submission.GasLimit = 2500000 // Hard code to 2.5 million
+			/*
+				if submission.GasLimit == 0 {
+					submission.GasLimit = 2.8e7 // Hard code to 3 million for failed simulations
+				}
+			*/
 			submissions[i] = submission
 		}
 		txs, err := txMgr.BatchExecuteTransactions(submissions, mainNodeOpts)
@@ -1384,8 +1393,8 @@ func TestGetMinipools(t *testing.T) {
 			err = txMgr.WaitForTransaction(tx)
 			require.NoError(t, err)
 		}
-		t.Logf("Mined minipool creation TXs %d-%d", start, end)
-		mainNodeOpts.Nonce.Add(mainNodeOpts.Nonce, big.NewInt(int64(len(txs))))
+		t.Logf("Mined minipool creation TXs %d-%d", start+1, end)
+		//mainNodeOpts.Nonce.Add(mainNodeOpts.Nonce, big.NewInt(int64(len(txs))))
 	}
 
 	// Get the list of minipools from SNA
@@ -2492,6 +2501,62 @@ func calculateNodeOpRewardsFactor(t *testing.T, validatorCount float64, maxValid
 	x := validatorCount / maxValidators
 	val := (math.Pow(math.E, k*(x-1)) - math.Pow(math.E, -k)) / (1 - math.Pow(math.E, -k))
 	return eth.EthToWei(val)
+}
+
+// Make a custom signed deposit data with the provided pubkey instead of the pubkey for the private key. Will fail validation but useful for testing
+func createDepositData(validatorKey *eth2types.BLSPrivateKey, pubkey beacon.ValidatorPubkey, withdrawalCredentials common.Hash, genesisForkVersion []byte, depositAmount uint64, networkName string) (beacon.ExtendedDepositData, error) {
+	// Build deposit data
+	dd := ssz_types.DepositDataNoSignature{
+		PublicKey:             pubkey[:],
+		WithdrawalCredentials: withdrawalCredentials[:],
+		Amount:                depositAmount,
+	}
+	domain, err := eth2types.ComputeDomain(eth2types.DomainDeposit, genesisForkVersion, eth2types.ZeroGenesisValidatorsRoot)
+	if err != nil {
+		return beacon.ExtendedDepositData{}, fmt.Errorf("error computing domain: %w", err)
+	}
+
+	// Get signing root
+	messageRoot, err := dd.HashTreeRoot()
+	if err != nil {
+		return beacon.ExtendedDepositData{}, fmt.Errorf("error getting message root: %w", err)
+	}
+	dataRoot := ssz_types.SigningRoot{
+		ObjectRoot: messageRoot[:],
+		Domain:     domain,
+	}
+
+	// Get signing root with domain
+	dataRootHash, err := dataRoot.HashTreeRoot()
+	if err != nil {
+		return beacon.ExtendedDepositData{}, err
+	}
+
+	// Build deposit data struct (with signature)
+	var depositData = ssz_types.DepositData{
+		PublicKey:             dd.PublicKey,
+		WithdrawalCredentials: dd.WithdrawalCredentials,
+		Amount:                dd.Amount,
+		Signature:             validatorKey.Sign(dataRootHash[:]).Marshal(),
+	}
+
+	// Get deposit data root
+	depositDataRoot, err := depositData.HashTreeRoot()
+	if err != nil {
+		return beacon.ExtendedDepositData{}, err
+	}
+
+	// Create the extended data
+	return beacon.ExtendedDepositData{
+		PublicKey:             depositData.PublicKey,
+		WithdrawalCredentials: depositData.WithdrawalCredentials,
+		Amount:                depositData.Amount,
+		Signature:             depositData.Signature,
+		DepositMessageRoot:    messageRoot[:],
+		DepositDataRoot:       depositDataRoot[:],
+		ForkVersion:           genesisForkVersion,
+		NetworkName:           networkName,
+	}, nil
 }
 
 // Cleanup after a unit test

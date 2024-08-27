@@ -11,32 +11,23 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
-	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-constellation/shared/keys"
 	batch "github.com/rocket-pool/batch-query"
-	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
 	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
-	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
 )
 
-type MinipoolDetails struct {
-	MinipoolAddress       common.Address
-	Status                rptypes.MinipoolStatus
-	StatusTime            time.Time
-	Pubkey                beacon.ValidatorPubkey
-	WithdrawalCredentials common.Hash
-	ValidatorStatus       *beacon.ValidatorStatus
-}
+const (
+	minipoolDetailsBatchSize int = 100
+)
 
 type ConstellationNodeSnapshot struct {
-	NodeAddress  common.Address
-	IsRegistered bool
-	Minipools    []*MinipoolDetails
+	NodeAddress common.Address
+	Minipools   []minipool.IMinipool
 }
 
 type RocketPoolNetworkSettings struct {
@@ -55,8 +46,6 @@ type NetworkSnapshotTask struct {
 	sp     cscommon.IConstellationServiceProvider
 	logger *slog.Logger
 	ctx    context.Context
-	cfg    *csconfig.ConstellationConfig
-	res    *csconfig.MergedResources
 	csMgr  *cscommon.ConstellationManager
 	rpMgr  *cscommon.RocketPoolManager
 	ec     eth.IExecutionClient
@@ -69,8 +58,6 @@ func NewNetworkSnapshotTask(ctx context.Context, sp cscommon.IConstellationServi
 		ctx:    ctx,
 		sp:     sp,
 		logger: log,
-		cfg:    sp.GetConfig(),
-		res:    sp.GetResources(),
 		csMgr:  sp.GetConstellationManager(),
 		rpMgr:  sp.GetRocketPoolManager(),
 		ec:     sp.GetEthClient(),
@@ -78,30 +65,27 @@ func NewNetworkSnapshotTask(ctx context.Context, sp cscommon.IConstellationServi
 }
 
 // Run the task
-func (t *NetworkSnapshotTask) Run(walletStatus *wallet.WalletStatus) error {
+func (t *NetworkSnapshotTask) Run(walletStatus *wallet.WalletStatus) (*NetworkSnapshot, error) {
 	// Log
 	t.logger.Info("Creating network snapshot...")
 
 	// Refresh contract managers
 	err := t.refreshContracts()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Get the network snapshot
-	/*
-		snapshot, err := t.createNetworkSnapshot()
-		if err != nil {
-			log.Error("Error getting network snapshot", slog.Error(err))
-			return err
-		}
+	snapshot, err := t.createNetworkSnapshot(walletStatus.Wallet.WalletAddress)
+	if err != nil {
+		return nil, fmt.Errorf("error creating network snapshot: %w", err)
+	}
 
-		// Log
-		log.Info("Network Snapshot", slog.Any("Snapshot", snapshot))
-	*/
-
-	// Return
-	return nil
+	// Log
+	t.logger.Info("Network snapshot created",
+		slog.String("block", snapshot.ExecutionBlockHeader.Number.String()),
+	)
+	return snapshot, nil
 }
 
 // Refresh the contract managers
@@ -124,7 +108,6 @@ func (t *NetworkSnapshotTask) refreshContracts() error {
 func (t *NetworkSnapshotTask) createNetworkSnapshot(nodeAddress common.Address) (*NetworkSnapshot, error) {
 	// Make some bindings
 	rp := t.rpMgr.RocketPool
-	var minipoolCount *big.Int
 	qMgr := t.sp.GetQueryManager()
 	pdaoMgr, err := protocol.NewProtocolDaoManager(rp)
 	if err != nil {
@@ -149,8 +132,9 @@ func (t *NetworkSnapshotTask) createNetworkSnapshot(nodeAddress common.Address) 
 	}
 
 	// Run a query
+	var minipoolAddresses []common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		t.csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, nodeAddress)
+		t.csMgr.SuperNodeAccount.GetSubNodeMinipools(mc, &minipoolAddresses, nodeAddress)
 		return nil
 	}, callOpts,
 		odaoMgr.Settings.Minipool.ScrubPeriod,
@@ -161,28 +145,42 @@ func (t *NetworkSnapshotTask) createNetworkSnapshot(nodeAddress common.Address) 
 		return nil, fmt.Errorf("error getting contract state: %w", err)
 	}
 
-	// Get the minipool addresses
-	count := int(minipoolCount.Int64())
-	addresses := make([]common.Address, count)
-	err = qMgr.BatchQuery(count, minipoolAddressQueryBatchSize, func(mc *batch.MultiCaller, i int) error {
-		t.csMgr.SuperNodeAccount.GetSubNodeMinipoolAt(mc, &addresses[i], nodeAddress, big.NewInt(int64(i)))
+	// Create each minipool binding
+	mps, err := mpMgr.CreateMinipoolsFromAddresses(minipoolAddresses, false, callOpts)
+	if err != nil {
+		return nil, fmt.Errorf("error creating minipool bindings: %w", err)
+	}
+
+	// Get the minipool details
+	err = rp.BatchQuery(len(minipoolAddresses), minipoolDetailsBatchSize, func(mc *batch.MultiCaller, i int) error {
+		mp := mps[i]
+		mpCommon := mp.Common()
+		eth.AddQueryablesToMulticall(mc,
+			mpCommon.Exists,
+			mpCommon.Status,
+			mpCommon.StatusTime,
+			mpCommon.NodeAddress,
+			mpCommon.Pubkey,
+			mpCommon.WithdrawalCredentials,
+		)
 		return nil
 	}, callOpts)
 	if err != nil {
-		return nil, fmt.Errorf("error getting minipool addresses for node [%s]: %w", nodeAddress.Hex(), err)
-	}
-
-	// Make the RP network settings
-	rpNetworkSettings := &RocketPoolNetworkSettings{
-		ScrubPeriod:        odaoMgr.Settings.Minipool.ScrubPeriod.Formatted(),
-		LaunchTimeout:      pdaoMgr.Settings.Minipool.LaunchTimeout.Formatted(),
-		MinipoolStakeValue: mpMgr.StakeValue.Get(),
+		return nil, fmt.Errorf("error getting minipool details: %w", err)
 	}
 
 	// Create the network snapshot
 	snapshot := &NetworkSnapshot{
-		RocketPoolNetworkSettings: rpNetworkSettings,
-		//ConstellationNode:         nodeSnapshot,
+		ExecutionBlockHeader: header,
+		RocketPoolNetworkSettings: &RocketPoolNetworkSettings{
+			ScrubPeriod:        odaoMgr.Settings.Minipool.ScrubPeriod.Formatted(),
+			LaunchTimeout:      pdaoMgr.Settings.Minipool.LaunchTimeout.Formatted(),
+			MinipoolStakeValue: mpMgr.StakeValue.Get(),
+		},
+		ConstellationNode: &ConstellationNodeSnapshot{
+			NodeAddress: nodeAddress,
+			Minipools:   mps,
+		},
 	}
 
 	// Return

@@ -14,22 +14,12 @@ import (
 	"github.com/nodeset-org/hyperdrive-constellation/shared/keys"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/gas"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/tx"
-	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/node/validator"
-	"github.com/rocket-pool/node-manager-core/wallet"
-	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
-	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
-	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
-)
-
-const (
-	minipoolAddressQueryBatchSize int = 1000
-	minipoolDetailsBatchSize      int = 100
 )
 
 var (
@@ -41,19 +31,13 @@ type StakeMinipoolsTask struct {
 	sp             cscommon.IConstellationServiceProvider
 	logger         *slog.Logger
 	ctx            context.Context
-	cfg            *csconfig.ConstellationConfig
 	res            *csconfig.MergedResources
 	w              *cscommon.Wallet
 	csMgr          *cscommon.ConstellationManager
-	rpMgr          *cscommon.RocketPoolManager
-	rp             *rocketpool.RocketPool
-	bc             beacon.IBeaconClient
 	opts           *bind.TransactOpts
 	gasThreshold   float64
 	maxFee         *big.Int
 	maxPriorityFee *big.Int
-	launchTimeout  time.Duration
-	stakeValueGwei uint64
 }
 
 // Create a stake minipools task
@@ -65,12 +49,9 @@ func NewStakeMinipoolsTask(ctx context.Context, sp cscommon.IConstellationServic
 		ctx:            ctx,
 		sp:             sp,
 		logger:         log,
-		cfg:            sp.GetConfig(),
 		res:            sp.GetResources(),
 		w:              sp.GetWallet(),
 		csMgr:          sp.GetConstellationManager(),
-		rpMgr:          sp.GetRocketPoolManager(),
-		bc:             sp.GetBeaconClient(),
 		gasThreshold:   hdCfg.AutoTxGasThreshold.Value,
 		maxFee:         maxFee,
 		maxPriorityFee: maxPriorityFee,
@@ -78,16 +59,16 @@ func NewStakeMinipoolsTask(ctx context.Context, sp cscommon.IConstellationServic
 }
 
 // Stake prelaunch minipools
-func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
+func (t *StakeMinipoolsTask) Run(snapshot *NetworkSnapshot) error {
 	// Log
-	t.logger.Info("Starting check for minipools to launch.")
+	t.logger.Info("Checking for minipools to launch...")
 
 	// Get transactor
-	walletAddress := walletStatus.Wallet.WalletAddress
-	t.opts = t.sp.GetSigner().GetTransactor(walletAddress)
+	nodeAddress := snapshot.ConstellationNode.NodeAddress
+	t.opts = t.sp.GetSigner().GetTransactor(nodeAddress)
 
 	// Get prelaunch minipools
-	minipools, err := t.getPrelaunchMinipools(walletAddress)
+	minipools, err := t.getPrelaunchMinipools(snapshot)
 	if err != nil {
 		return err
 	}
@@ -104,7 +85,7 @@ func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
 	// Stake minipools
 	txSubmissions := make([]*eth.TransactionSubmission, len(minipools))
 	for i, mp := range minipools {
-		txSubmissions[i], err = t.createStakeMinipoolTx(mp, walletAddress)
+		txSubmissions[i], err = t.createStakeMinipoolTx(snapshot, mp)
 		if err != nil {
 			t.logger.Error(
 				"Error preparing submission to stake minipool",
@@ -116,7 +97,7 @@ func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
 	}
 
 	// Stake
-	_, err = t.stakeMinipools(txSubmissions, minipools)
+	_, err = t.stakeMinipools(snapshot, txSubmissions, minipools)
 	if err != nil {
 		return fmt.Errorf("error staking minipools: %w", err)
 	}
@@ -126,91 +107,12 @@ func (t *StakeMinipoolsTask) Run(walletStatus *wallet.WalletStatus) error {
 }
 
 // Get prelaunch minipools
-func (t *StakeMinipoolsTask) getPrelaunchMinipools(walletAddress common.Address) ([]minipool.IMinipool, error) {
-	// Make some bindings
-	var minipoolCount *big.Int
-	qMgr := t.sp.GetQueryManager()
-	pdaoMgr, err := protocol.NewProtocolDaoManager(t.rp)
-	if err != nil {
-		return nil, fmt.Errorf("error creating pDAO manager binding: %w", err)
-	}
-	odaoMgr, err := oracle.NewOracleDaoManager(t.rp)
-	if err != nil {
-		return nil, fmt.Errorf("error creating pDAO manager binding: %w", err)
-	}
-	mpMgr, err := minipool.NewMinipoolManager(t.rp)
-	if err != nil {
-		return nil, fmt.Errorf("error creating minipool manager binding: %w", err)
-	}
-
-	// Get the time of the target header
-	header, err := t.rp.Client.HeaderByNumber(t.ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error getting the latest block time: %w", err)
-	}
-	blockTime := time.Unix(int64(header.Time), 0)
-	callOpts := &bind.CallOpts{
-		BlockNumber: header.Number,
-	}
-
-	// Run a query
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		t.csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, walletAddress)
-		return nil
-	}, callOpts,
-		odaoMgr.Settings.Minipool.ScrubPeriod,
-		pdaoMgr.Settings.Minipool.LaunchTimeout,
-		mpMgr.StakeValue,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error getting contract state: %w", err)
-	}
-
+func (t *StakeMinipoolsTask) getPrelaunchMinipools(snapshot *NetworkSnapshot) ([]minipool.IMinipool, error) {
 	// Prep data
-	scrubPeriod := odaoMgr.Settings.Minipool.ScrubPeriod.Formatted()
-	t.launchTimeout = pdaoMgr.Settings.Minipool.LaunchTimeout.Formatted()
-	stakeValueWei := mpMgr.StakeValue.Get()
-	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei)
-	t.stakeValueGwei = stakeValueGwei.Uint64()
-
-	// Get the minipool addresses
-	count := int(minipoolCount.Int64())
-	addresses := make([]common.Address, count)
-	err = qMgr.BatchQuery(count, minipoolAddressQueryBatchSize, func(mc *batch.MultiCaller, i int) error {
-		t.csMgr.SuperNodeAccount.GetSubNodeMinipoolAt(mc, &addresses[i], walletAddress, big.NewInt(int64(i)))
-		return nil
-	}, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error getting minipool addresses for node [%s]: %w", walletAddress.Hex(), err)
-	}
-
-	// Create each minipool binding
-	mps, err := mpMgr.CreateMinipoolsFromAddresses(addresses, false, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error creating minipool bindings: %w", err)
-	}
-
-	// Get the minipool details
-	err = t.rp.BatchQuery(len(addresses), minipoolDetailsBatchSize, func(mc *batch.MultiCaller, i int) error {
-		mp := mps[i]
-		mpCommon := mp.Common()
-		eth.AddQueryablesToMulticall(mc,
-			mpCommon.Exists,
-			mpCommon.Status,
-			mpCommon.StatusTime,
-			mpCommon.NodeAddress,
-			mpCommon.Pubkey,
-			mpCommon.WithdrawalCredentials,
-		)
-		return nil
-	}, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error getting minipool details: %w", err)
-	}
-
-	// Filter minipools by status
+	scrubPeriod := snapshot.RocketPoolNetworkSettings.ScrubPeriod
+	blockTime := time.Unix(int64(snapshot.ExecutionBlockHeader.Time), 0)
 	prelaunchMinipools := []minipool.IMinipool{}
-	for _, mp := range mps {
+	for _, mp := range snapshot.ConstellationNode.Minipools {
 		mpCommon := mp.Common()
 		if mpCommon.Status.Formatted() == rptypes.MinipoolStatus_Prelaunch {
 			creationTime := mpCommon.StatusTime.Formatted()
@@ -228,7 +130,7 @@ func (t *StakeMinipoolsTask) getPrelaunchMinipools(walletAddress common.Address)
 }
 
 // Get submission info for staking a minipool
-func (t *StakeMinipoolsTask) createStakeMinipoolTx(mp minipool.IMinipool, walletAddress common.Address) (*eth.TransactionSubmission, error) {
+func (t *StakeMinipoolsTask) createStakeMinipoolTx(snapshot *NetworkSnapshot, mp minipool.IMinipool) (*eth.TransactionSubmission, error) {
 	mpCommon := mp.Common()
 
 	// Log
@@ -248,7 +150,9 @@ func (t *StakeMinipoolsTask) createStakeMinipoolTx(mp minipool.IMinipool, wallet
 	}
 
 	// Get validator deposit data
-	depositData, err := validator.GetDepositData(validatorKey, withdrawalCredentials, t.res.GenesisForkVersion, t.stakeValueGwei, t.res.EthNetworkName)
+	stakeValueWei := snapshot.RocketPoolNetworkSettings.MinipoolStakeValue
+	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei).Uint64()
+	depositData, err := validator.GetDepositData(validatorKey, withdrawalCredentials, t.res.GenesisForkVersion, stakeValueGwei, t.res.EthNetworkName)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +176,7 @@ func (t *StakeMinipoolsTask) createStakeMinipoolTx(mp minipool.IMinipool, wallet
 }
 
 // Stake all available minipools
-func (t *StakeMinipoolsTask) stakeMinipools(submissions []*eth.TransactionSubmission, minipools []minipool.IMinipool) (bool, error) {
+func (t *StakeMinipoolsTask) stakeMinipools(snapshot *NetworkSnapshot, submissions []*eth.TransactionSubmission, minipools []minipool.IMinipool) (bool, error) {
 	// Get the max fee
 	maxFee := t.maxFee
 	if maxFee == nil || maxFee.Uint64() == 0 {
@@ -295,13 +199,14 @@ func (t *StakeMinipoolsTask) stakeMinipools(submissions []*eth.TransactionSubmis
 	opts.GasTipCap = t.maxPriorityFee
 
 	// Print the gas info
+	launchTimeout := snapshot.RocketPoolNetworkSettings.LaunchTimeout
 	forceSubmissions := []*eth.TransactionSubmission{}
 	if !gas.PrintAndCheckGasInfoForBatch(submissions, true, t.gasThreshold, t.logger, maxFee) {
 		// Check for the timeout buffers
 		for i, mp := range minipools {
 			mpCommon := mp.Common()
 			prelaunchTime := mpCommon.StatusTime.Formatted()
-			isDue, timeUntilDue := isTransactionDue(prelaunchTime, t.launchTimeout)
+			isDue, timeUntilDue := isTransactionDue(prelaunchTime, launchTimeout)
 			if !isDue {
 				t.logger.Info(fmt.Sprintf("Time until staking minipool %s will be forced for safety: %s", mpCommon.Address.Hex(), timeUntilDue))
 				continue

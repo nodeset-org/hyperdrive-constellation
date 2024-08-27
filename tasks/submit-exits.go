@@ -4,341 +4,263 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/big"
-	"time"
+	"strconv"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind"
-	"github.com/ethereum/go-ethereum/common"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-constellation/shared/keys"
-	"github.com/nodeset-org/hyperdrive-daemon/module-utils/gas"
-	"github.com/nodeset-org/hyperdrive-daemon/module-utils/tx"
-	batch "github.com/rocket-pool/batch-query"
+	nscommon "github.com/nodeset-org/nodeset-client-go/common"
 	"github.com/rocket-pool/node-manager-core/beacon"
-	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/node/validator"
-	"github.com/rocket-pool/node-manager-core/wallet"
-	"github.com/rocket-pool/rocketpool-go/v2/dao/oracle"
-	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
-	rptypes "github.com/rocket-pool/rocketpool-go/v2/types"
+	eth2types "github.com/wealdtech/go-eth2-types/v2"
 )
 
 // Submit signed exits task
 type SubmitSignedExitsTask struct {
-	sp             cscommon.IConstellationServiceProvider
-	logger         *slog.Logger
-	ctx            context.Context
-	cfg            *csconfig.ConstellationConfig
-	res            *csconfig.MergedResources
-	w              *cscommon.Wallet
-	csMgr          *cscommon.ConstellationManager
-	rpMgr          *cscommon.RocketPoolManager
-	rp             *rocketpool.RocketPool
-	bc             beacon.IBeaconClient
-	opts           *bind.TransactOpts
-	gasThreshold   float64
-	maxFee         *big.Int
-	maxPriorityFee *big.Int
-	launchTimeout  time.Duration
-	stakeValueGwei uint64
+	sp        cscommon.IConstellationServiceProvider
+	logger    *slog.Logger
+	ctx       context.Context
+	cfg       *csconfig.ConstellationConfig
+	res       *csconfig.MergedResources
+	w         *cscommon.Wallet
+	csMgr     *cscommon.ConstellationManager
+	rpMgr     *cscommon.RocketPoolManager
+	rp        *rocketpool.RocketPool
+	bc        beacon.IBeaconClient
+	beaconCfg *beacon.Eth2Config
 
 	// Cache of minipools that have had signed exits sent to NodeSet
-	signedExitsSent map[common.Address]bool
-
-	// Cache of minipools that have missing signed exits still
-	signedExitsMissing map[common.Address]bool
+	signedExitsSent map[beacon.ValidatorPubkey]bool
 }
 
 // Create a submit signed exits task
 func NewSubmitSignedExitsTask(ctx context.Context, sp cscommon.IConstellationServiceProvider, logger *log.Logger) *SubmitSignedExitsTask {
-	hdCfg := sp.GetHyperdriveConfig()
-	log := logger.With(slog.String(keys.TaskKey, "Minipool Stake"))
-	maxFee, maxPriorityFee := tx.GetAutoTxInfo(hdCfg, log)
+	log := logger.With(slog.String(keys.TaskKey, "Submit Signed Exits"))
 	return &SubmitSignedExitsTask{
-		ctx:                ctx,
-		sp:                 sp,
-		logger:             log,
-		cfg:                sp.GetConfig(),
-		res:                sp.GetResources(),
-		w:                  sp.GetWallet(),
-		csMgr:              sp.GetConstellationManager(),
-		rpMgr:              sp.GetRocketPoolManager(),
-		bc:                 sp.GetBeaconClient(),
-		gasThreshold:       hdCfg.AutoTxGasThreshold.Value,
-		maxFee:             maxFee,
-		maxPriorityFee:     maxPriorityFee,
-		signedExitsSent:    make(map[common.Address]bool),
-		signedExitsMissing: make(map[common.Address]bool),
+		ctx:             ctx,
+		sp:              sp,
+		logger:          log,
+		cfg:             sp.GetConfig(),
+		res:             sp.GetResources(),
+		w:               sp.GetWallet(),
+		csMgr:           sp.GetConstellationManager(),
+		rpMgr:           sp.GetRocketPoolManager(),
+		bc:              sp.GetBeaconClient(),
+		signedExitsSent: make(map[beacon.ValidatorPubkey]bool),
 	}
 }
 
-// Stake prelaunch minipools
-func (t *SubmitSignedExitsTask) Run(walletStatus *wallet.WalletStatus) error {
+// Submit signed exits
+func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	// Log
-	t.logger.Info("Starting check for missing signed exits.")
+	t.logger.Info("Checking for required signed exit submissions...")
 
-	// Refresh RP
-	err := t.rpMgr.RefreshRocketPoolContracts()
-	if err != nil {
-		return fmt.Errorf("error refreshing Rocket Pool contracts: %w", err)
-	}
-	t.rp = t.rpMgr.RocketPool
-
-	// Refresh Constellation
-	err = t.csMgr.LoadContracts()
-	if err != nil {
-		return fmt.Errorf("error loading Constellation contracts: %w", err)
+	// Get the Beacon config
+	if t.beaconCfg == nil {
+		cfg, err := t.bc.GetEth2Config(t.ctx)
+		if err != nil {
+			return fmt.Errorf("error getting Beacon config: %w", err)
+		}
+		t.beaconCfg = &cfg
 	}
 
-	// Get transactor
-	walletAddress := walletStatus.Wallet.WalletAddress
-	t.opts = t.sp.GetSigner().GetTransactor(walletAddress)
-
-	// Get prelaunch minipools
-	minipools, err := t.getPrelaunchMinipools(walletAddress)
-	if err != nil {
-		return err
+	// Get minipools that haven't had exits submitted yet
+	requiredMinipools := []minipool.IMinipool{}
+	for _, mp := range snapshot.ConstellationNode.Minipools {
+		pubkey := mp.Common().Pubkey.Get()
+		_, exists := t.signedExitsSent[pubkey]
+		if !exists {
+			requiredMinipools = append(requiredMinipools, mp)
+		}
 	}
-	if len(minipools) == 0 {
+	if len(requiredMinipools) == 0 {
 		return nil
 	}
 
-	// Log
-	t.logger.Info(
-		"Minipools are ready for staking.",
-		slog.Int("count", len(minipools)),
-	)
-
-	// Stake minipools
-	txSubmissions := make([]*eth.TransactionSubmission, len(minipools))
-	for i, mp := range minipools {
-		txSubmissions[i], err = t.createStakeMinipoolTx(mp, walletAddress)
-		if err != nil {
-			t.logger.Error(
-				"Error preparing submission to stake minipool",
-				slog.String("minipool", mp.Common().Address.Hex()),
-				log.Err(err),
-			)
-			return err
-		}
+	// Get signed exits for eligible minipools
+	exitMessages, err := t.getSignedExits(snapshot, requiredMinipools)
+	if err != nil {
+		return fmt.Errorf("error getting signed exits: %w", err)
 	}
 
-	// Stake
-	_, err = t.stakeMinipools(txSubmissions, minipools)
+	// Upload signed exits to NodeSet
+	err = t.uploadSignedExits(exitMessages)
 	if err != nil {
-		return fmt.Errorf("error staking minipools: %w", err)
+		return fmt.Errorf("error uploading signed exits: %w", err)
 	}
 
 	// Return
 	return nil
 }
 
-// Get prelaunch minipools
-func (t *SubmitSignedExitsTask) getPrelaunchMinipools(walletAddress common.Address) ([]minipool.IMinipool, error) {
-	// Make some bindings
-	var minipoolCount *big.Int
-	qMgr := t.sp.GetQueryManager()
-	pdaoMgr, err := protocol.NewProtocolDaoManager(t.rp)
+// Get minipools that are eligible for signed exit submission
+func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipools []minipool.IMinipool) ([]nscommon.ExitData, error) {
+	// Get the slot to check on Beacon
+	blockTimeUnix := snapshot.ExecutionBlockHeader.Time
+	slotSeconds := blockTimeUnix - t.beaconCfg.GenesisTime
+	slot := slotSeconds / t.beaconCfg.SecondsPerSlot
+
+	// Check the minipool status on Beacon
+	opts := &beacon.ValidatorStatusOptions{
+		Slot: &slot,
+	}
+	pubkeys := make([]beacon.ValidatorPubkey, len(minipools))
+	for i, mp := range minipools {
+		pubkeys[i] = mp.Common().Pubkey.Get()
+	}
+	statuses, err := t.bc.GetValidatorStatuses(t.ctx, pubkeys, opts)
 	if err != nil {
-		return nil, fmt.Errorf("error creating pDAO manager binding: %w", err)
-	}
-	odaoMgr, err := oracle.NewOracleDaoManager(t.rp)
-	if err != nil {
-		return nil, fmt.Errorf("error creating pDAO manager binding: %w", err)
-	}
-	mpMgr, err := minipool.NewMinipoolManager(t.rp)
-	if err != nil {
-		return nil, fmt.Errorf("error creating minipool manager binding: %w", err)
+		return nil, fmt.Errorf("error getting validator statuses: %w", err)
 	}
 
-	// Get the time of the target header
-	header, err := t.rp.Client.HeaderByNumber(t.ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error getting the latest block time: %w", err)
-	}
-	blockTime := time.Unix(int64(header.Time), 0)
-	callOpts := &bind.CallOpts{
-		BlockNumber: header.Number,
-	}
-
-	// Run a query
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		t.csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, walletAddress)
-		return nil
-	}, callOpts,
-		odaoMgr.Settings.Minipool.ScrubPeriod,
-		pdaoMgr.Settings.Minipool.LaunchTimeout,
-		mpMgr.StakeValue,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error getting contract state: %w", err)
-	}
-
-	// Prep data
-	scrubPeriod := odaoMgr.Settings.Minipool.ScrubPeriod.Formatted()
-	t.launchTimeout = pdaoMgr.Settings.Minipool.LaunchTimeout.Formatted()
-	stakeValueWei := mpMgr.StakeValue.Get()
-	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei)
-	t.stakeValueGwei = stakeValueGwei.Uint64()
-
-	// Get the minipool addresses
-	count := int(minipoolCount.Int64())
-	addresses := make([]common.Address, count)
-	err = qMgr.BatchQuery(count, minipoolAddressQueryBatchSize, func(mc *batch.MultiCaller, i int) error {
-		t.csMgr.SuperNodeAccount.GetSubNodeMinipoolAt(mc, &addresses[i], walletAddress, big.NewInt(int64(i)))
-		return nil
-	}, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error getting minipool addresses for node [%s]: %w", walletAddress.Hex(), err)
-	}
-
-	// Create each minipool binding
-	mps, err := mpMgr.CreateMinipoolsFromAddresses(addresses, false, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error creating minipool bindings: %w", err)
-	}
-
-	// Get the minipool details
-	err = t.rp.BatchQuery(len(addresses), minipoolDetailsBatchSize, func(mc *batch.MultiCaller, i int) error {
-		mp := mps[i]
-		mpCommon := mp.Common()
-		eth.AddQueryablesToMulticall(mc,
-			mpCommon.Exists,
-			mpCommon.Status,
-			mpCommon.StatusTime,
-			mpCommon.NodeAddress,
-			mpCommon.Pubkey,
-			mpCommon.WithdrawalCredentials,
-		)
-		return nil
-	}, callOpts)
-	if err != nil {
-		return nil, fmt.Errorf("error getting minipool details: %w", err)
-	}
-
-	// Filter minipools by status
-	prelaunchMinipools := []minipool.IMinipool{}
-	for _, mp := range mps {
-		mpCommon := mp.Common()
-		if mpCommon.Status.Formatted() == rptypes.MinipoolStatus_Prelaunch {
-			creationTime := mpCommon.StatusTime.Formatted()
-			remainingTime := creationTime.Add(scrubPeriod).Sub(blockTime)
-			if remainingTime < 0 {
-				prelaunchMinipools = append(prelaunchMinipools, mp)
-			} else {
-				t.logger.Info(fmt.Sprintf("Minipool %s has %s left until it can be staked.", mpCommon.Address.Hex(), remainingTime))
-			}
-		}
-	}
-
-	// Return
-	return prelaunchMinipools, nil
-}
-
-// Get submission info for staking a minipool
-func (t *SubmitSignedExitsTask) createStakeMinipoolTx(mp minipool.IMinipool, walletAddress common.Address) (*eth.TransactionSubmission, error) {
-	mpCommon := mp.Common()
-
-	// Log
-	t.logger.Info(
-		"Preparing to stake minipool...",
-		slog.String("minipool", mpCommon.Address.Hex()),
-	)
-
-	// Get minipool withdrawal credentials
-	withdrawalCredentials := mpCommon.WithdrawalCredentials.Get()
-
-	// Get the validator key for the minipool
-	validatorPubkey := mpCommon.Pubkey.Get()
-	validatorKey, err := t.w.LoadValidatorKey(validatorPubkey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get validator deposit data
-	depositData, err := validator.GetDepositData(validatorKey, withdrawalCredentials, t.res.GenesisForkVersion, t.stakeValueGwei, t.res.EthNetworkName)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the tx info
-	signature := beacon.ValidatorSignature(depositData.Signature)
-	depositDataRoot := common.BytesToHash(depositData.DepositDataRoot)
-	txInfo, err := t.csMgr.SuperNodeAccount.Stake(signature, depositDataRoot, mpCommon.Address, t.opts)
-	if err != nil {
-		return nil, fmt.Errorf("error estimating the gas required to stake the minipool: %w", err)
-	}
-	if txInfo.SimulationResult.SimulationError != "" {
-		return nil, fmt.Errorf("simulating stake minipool tx for %s failed: %s", mpCommon.Address.Hex(), txInfo.SimulationResult.SimulationError)
-	}
-
-	submission, err := eth.CreateTxSubmissionFromInfo(txInfo, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating stake tx submission for minipool %s: %w", mpCommon.Address.Hex(), err)
-	}
-	return submission, nil
-}
-
-// Stake all available minipools
-func (t *SubmitSignedExitsTask) stakeMinipools(submissions []*eth.TransactionSubmission, minipools []minipool.IMinipool) (bool, error) {
-	// Get the max fee
-	maxFee := t.maxFee
-	if maxFee == nil || maxFee.Uint64() == 0 {
-		var err error
-		maxFee, err = gas.GetMaxFeeWeiForDaemon(t.logger)
-		if err != nil {
-			return false, err
-		}
-	}
-	opts := &bind.TransactOpts{
-		From:      t.opts.From,
-		Value:     nil,
-		Nonce:     nil,
-		Signer:    t.opts.Signer,
-		GasFeeCap: maxFee,
-		GasTipCap: t.maxPriorityFee,
-		Context:   t.ctx,
-	}
-	opts.GasFeeCap = maxFee
-	opts.GasTipCap = t.maxPriorityFee
-
-	// Print the gas info
-	forceSubmissions := []*eth.TransactionSubmission{}
-	if !gas.PrintAndCheckGasInfoForBatch(submissions, true, t.gasThreshold, t.logger, maxFee) {
-		// Check for the timeout buffers
-		for i, mp := range minipools {
-			mpCommon := mp.Common()
-			prelaunchTime := mpCommon.StatusTime.Formatted()
-			isDue, timeUntilDue := isTransactionDue(prelaunchTime, t.launchTimeout)
-			if !isDue {
-				t.logger.Info(fmt.Sprintf("Time until staking minipool %s will be forced for safety: %s", mpCommon.Address.Hex(), timeUntilDue))
-				continue
-			}
-			t.logger.Warn(
-				"NOTICE: Minipool has exceeded half of the timeout period, so it will be force-staked at the current gas price.",
-				slog.String("minipool", mpCommon.Address.Hex()),
+	// Filter on beacon status
+	eligibleMinipools := []minipool.IMinipool{}
+	for _, mp := range minipools {
+		// Ignore minipools that aren't on Beacon yet
+		pubkey := mp.Common().Pubkey.Get()
+		status, exists := statuses[pubkey]
+		if !exists {
+			t.logger.Debug("Validator hasn't been seen by Beacon yet",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
 			)
-			forceSubmissions = append(forceSubmissions, submissions[i])
+			continue
 		}
 
-		if len(forceSubmissions) == 0 {
-			return false, nil
+		// Ignore minipools that haven't been assigned an index yet
+		if status.Index == "" {
+			t.logger.Debug("Validator doesn't have an index yet",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+			)
+			continue
 		}
-		submissions = forceSubmissions
+		t.logger.Info("Validator is eligible for signed exit submission",
+			slog.String("minipool", mp.Common().Address.Hex()),
+			slog.String("pubkey", pubkey.HexWithPrefix()),
+		)
+		eligibleMinipools = append(eligibleMinipools, mp)
+	}
+	if len(eligibleMinipools) == 0 {
+		return nil, nil
 	}
 
-	// Print TX info and wait for them to be included in a block
-	txMgr := t.sp.GetTransactionManager()
-	err := tx.PrintAndWaitForTransactionBatch(t.res.NetworkResources, txMgr, t.logger, submissions, opts)
+	// Get Beacon details for exiting
+	head, err := t.bc.GetBeaconHead(t.ctx)
 	if err != nil {
-		return false, err
+		return nil, fmt.Errorf("error getting beacon head: %w", err)
+	}
+	epoch := head.Epoch
+	signatureDomain, err := t.bc.GetDomainData(t.ctx, eth2types.DomainVoluntaryExit[:], epoch, false)
+	if err != nil {
+		return nil, fmt.Errorf("error getting domain data: %w", err)
 	}
 
-	// Log
-	t.logger.Info("Successfully staked all minipools.")
-	return true, nil
+	// Get the signed exits
+	exitData := []nscommon.ExitData{}
+	for _, mp := range eligibleMinipools {
+		pubkey := mp.Common().Pubkey.Get()
+		index := statuses[pubkey].Index
+
+		// Load the private key
+		key, err := t.w.LoadValidatorKey(pubkey)
+		if err != nil {
+			t.logger.Warn("Error getting validator private key",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+				log.Err(err),
+			)
+			continue
+		}
+		if key == nil {
+			t.logger.Warn("Validator private key not found on disk",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+			)
+			continue
+		}
+
+		// Make a signed exit
+		signature, err := validator.GetSignedExitMessage(key, index, epoch, signatureDomain)
+		if err != nil {
+			t.logger.Warn("Error getting signed exit message",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+				log.Err(err),
+			)
+			continue
+		}
+		exitData = append(exitData, nscommon.ExitData{
+			Pubkey: pubkey.HexWithPrefix(),
+			ExitMessage: nscommon.ExitMessage{
+				Message: nscommon.ExitMessageDetails{
+					Epoch:          strconv.FormatUint(epoch, 10),
+					ValidatorIndex: index,
+				},
+				Signature: signature.HexWithPrefix(),
+			},
+		})
+		t.logger.Debug("Signed exit message created",
+			slog.String("minipool", mp.Common().Address.Hex()),
+			slog.String("pubkey", pubkey.HexWithPrefix()),
+		)
+	}
+
+	return exitData, nil
+}
+
+// Upload signed exits to NodeSet
+func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.ExitData) error {
+	hd := t.sp.GetHyperdriveClient()
+	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(exitMessages)
+	if err != nil {
+		return fmt.Errorf("error uploading signed exits: %w", err)
+	}
+
+	if uploadResponse.Data.NotRegistered {
+		return fmt.Errorf("node is not registered with nodeset, can't send signed exits")
+	}
+	if uploadResponse.Data.NotAuthorized {
+		return fmt.Errorf("node is not authorized for constellation usage, can't send signed exits")
+	}
+	t.logger.Debug("Signed exits uploaded to NodeSet")
+
+	// Get the validators to make sure they're marked as submitted
+	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
+	if err != nil {
+		return fmt.Errorf("error getting validators from NodeSet: %w", err)
+	}
+	for _, validator := range validatorsResponse.Data.Validators {
+		// Find it in the exit messages
+		found := false
+		pubkey := validator.Pubkey
+		for _, exitMessage := range exitMessages {
+			if exitMessage.Pubkey == pubkey.HexWithPrefix() {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.logger.Warn("Validator exit message still missing according to NodeSet and wasn't submitted in this round",
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+			)
+			continue
+		}
+
+		if !validator.ExitMessageUploaded {
+			t.logger.Warn("Validator exit message was submitted to NodeSet but wasn't stored on the server",
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+			)
+			continue
+		}
+
+		t.signedExitsSent[pubkey] = true
+		t.logger.Info("Validator exit message successfully submitted and stored on the NodeSet server",
+			slog.String("pubkey", pubkey.HexWithPrefix()),
+		)
+	}
+	return nil
 }
