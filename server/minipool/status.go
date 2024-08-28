@@ -2,7 +2,9 @@ package csminipool
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"math/big"
 	"net/url"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -58,6 +60,9 @@ type MinipoolStatusContext struct {
 
 	snContext *snminipool.MinipoolStatusContext
 	snData    *snapi.MinipoolStatusData
+
+	// Data
+	maxValidators *big.Int
 }
 
 func (c *MinipoolStatusContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
@@ -77,6 +82,8 @@ func (c *MinipoolStatusContext) Initialize(walletStatus wallet.WalletStatus) (ty
 func (c *MinipoolStatusContext) GetState(node *node.Node, mc *batch.MultiCaller) {
 	// Defer to the SN
 	c.snContext.GetState(node, mc)
+	csMgr := c.ServiceProvider.GetConstellationManager()
+	csMgr.SuperNodeAccount.GetMaxValidators(mc, &c.maxValidators)
 }
 
 func (c *MinipoolStatusContext) CheckState(node *node.Node, data *csapi.MinipoolStatusData) bool {
@@ -90,9 +97,32 @@ func (c *MinipoolStatusContext) GetMinipoolDetails(mc *batch.MultiCaller, mp min
 }
 
 func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolStatusData, latestBlockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
-	// Defer to the SN for data preparation and response, but copy the data over to the CS type first
 	code, err := c.snContext.PrepareData(addresses, mps, c.snData)
-	data.Minipools = c.snData.Minipools
+	data.MaxValidatorsPerNode = c.maxValidators.Uint64()
 	data.LatestDelegate = c.snData.LatestDelegate
+
+	// Get the signed exit status from NodeSet
+	hd := c.ServiceProvider.GetHyperdriveClient()
+	response, err := hd.NodeSet_Constellation.GetValidators()
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error getting validator status from the nodeset server: %w", err)
+	}
+
+	// Add each minipool to the list
+	data.Minipools = make([]csapi.MinipoolDetails, len(c.snData.Minipools))
+	for i, mp := range c.snData.Minipools {
+		newMp := csapi.MinipoolDetails{
+			MinipoolDetails: &mp,
+		}
+
+		// Check the signed exit upload status
+		for _, validator := range response.Data.Validators {
+			if validator.Pubkey == mp.ValidatorPubkey {
+				newMp.SignedExitUploaded = validator.ExitMessageUploaded
+			}
+		}
+		data.Minipools[i] = newMp
+	}
+
 	return code, err
 }

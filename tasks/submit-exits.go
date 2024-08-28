@@ -85,6 +85,9 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("error getting signed exits: %w", err)
 	}
+	if len(exitMessages) == 0 {
+		return nil
+	}
 
 	// Upload signed exits to NodeSet
 	err = t.uploadSignedExits(exitMessages)

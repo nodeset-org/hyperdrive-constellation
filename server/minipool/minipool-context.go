@@ -157,10 +157,10 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 		return status, nil, err
 	}
 
-	// Get the number of minipools belonging to the node
-	var minipoolCount *big.Int
+	// Get the minipool addresses belonging to the node and the initial chain state
+	var addresses []common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.Whitelist.GetActiveValidatorCountForOperator(mc, &minipoolCount, walletStatus.Address.NodeAddress)
+		csMgr.SuperNodeAccount.GetSubNodeMinipools(mc, &addresses, walletStatus.Address.NodeAddress)
 		mpContext.GetState(node, mc)
 		return nil
 	}, callOpts)
@@ -175,22 +175,11 @@ func runMinipoolRoute[DataType any](ctx context.Context, mpContext IMinipoolCall
 	}
 
 	// Set the node minipool count to the Constellation count
-	node.MinipoolCount.SetRawValue(minipoolCount)
+	node.MinipoolCount.SetRawValue(big.NewInt(int64(len(addresses))))
 
 	// Supplemental function-specific check to see if minipool processing should continue
 	if !mpContext.CheckState(node, data) {
 		return types.ResponseStatus_Success, response, nil
-	}
-
-	// Get the minipool addresses
-	count := int(minipoolCount.Int64())
-	addresses := make([]common.Address, count)
-	err = qMgr.BatchQuery(count, minipoolAddressQueryBatchSize, func(mc *batch.MultiCaller, i int) error {
-		csMgr.SuperNodeAccount.GetSubNodeMinipoolAt(mc, &addresses[i], walletStatus.Address.NodeAddress, big.NewInt(int64(i)))
-		return nil
-	}, callOpts)
-	if err != nil {
-		return types.ResponseStatus_Error, nil, fmt.Errorf("error getting minipool addresses for node [%s]: %w", walletStatus.Address.NodeAddress.Hex(), err)
 	}
 
 	// Create each minipool binding

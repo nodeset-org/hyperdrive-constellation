@@ -76,10 +76,12 @@ func (r *MinipoolRequester) Status() (*types.ApiResponse[csapi.MinipoolStatusDat
 	return client.SendGetRequest[csapi.MinipoolStatusData](r, "status", "Status", args)
 }
 
-// Get details for exiting all validators with local private keys stored in the Constellation keystore, regardless of minipool status
-func (r *MinipoolRequester) GetLocalExitDetails() (*types.ApiResponse[csapi.MinipoolExitDetailsData], error) {
-	args := map[string]string{}
-	return client.SendGetRequest[csapi.MinipoolExitDetailsData](r, "local-exit/details", "GetLocalExitDetails", args)
+// Upload signed voluntary exit messages for minipool validators to the NodeSet server
+func (r *MinipoolRequester) UploadSignedExits(infos []csapi.MinipoolExitInfo) (*types.ApiResponse[types.SuccessData], error) {
+	body := csapi.MinipoolUploadSignedExitBody{
+		Infos: infos,
+	}
+	return client.SendPostRequest[types.SuccessData](r, "upload-signed-exits", "UploadSignedExits", body)
 }
 
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested

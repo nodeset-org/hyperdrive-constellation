@@ -51,57 +51,15 @@ type MinipoolExitBody struct {
 	Infos []MinipoolExitInfo `json:"infos"`
 }
 
-/*
 type MinipoolDetails struct {
-	Address         common.Address         `json:"address"`
-	ValidatorPubkey beacon.ValidatorPubkey `json:"validatorPubkey"`
-	Version         uint8                  `json:"version"`
-	Status          struct {
-		Status      types.MinipoolStatus `json:"status"`
-		StatusBlock uint64               `json:"statusBlock"`
-		StatusTime  time.Time            `json:"statusTime"`
-	} `json:"status"`
-	Node struct {
-		Fee             float64        `json:"fee"`
-		DepositBalance  *big.Int       `json:"depositBalance"`
-		RefundBalance   *big.Int       `json:"refundBalance"`
-		DepositAssigned bool           `json:"depositAssigned"`
-	} `json:"node"`
-	User struct {
-		DepositBalance      *big.Int  `json:"depositBalance"`
-		DepositAssigned     bool      `json:"depositAssigned"`
-		DepositAssignedTime time.Time `json:"depositAssignedTime"`
-	} `json:"user"`
-	Balance               *big.Int `json:"balance"`
-	NodeShareOfEthBalance *big.Int `json:"nodeShareOfEthBalance"`
-	Validator             struct {
-		Exists      bool     `json:"exists"`
-		Active      bool     `json:"active"`
-		Index       string   `json:"index"`
-		Balance     *big.Int `json:"balance"`
-		NodeBalance *big.Int `json:"nodeBalance"`
-	} `json:"validator"`
-	CanStake          bool                  `json:"canStake"`
-	Queue             minipool.QueueDetails `json:"queue"`
-	CloseAvailable    bool                  `json:"closeAvailable"`
-	Finalised         bool                  `json:"finalised"`
-	UseLatestDelegate bool                  `json:"useLatestDelegate"`
-	Delegate          common.Address        `json:"delegate"`
-	PreviousDelegate  common.Address        `json:"previousDelegate"`
-	EffectiveDelegate common.Address        `json:"effectiveDelegate"`
-	TimeUntilDissolve time.Duration         `json:"timeUntilDissolve"`
-	Penalties         uint64                `json:"penalties"`
+	*snapi.MinipoolDetails
+	SignedExitUploaded bool `json:"signedExitUploaded"`
 }
 
 type MinipoolStatusData struct {
-	Minipools      []MinipoolDetails `json:"minipools"`
-	LatestDelegate common.Address    `json:"latestDelegate"`
-}
-*/
-
-type MinipoolStatusData struct {
-	Minipools      []snapi.MinipoolDetails `json:"minipools"`
-	LatestDelegate common.Address          `json:"latestDelegate"`
+	Minipools            []MinipoolDetails `json:"minipools"`
+	LatestDelegate       common.Address    `json:"latestDelegate"`
+	MaxValidatorsPerNode uint64            `json:"maxValidatorsPerNode"`
 }
 
 type MinipoolCreateData struct {
@@ -136,4 +94,8 @@ type MinipoolStakeDetails struct {
 type MinipoolStakeData struct {
 	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
 	Details                         []MinipoolStakeDetails `json:"details"`
+}
+
+type MinipoolUploadSignedExitBody struct {
+	Infos []MinipoolExitInfo `json:"infos"`
 }
