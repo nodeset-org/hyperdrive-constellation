@@ -60,7 +60,10 @@ func TestConstellationRegistration(t *testing.T) {
 	// Set up the NodeSet mock server
 	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetConstellationAdminPrivateKey(adminKey)
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
+	deployment.SetAdminPrivateKey(adminKey)
 	t.Log("Set up the NodeSet mock server")
 
 	// Make the registration tx

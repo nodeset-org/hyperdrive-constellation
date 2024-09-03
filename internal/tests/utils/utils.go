@@ -10,7 +10,7 @@ import (
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
-	"github.com/nodeset-org/nodeset-client-go/server-mock/manager"
+	"github.com/nodeset-org/nodeset-client-go/server-mock/db"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
@@ -117,7 +117,7 @@ func DepositToWethVault(t *testing.T, testMgr *cstesting.ConstellationTestManage
 }
 
 // Creates the TX for creating a new minipool, and verifies it simulated successfully
-func BuildAndVerifyCreateMinipoolTx(t *testing.T, nsMgr *manager.NodeSetMockManager, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node, shouldSucceed bool) *csapi.MinipoolCreateData {
+func BuildAndVerifyCreateMinipoolTx(t *testing.T, deployment *db.ConstellationDeployment, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node, shouldSucceed bool) *csapi.MinipoolCreateData {
 	// Bindings
 	cs := csNode.GetApiClient()
 
@@ -132,12 +132,12 @@ func BuildAndVerifyCreateMinipoolTx(t *testing.T, nsMgr *manager.NodeSetMockMana
 	t.Logf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex())
 
 	// Increment the nonce for the node
-	nsMgr.IncrementSuperNodeNonce(nodeAddress)
+	deployment.IncrementSuperNodeNonce(nodeAddress)
 	return depositResponse.Data
 }
 
 // Builds and submits multiple minipool creation TXs, returning the minipool data and transaction hashes
-func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nsMgr *manager.NodeSetMockManager, nodes []*cstesting.ConstellationNode, addresses []common.Address, mpsPerNode int, salts [][]*big.Int, rpSuperNode *node.Node) ([][]*csapi.MinipoolCreateData, [][]common.Hash) {
+func BuildAndSubmitCreateMinipoolTxs(t *testing.T, deployment *db.ConstellationDeployment, nodes []*cstesting.ConstellationNode, addresses []common.Address, mpsPerNode int, salts [][]*big.Int, rpSuperNode *node.Node) ([][]*csapi.MinipoolCreateData, [][]common.Hash) {
 	// Build the minipool creation TXs
 	datas := make([][]*csapi.MinipoolCreateData, len(nodes))
 	for i, node := range nodes {
@@ -149,7 +149,7 @@ func BuildAndSubmitCreateMinipoolTxs(t *testing.T, nsMgr *manager.NodeSetMockMan
 			} else {
 				salt = big.NewInt(int64(mpsPerNode*i + j)) // Sequential salts; only works if this function is called once
 			}
-			data := BuildAndVerifyCreateMinipoolTx(t, nsMgr, node, addresses[i], salt, rpSuperNode, j == 0)
+			data := BuildAndVerifyCreateMinipoolTx(t, deployment, node, addresses[i], salt, rpSuperNode, j == 0)
 			datasForNode[j] = data
 			SaveValidatorKey(t, node, data)
 		}
@@ -223,7 +223,12 @@ func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	previousMpCount := rpSuperNode.MinipoolCount.Formatted()
 	t.Logf("Supernode has %d minipools", previousMpCount)
 
-	data := BuildAndVerifyCreateMinipoolTx(t, testMgr.GetNodeSetMockServer().GetManager(), csNode, nodeAddress, salt, rpSuperNode, true)
+	// Make the minipool
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
+	data := BuildAndVerifyCreateMinipoolTx(t, deployment, csNode, nodeAddress, salt, rpSuperNode, true)
 	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo, "Deposited and made a minipool")
 
 	// Save the key

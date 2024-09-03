@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
-	"github.com/nodeset-org/nodeset-client-go/server-mock/db"
 	"github.com/nodeset-org/osha/keys"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/wallet"
@@ -61,12 +60,13 @@ func TestMain(m *testing.M) {
 	mainNodeAddress = recoverResponse.Data.AccountAddress
 
 	// Make a NodeSet account
-	nsServer := testMgr.GetNodeSetMockServer().GetManager()
-	err = nsServer.AddUser(nsEmail)
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	user, err := nsDB.Core.AddUser(nsEmail)
 	if err != nil {
 		fail("error adding user to nodeset: %v", err)
 	}
-	err = nsServer.WhitelistNodeAccount(nsEmail, mainNodeAddress)
+	_ = user.WhitelistNode(mainNodeAddress)
 	if err != nil {
 		fail("error adding node account to nodeset: %v", err)
 	}
@@ -121,14 +121,13 @@ func TestMain(m *testing.M) {
 		fail("error loading Constellation contracts: %v", err)
 	}
 	res := sp.GetResources()
-	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	nsMgr.SetConstellationAdminPrivateKey(deployerKey)
-	nsMgr.SetDeployment(&db.Deployment{
-		DeploymentID:     res.DeploymentName,
-		WhitelistAddress: csMgr.Whitelist.Address,
-		SuperNodeAddress: csMgr.SuperNodeAccount.Address,
-		ChainID:          new(big.Int).SetUint64(uint64(res.ChainID)),
-	})
+	deployment := nsDB.Constellation.AddDeployment(
+		res.DeploymentName,
+		new(big.Int).SetUint64(uint64(res.ChainID)),
+		csMgr.Whitelist.Address,
+		csMgr.SuperNodeAccount.Address,
+	)
+	deployment.SetAdminPrivateKey(deployerKey)
 
 	// Bootstrap the oDAO - indices are addresses 10-12
 	odaoNodes, odaoOpts, err = testMgr.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, deployerOpts)

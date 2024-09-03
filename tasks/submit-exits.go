@@ -156,7 +156,7 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 	if err != nil {
 		return nil, fmt.Errorf("error getting beacon head: %w", err)
 	}
-	epoch := head.Epoch
+	epoch := head.FinalizedEpoch // Use the latest finalized epoch for the exit
 	signatureDomain, err := t.bc.GetDomainData(t.ctx, eth2types.DomainVoluntaryExit[:], epoch, false)
 	if err != nil {
 		return nil, fmt.Errorf("error getting domain data: %w", err)

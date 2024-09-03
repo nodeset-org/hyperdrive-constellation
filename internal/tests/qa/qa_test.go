@@ -97,7 +97,10 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Build the minipool creation TXs
 	minipoolsPerNode := 1
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
-	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, minipoolsPerNode, nil, bindings.RpSuperNode)
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
+	datas, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, nodes, nodeAddresses, minipoolsPerNode, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -334,6 +337,9 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	// Get some services
 	sp := testMgr.GetNode().GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	csMgr := sp.GetConstellationManager()
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
@@ -361,7 +367,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, remainder, deployerOpts)
 
 	// Build the minipool creation TXs
-	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, 1, nil, bindings.RpSuperNode)
+	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, nodes, nodeAddresses, 1, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -394,6 +400,9 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	sp := testMgr.GetNode().GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	csMgr := sp.GetConstellationManager()
 	require.NoError(t, err)
 	t.Log("Created bindings")
@@ -427,7 +436,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	wave1Nodes := nodes[:5]
 	wave1Addresses := nodeAddresses[:5]
 	wave1Salts := salts[:5]
-	_, wave1Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave1Nodes, wave1Addresses, 1, wave1Salts, bindings.RpSuperNode)
+	_, wave1Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, wave1Nodes, wave1Addresses, 1, wave1Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -446,7 +455,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	wave2Nodes := nodes[5:10]
 	wave2Addresses := nodeAddresses[5:10]
 	wave2Salts := salts[5:10]
-	_, wave2Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave2Nodes, wave2Addresses, 1, wave2Salts, bindings.RpSuperNode)
+	_, wave2Hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, wave2Nodes, wave2Addresses, 1, wave2Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -492,6 +501,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	//ec := sp.GetEthClient()
 	t.Log("Created bindings")
 
@@ -565,7 +577,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool")
 
 	// Create minipools
-	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, nodes, nodeAddresses, wave1MinipoolsPerNode, nil, bindings.RpSuperNode)
+	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, nodes, nodeAddresses, wave1MinipoolsPerNode, nil, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -1051,6 +1063,9 @@ func Test15_StakingTest(t *testing.T) {
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	t.Log("Created bindings")
 
 	// Update the timestamp for signatures
@@ -1085,7 +1100,7 @@ func Test15_StakingTest(t *testing.T) {
 	wave1Nodes := nodes[:5]
 	wave1NodeAddresses := nodeAddresses[:5]
 	wave1Salts := salts[:5]
-	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave1Nodes, wave1NodeAddresses, 1, wave1Salts, bindings.RpSuperNode)
+	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, wave1Nodes, wave1NodeAddresses, 1, wave1Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -1140,7 +1155,7 @@ func Test15_StakingTest(t *testing.T) {
 	wave2Nodes := nodes[5:10]
 	wave2NodeAddresses := nodeAddresses[5:10]
 	wave2Salts := salts[5:10]
-	wave2Data, wave2CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, nsMgr, wave2Nodes, wave2NodeAddresses, 1, wave2Salts, bindings.RpSuperNode)
+	wave2Data, wave2CreationHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, wave2Nodes, wave2NodeAddresses, 1, wave2Salts, bindings.RpSuperNode)
 
 	// Mine a block
 	err = testMgr.CommitBlock()
@@ -1226,8 +1241,10 @@ func TestGetMinipools(t *testing.T) {
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
 	beaconCfg := testMgr.GetBeaconMockManager().GetConfig()
 	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	t.Log("Created bindings")
 
 	// Register the main node with Constellation
@@ -1331,9 +1348,9 @@ func TestGetMinipools(t *testing.T) {
 		withdrawalCreds := validator.GetWithdrawalCredsFromAddress(expectedAddress)
 
 		// Get a signature and increment the node nonce
-		sig, err := nsMgr.GetConstellationDepositSignature(mainNodeAddress, expectedAddress, salt, csMgr.SuperNodeAccount.Address, chainID)
+		sig, err := deployment.GetMinipoolDepositSignature(mainNodeAddress, expectedAddress, salt)
 		require.NoError(t, err)
-		nsMgr.IncrementSuperNodeNonce(mainNodeAddress)
+		deployment.IncrementSuperNodeNonce(mainNodeAddress)
 
 		// Make a dummy deposit data
 		depositData, err := createDepositData(blsKey, pubkey, withdrawalCreds, beaconCfg.GenesisForkVersion, uint64(prelaunchValueGwei), res.EthNetworkName)

@@ -75,9 +75,10 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting beacon head: %w", err)
 	}
+	epoch := head.FinalizedEpoch // Use the finalized epoch for signed exits
 
 	// Get voluntary exit signature domain
-	signatureDomain, err := bc.GetDomainData(ctx, eth2types.DomainVoluntaryExit[:], head.Epoch, false)
+	signatureDomain, err := bc.GetDomainData(ctx, eth2types.DomainVoluntaryExit[:], epoch, false)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting beacon domain data: %w", err)
 	}
@@ -100,7 +101,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 		}
 
 		// Get signed voluntary exit message
-		signature, err := nmc_validator.GetSignedExitMessage(validatorKey, index, head.Epoch, signatureDomain)
+		signature, err := nmc_validator.GetSignedExitMessage(validatorKey, index, epoch, signatureDomain)
 		if err != nil {
 			return types.ResponseStatus_Error, fmt.Errorf("error getting exit message signature for minipool %s (pubkey %s): %w", address.Hex(), pubkey.Hex(), err)
 		}
@@ -110,7 +111,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 			Pubkey: pubkey.HexWithPrefix(),
 			ExitMessage: nscommon.ExitMessage{
 				Message: nscommon.ExitMessageDetails{
-					Epoch:          strconv.FormatUint(head.Epoch, 10),
+					Epoch:          strconv.FormatUint(epoch, 10),
 					ValidatorIndex: index,
 				},
 				Signature: signature.HexWithPrefix(),
@@ -151,6 +152,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 			if !validator.ExitMessageUploaded {
 				return types.ResponseStatus_Error, fmt.Errorf("validator %s exit message was uploaded but has not been marked on the NodeSet server?", info.Pubkey.Hex())
 			}
+			break
 		}
 		if !found {
 			return types.ResponseStatus_Error, fmt.Errorf("validator %s was uploaded but not found in the NodeSet's list for this node", info.Pubkey.Hex())
