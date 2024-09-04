@@ -76,7 +76,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 			return fmt.Errorf("error getting validators from NodeSet: %w", err)
 		}
 		for _, validator := range validatorsResponse.Data.Validators {
-			if validator.ExitMessageUploaded {
+			if !validator.RequiresExitMessage {
 				t.signedExitsSent[beacon.ValidatorPubkey(validator.Pubkey)] = true
 			}
 		}
@@ -269,8 +269,8 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.ExitDa
 			continue
 		}
 
-		if !validator.ExitMessageUploaded {
-			t.logger.Warn("Validator exit message was submitted to NodeSet but wasn't stored on the server",
+		if validator.RequiresExitMessage {
+			t.logger.Warn("Validator exit message was submitted to NodeSet but is still required by the server?",
 				slog.String("pubkey", pubkey.HexWithPrefix()),
 			)
 			continue

@@ -53,7 +53,7 @@ type MinipoolExitBody struct {
 
 type MinipoolDetails struct {
 	*snapi.MinipoolDetails
-	SignedExitUploaded bool `json:"signedExitUploaded"`
+	RequiresSignedExit bool `json:"requiresSignedExit"`
 }
 
 type MinipoolStatusData struct {

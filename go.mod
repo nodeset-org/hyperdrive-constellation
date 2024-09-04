@@ -8,8 +8,8 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240904165153-e58c8e3bd2f8
-	github.com/nodeset-org/nodeset-client-go v0.0.0-20240830215146-dd4f3de8c767
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240904201151-b5268586e0f6
+	github.com/nodeset-org/nodeset-client-go v0.0.0-20240904201004-7c9c8392558c
 	github.com/nodeset-org/osha v0.2.1-0.20240730134808-bc24a42c233e
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.2-0.20240903185110-65b3ec0f1045

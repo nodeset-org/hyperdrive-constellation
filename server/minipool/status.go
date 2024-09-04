@@ -118,7 +118,7 @@ func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []mi
 		// Check the signed exit upload status
 		for _, validator := range response.Data.Validators {
 			if validator.Pubkey == mp.ValidatorPubkey {
-				newMp.SignedExitUploaded = validator.ExitMessageUploaded
+				newMp.RequiresSignedExit = validator.RequiresExitMessage
 			}
 		}
 		data.Minipools[i] = newMp

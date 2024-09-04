@@ -149,8 +149,8 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 				continue
 			}
 			found = true
-			if !validator.ExitMessageUploaded {
-				return types.ResponseStatus_Error, fmt.Errorf("validator %s exit message was uploaded but has not been marked on the NodeSet server?", info.Pubkey.Hex())
+			if validator.RequiresExitMessage {
+				return types.ResponseStatus_Error, fmt.Errorf("validator %s exit message was uploaded but is still required on the NodeSet server?", info.Pubkey.Hex())
 			}
 			break
 		}
