@@ -20,17 +20,18 @@ import (
 
 // Submit signed exits task
 type SubmitSignedExitsTask struct {
-	sp        cscommon.IConstellationServiceProvider
-	logger    *slog.Logger
-	ctx       context.Context
-	cfg       *csconfig.ConstellationConfig
-	res       *csconfig.MergedResources
-	w         *cscommon.Wallet
-	csMgr     *cscommon.ConstellationManager
-	rpMgr     *cscommon.RocketPoolManager
-	rp        *rocketpool.RocketPool
-	bc        beacon.IBeaconClient
-	beaconCfg *beacon.Eth2Config
+	sp          cscommon.IConstellationServiceProvider
+	logger      *slog.Logger
+	ctx         context.Context
+	cfg         *csconfig.ConstellationConfig
+	res         *csconfig.MergedResources
+	w           *cscommon.Wallet
+	csMgr       *cscommon.ConstellationManager
+	rpMgr       *cscommon.RocketPoolManager
+	rp          *rocketpool.RocketPool
+	bc          beacon.IBeaconClient
+	beaconCfg   *beacon.Eth2Config
+	initialized bool
 
 	// Cache of minipools that have had signed exits sent to NodeSet
 	signedExitsSent map[beacon.ValidatorPubkey]bool
@@ -65,6 +66,21 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 			return fmt.Errorf("error getting Beacon config: %w", err)
 		}
 		t.beaconCfg = &cfg
+	}
+
+	// Initialize the signed exits cache
+	if !t.initialized {
+		hd := t.sp.GetHyperdriveClient()
+		validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
+		if err != nil {
+			return fmt.Errorf("error getting validators from NodeSet: %w", err)
+		}
+		for _, validator := range validatorsResponse.Data.Validators {
+			if validator.ExitMessageUploaded {
+				t.signedExitsSent[beacon.ValidatorPubkey(validator.Pubkey)] = true
+			}
+		}
+		t.initialized = true
 	}
 
 	// Get minipools that haven't had exits submitted yet
