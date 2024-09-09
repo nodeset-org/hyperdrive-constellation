@@ -2,6 +2,8 @@ package cstestutils
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"math/big"
 	"testing"
 
@@ -13,12 +15,354 @@ import (
 	"github.com/nodeset-org/nodeset-client-go/server-mock/db"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
+	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
 	"github.com/rocket-pool/rocketpool-go/v2/tokens"
 	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
 )
+
+// =================
+// === Without T ===
+// =================
+
+// Deposits RPL to the RPL vault and verifies the contract balances have been updated
+func DepositToRplVaultBeforeTest(testHarness *StandardTestHarness, rplVault contracts.IErc4626Token, rpl *tokens.TokenRpl, amount *big.Int, opts *bind.TransactOpts) error {
+	// Bindings
+	testMgr := testHarness.TestManager
+	logger := testHarness.Logger
+	csNode := testMgr.GetNode()
+	sp := csNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	csMgr := sp.GetConstellationManager()
+
+	// Get the xRPL balance before depositing
+	var xRplBalance *big.Int
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		rplVault.BalanceOf(mc, &xRplBalance, opts.From)
+		return nil
+	}, nil)
+
+	// Deposit RPL to the RPL vault
+	err = testMgr.Constellation_DepositToRplVault(rplVault, amount, opts, opts)
+	if err != nil {
+		return err
+	}
+	logger.Info(fmt.Sprintf("Deposited %.6f RPL into the RPL vault", eth.WeiToEth(amount)))
+
+	// Verify balances have been updated
+	var odRplBalance *big.Int
+	var rvRplBalance *big.Int
+	var newXrplBalance *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		rpl.BalanceOf(mc, &odRplBalance, csMgr.OperatorDistributor.Address)
+		rpl.BalanceOf(mc, &rvRplBalance, rplVault.Address())
+		rplVault.BalanceOf(mc, &newXrplBalance, opts.From)
+		return nil
+	}, nil)
+	if err != nil {
+		return err
+	}
+	if odRplBalance.Cmp(common.Big0) != 1 {
+		logger.Error("OperatorDistributor's RPL balance is not greater than 0")
+	}
+	logger.Info(fmt.Sprintf("OperatorDistributor's RPL balance is now %.6f (%s wei)", eth.WeiToEth(odRplBalance), odRplBalance.String()))
+	if rvRplBalance.Cmp(common.Big0) != 1 {
+		logger.Error("RPL vault's RPL balance is not greater than 0")
+	}
+	logger.Info(fmt.Sprintf("RPL vault's RPL balance is now %.6f (%s wei)", eth.WeiToEth(rvRplBalance), rvRplBalance.String()))
+	if newXrplBalance.Cmp(xRplBalance) != 1 {
+		logger.Error("Sender's xRPL balance did not go up")
+	}
+	logger.Info(fmt.Sprintf("Sender's xRPL balance went up from %.6f (%s wei) to %.6f (%s wei)",
+		eth.WeiToEth(xRplBalance), xRplBalance.String(),
+		eth.WeiToEth(newXrplBalance), newXrplBalance.String(),
+	))
+	return nil
+}
+
+// Deposits WETH to the WETH vault and verifies the contract balances have been updated
+func DepositToWethVaultBeforeTest(testHarness *StandardTestHarness, wethVault contracts.IErc4626Token, weth *contracts.Weth, amount *big.Int, opts *bind.TransactOpts) error {
+	// Bindings
+	testMgr := testHarness.TestManager
+	logger := testHarness.Logger
+	sp := testMgr.GetNode().GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	csMgr := sp.GetConstellationManager()
+	ec := sp.GetEthClient()
+
+	err := testMgr.Constellation_DepositToWethVault(weth, wethVault, amount, opts)
+	if err != nil {
+		return err
+	}
+	logger.Info(fmt.Sprintf("Deposited %.6f WETH into the WETH vault", eth.WeiToEth(amount)))
+
+	// Verify OperatorDistributor WETH balance has been updated
+	odEthBalance, err := ec.BalanceAt(context.Background(), csMgr.OperatorDistributor.Address, nil)
+	if err != nil {
+		return err
+	}
+	var evWethBalance *big.Int
+	err = qMgr.Query(func(mc *batch.MultiCaller) error {
+		weth.BalanceOf(mc, &evWethBalance, wethVault.Address())
+		return nil
+	}, nil)
+	if err != nil {
+		return err
+	}
+	if odEthBalance.Cmp(common.Big0) != 1 {
+		logger.Error("OperatorDistributor's ETH balance is not greater than 0")
+	}
+	logger.Info(fmt.Sprintf("OperatorDistributor's ETH balance is now %.6f (%s wei)", eth.WeiToEth(odEthBalance), odEthBalance.String()))
+	if evWethBalance.Cmp(common.Big0) != 1 {
+		logger.Error("WETH vault's WETH balance is not greater than 0")
+	}
+	logger.Info(fmt.Sprintf("WETH vault's WETH balance is now %.6f (%s wei)", eth.WeiToEth(evWethBalance), evWethBalance.String()))
+	return nil
+}
+
+// Registers the node with Constellation, ensuring it wasn't previously registered beforehand
+func RegisterWithConstellationBeforeTest(testHarness *StandardTestHarness, csNode *cstesting.ConstellationNode) {
+	// Bindings
+	testMgr := testHarness.TestManager
+	logger := testHarness.Logger
+	cs := csNode.GetApiClient()
+
+	// Check if the node is registered
+	statusResponse, err := cs.Node.GetRegistrationStatus()
+	if err != nil {
+		logger.Error("Error getting registration status", log.Err(err))
+	}
+	if statusResponse.Data.Registered {
+		logger.Error("Node is already registered with Constellation")
+	}
+	logger.Info("Node is not registered with Constellation yet, as expected")
+
+	// Register the node
+	response, err := cs.Node.Register()
+	if err != nil {
+		logger.Error("Error registering node with Constellation", log.Err(err))
+	}
+	if response.Data.NotAuthorized {
+		logger.Error("Node is not authorized to register with Constellation")
+	}
+	if response.Data.NotRegisteredWithNodeSet {
+		logger.Error("Node is not registered with a NodeSet")
+	}
+	if !response.Data.TxInfo.SimulationResult.IsSimulated {
+		logger.Error("TX is not simulated")
+	}
+	if response.Data.TxInfo.SimulationResult.SimulationError != "" {
+		logger.Error("TX simulation failed", slog.String("error", response.Data.TxInfo.SimulationResult.SimulationError))
+	}
+	err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), response.Data.TxInfo)
+	if err != nil {
+		logger.Error("Error mining registration TX", log.Err(err))
+	}
+	logger.Info("Mined the registration TX")
+
+	// Check if the node is registered
+	statusResponse, err = cs.Node.GetRegistrationStatus()
+	if err != nil {
+		logger.Error("Error getting registration status", log.Err(err))
+	}
+	if !statusResponse.Data.Registered {
+		logger.Error("Node is not registered with Constellation")
+	}
+	logger.Info("Node is now registered with Constellation")
+}
+
+// Deposits into Constellation, creating a new minipool
+func CreateMinipoolBeforeTest(testHarness *StandardTestHarness, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node, mpMgr *minipool.MinipoolManager) (minipool.IMinipool, error) {
+	// Bindings
+	testMgr := testHarness.TestManager
+	logger := testHarness.Logger
+	sp := csNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+
+	// Check the Supernode minipool count
+	err := qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
+	if err != nil {
+		return nil, err
+	}
+	previousMpCount := rpSuperNode.MinipoolCount.Formatted()
+	logger.Info(fmt.Sprintf("Supernode has %d minipools", previousMpCount))
+
+	// Make the minipool
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	res := sp.GetResources()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
+	data, err := BuildAndVerifyCreateMinipoolTxBeforeTest(logger, deployment, csNode, nodeAddress, salt, rpSuperNode, true)
+	if err != nil {
+		return nil, err
+	}
+	err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	// Save the key
+	SaveValidatorKeyBeforeTest(logger, csNode, data)
+
+	// Check the Supernode minipool count
+	err = qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
+	if err != nil {
+		return nil, err
+	}
+	newMpCount := rpSuperNode.MinipoolCount.Formatted()
+	if newMpCount-previousMpCount != 1 {
+		return nil, fmt.Errorf("Supernode minipool count did not increase by 1")
+	}
+	logger.Info(fmt.Sprintf("Supernode now has %d minipools", newMpCount))
+
+	// Verify the minipool
+	mp, err := VerifyMinipoolAfterCreationBeforeTest(logger, qMgr, rpSuperNode, newMpCount-1, data.MinipoolAddress, mpMgr)
+	if err != nil {
+		return nil, err
+	}
+	return mp, nil
+}
+
+// Creates the TX for creating a new minipool, and verifies it simulated successfully
+func BuildAndVerifyCreateMinipoolTxBeforeTest(logger *slog.Logger, deployment *db.ConstellationDeployment, csNode *cstesting.ConstellationNode, nodeAddress common.Address, salt *big.Int, rpSuperNode *node.Node, shouldSucceed bool) (*csapi.MinipoolCreateData, error) {
+	// Bindings
+	cs := csNode.GetApiClient()
+
+	// Make the minipool
+	depositResponse, err := cs.Minipool.Create(salt)
+	if err != nil {
+		return nil, err
+	}
+	if !depositResponse.Data.CanCreate {
+		return nil, fmt.Errorf("Can't create minipool")
+	}
+	if shouldSucceed {
+		if !depositResponse.Data.TxInfo.SimulationResult.IsSimulated {
+			return nil, fmt.Errorf("TX is not simulated")
+		}
+		if depositResponse.Data.TxInfo.SimulationResult.SimulationError != "" {
+			return nil, fmt.Errorf("TX simulation failed: %s", depositResponse.Data.TxInfo.SimulationResult.SimulationError)
+		}
+	}
+	logger.Info(fmt.Sprintf("Using salt 0x%s, MP address = %s", salt.Text(16), depositResponse.Data.MinipoolAddress.Hex()))
+
+	// Increment the nonce for the node
+	deployment.IncrementSuperNodeNonce(nodeAddress)
+	return depositResponse.Data, nil
+}
+
+// Saves the validator key created as part of a minipool creation TX to disk
+func SaveValidatorKeyBeforeTest(logger *slog.Logger, csNode *cstesting.ConstellationNode, data *csapi.MinipoolCreateData) error {
+	// Bindings
+	cs := csNode.GetApiClient()
+
+	// Save the key
+	pubkey := data.ValidatorPubkey
+	index := data.Index
+	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1)
+	if err != nil {
+		return fmt.Errorf("error creating validator key: %w", err)
+	}
+	logger.Info(fmt.Sprintf("Saved validator key for pubkey %s, index %d", pubkey.Hex(), index))
+	return nil
+}
+
+// Verifies the supernode's minipool address at the provided index is expected and the minipool status is prelaunch
+func VerifyMinipoolAfterCreationBeforeTest(logger *slog.Logger, qMgr *eth.QueryManager, rpSuperNode *node.Node, superNodeMpIndex uint64, expectedMinipoolAddress common.Address, mpMgr *minipool.MinipoolManager) (minipool.IMinipool, error) {
+	// Make sure the address is correct
+	var mpAddress common.Address
+	err := qMgr.Query(func(mc *batch.MultiCaller) error {
+		rpSuperNode.GetMinipoolAddress(mc, &mpAddress, superNodeMpIndex)
+		return nil
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if mpAddress != expectedMinipoolAddress {
+		return nil, fmt.Errorf("Minipool address is not expected; expected %s, got %s", expectedMinipoolAddress.Hex(), mpAddress.Hex())
+	}
+
+	// Make sure it's in prelaunch
+	mp, err := mpMgr.CreateMinipoolFromAddress(mpAddress, false, nil)
+	if err != nil {
+		return nil, err
+	}
+	err = qMgr.Query(nil, nil, mp.Common().Status)
+	if err != nil {
+		return nil, err
+	}
+	if mp.Common().Status.Formatted() != types.MinipoolStatus_Prelaunch {
+		return nil, fmt.Errorf("Minipool is not in prelaunch; status is %s", mp.Common().Status.Formatted())
+	}
+	logger.Info(fmt.Sprintf("Minipool %s is in prelaunch", mpAddress.Hex()))
+	return mp, nil
+}
+
+// Stakes a minipool
+func StakeMinipoolBeforeTest(testHarness *StandardTestHarness, csNode *cstesting.ConstellationNode, nodeAddress common.Address, mp minipool.IMinipool) error {
+	// Bindings
+	testMgr := testHarness.TestManager
+	logger := testHarness.Logger
+	cs := csNode.GetApiClient()
+	sp := csNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	ec := sp.GetEthClient()
+
+	// Get the node balance
+	beforeBalance, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	if err != nil {
+		return fmt.Errorf("error getting node balance: %w", err)
+	}
+
+	// Stake the minipool
+	stakeResponse, err := cs.Minipool.Stake()
+	if err != nil {
+		return fmt.Errorf("error staking minipool: %w", err)
+	}
+	if stakeResponse.Data.NotWhitelistedWithConstellation {
+		return fmt.Errorf("node is not whitelisted with Constellation")
+	}
+
+	// Find the details for the MP and stake it
+	for _, details := range stakeResponse.Data.Details {
+		if details.Address == mp.Common().Address {
+			err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), details.TxInfo)
+			if err != nil {
+				return fmt.Errorf("error mining staking TX: %w", err)
+			}
+
+			logger.Info(fmt.Sprintf("Staked minipool %s", mp.Common().Address.Hex()))
+			break
+		}
+	}
+
+	// Verify the minipool is staking now
+	err = qMgr.Query(nil, nil, mp.Common().Status)
+	if err != nil {
+		return err
+	}
+	if mp.Common().Status.Formatted() != types.MinipoolStatus_Staking {
+		return fmt.Errorf("Minipool is not in staking; status is %s", mp.Common().Status.Formatted())
+	}
+	logger.Info(fmt.Sprintf("Minipool %s is in staking", mp.Common().Address.Hex()))
+
+	// Get the balance after
+	afterBalance, err := ec.BalanceAt(context.Background(), nodeAddress, nil)
+	if err != nil {
+		return fmt.Errorf("error getting node balance: %w", err)
+	}
+	if afterBalance.Cmp(beforeBalance) != 1 {
+		return fmt.Errorf("Node balance did not increase")
+	}
+	logger.Info(fmt.Sprintf("Node balance increased from %.6f to %.6f", eth.WeiToEth(beforeBalance), eth.WeiToEth(afterBalance)))
+	return nil
+}
+
+// ==============
+// === With T ===
+// ==============
 
 // Registers the node with Constellation, ensuring it wasn't previously registered beforehand
 func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTestManager, csNode *cstesting.ConstellationNode) {
@@ -38,7 +382,9 @@ func RegisterWithConstellation(t *testing.T, testMgr *cstesting.ConstellationTes
 	require.False(t, response.Data.NotRegisteredWithNodeSet)
 	require.True(t, response.Data.TxInfo.SimulationResult.IsSimulated)
 	require.Empty(t, response.Data.TxInfo.SimulationResult.SimulationError)
-	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), response.Data.TxInfo, "Registered the node with Constellation")
+	err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), response.Data.TxInfo)
+	require.NoError(t, err)
+	t.Log("Mined the registration TX")
 
 	// Check if the node is registered
 	statusResponse, err = cs.Node.GetRegistrationStatus()
@@ -229,7 +575,8 @@ func CreateMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, c
 	res := sp.GetResources()
 	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	data := BuildAndVerifyCreateMinipoolTx(t, deployment, csNode, nodeAddress, salt, rpSuperNode, true)
-	testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo, "Deposited and made a minipool")
+	err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), data.TxInfo)
+	require.NoError(t, err)
 
 	// Save the key
 	SaveValidatorKey(t, csNode, data)
@@ -304,7 +651,9 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, cs
 	// Find the details for the MP and stake it
 	for _, details := range stakeResponse.Data.Details {
 		if details.Address == mp.Common().Address {
-			testMgr.MineTxViaHyperdrive(t, csNode.GetHyperdriveNode().GetApiClient(), details.TxInfo, "Staked the minipool")
+			err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), details.TxInfo)
+			require.NoError(t, err)
+			t.Logf("Staked minipool %s", mp.Common().Address.Hex())
 			break
 		}
 	}
