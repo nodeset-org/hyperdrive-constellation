@@ -90,6 +90,7 @@ func NewConstellationConfig(hdCfg *hdconfig.HyperdriveConfig, networks []*Conste
 	}
 
 	cfg.VcCommon = config.NewValidatorClientCommonConfig()
+	cfg.VcCommon.MetricsPort.Default[config.Network_All] = DefaultVcMetricsPort
 	cfg.Lighthouse = config.NewLighthouseVcConfig()
 	cfg.Lodestar = config.NewLodestarVcConfig()
 	cfg.Nimbus = config.NewNimbusVcConfig()
