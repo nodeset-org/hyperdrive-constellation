@@ -34,6 +34,7 @@ func NewMinipoolHandler(logger *log.Logger, ctx context.Context, serviceProvider
 		&minipoolStakeContextFactory{h},
 		&minipoolStatusContextFactory{h},
 		&minipoolUploadSignedExitsContextFactory{h},
+		&minipoolVanityContextFactory{h},
 	}
 	return h
 }

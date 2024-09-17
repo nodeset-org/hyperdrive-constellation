@@ -84,6 +84,14 @@ func (r *MinipoolRequester) UploadSignedExits(infos []csapi.MinipoolExitInfo) (*
 	return client.SendPostRequest[types.SuccessData](r, "upload-signed-exits", "UploadSignedExits", body)
 }
 
+// Get the artifacts necessary for vanity address searching
+func (r *MinipoolRequester) GetVanityArtifacts(nodeAddressStr string) (*types.ApiResponse[csapi.MinipoolVanityArtifactsData], error) {
+	args := map[string]string{
+		"node-address": nodeAddressStr,
+	}
+	return client.SendGetRequest[csapi.MinipoolVanityArtifactsData](r, "vanity-artifacts", "GetVanityArtifacts", args)
+}
+
 // Submit a minipool request that takes in a list of addresses and returns whatever type is requested
 func sendMultiMinipoolRequest[DataType any](r *MinipoolRequester, method string, requestName string, addresses []common.Address, args map[string]string) (*types.ApiResponse[DataType], error) {
 	if args == nil {

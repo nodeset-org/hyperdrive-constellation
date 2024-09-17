@@ -99,3 +99,10 @@ type MinipoolStakeData struct {
 type MinipoolUploadSignedExitBody struct {
 	Infos []MinipoolExitInfo `json:"infos"`
 }
+
+type MinipoolVanityArtifactsData struct {
+	SubNodeAddress         common.Address `json:"subNodeAddress"`
+	SuperNodeAddress       common.Address `json:"superNodeAddress"`
+	MinipoolFactoryAddress common.Address `json:"minipoolFactoryAddress"`
+	InitHash               common.Hash    `json:"initHash"`
+}
