@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-constellation/shared/keys"
@@ -20,18 +21,19 @@ import (
 
 // Submit signed exits task
 type SubmitSignedExitsTask struct {
-	sp          cscommon.IConstellationServiceProvider
-	logger      *slog.Logger
-	ctx         context.Context
-	cfg         *csconfig.ConstellationConfig
-	res         *csconfig.MergedResources
-	w           *cscommon.Wallet
-	csMgr       *cscommon.ConstellationManager
-	rpMgr       *cscommon.RocketPoolManager
-	rp          *rocketpool.RocketPool
-	bc          beacon.IBeaconClient
-	beaconCfg   *beacon.Eth2Config
-	initialized bool
+	sp                cscommon.IConstellationServiceProvider
+	logger            *slog.Logger
+	ctx               context.Context
+	cfg               *csconfig.ConstellationConfig
+	res               *csconfig.MergedResources
+	w                 *cscommon.Wallet
+	csMgr             *cscommon.ConstellationManager
+	rpMgr             *cscommon.RocketPoolManager
+	rp                *rocketpool.RocketPool
+	bc                beacon.IBeaconClient
+	beaconCfg         *beacon.Eth2Config
+	initialized       bool
+	registeredAddress *common.Address
 
 	// Cache of minipools that have had signed exits sent to NodeSet
 	signedExitsSent map[beacon.ValidatorPubkey]bool
@@ -69,8 +71,8 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	}
 
 	// Initialize the signed exits cache
+	hd := t.sp.GetHyperdriveClient()
 	if !t.initialized {
-		hd := t.sp.GetHyperdriveClient()
 		validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
 		if err != nil {
 			return fmt.Errorf("error getting validators from NodeSet: %w", err)
@@ -81,6 +83,33 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 			}
 		}
 		t.initialized = true
+	}
+
+	// Get the registered address from the server
+	if t.registeredAddress == nil {
+		response, err := hd.NodeSet_Constellation.GetRegisteredAddress()
+		if err != nil {
+			return fmt.Errorf("error getting registered address from NodeSet: %w", err)
+		}
+		if response.Data.NotRegisteredWithNodeSet {
+			t.logger.Debug("Node is not registered with NodeSet, can't send signed exits")
+			return nil
+		}
+		if response.Data.NotRegisteredWithConstellation {
+			t.logger.Debug("User doesn't have a node registered with Constellation yet, can't send signed exits")
+			return nil
+		}
+		t.registeredAddress = &response.Data.RegisteredAddress
+	}
+
+	// Make sure it matches the Constellation node registeredAddress
+	registeredAddress := *t.registeredAddress
+	if registeredAddress != snapshot.ConstellationNode.NodeAddress {
+		t.logger.Info("NodeSet registered address doesn't match Constellation node address, can't send signed exits",
+			slog.String("registeredAddress", registeredAddress.Hex()),
+			slog.String("nodeAddress", snapshot.ConstellationNode.NodeAddress.Hex()),
+		)
+		return nil
 	}
 
 	// Get minipools that haven't had exits submitted yet

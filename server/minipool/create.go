@@ -229,7 +229,7 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	// Get a deposit signature
 	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt)
 	if err != nil {
-		if errors.Is(err, v2constellation.ErrMissingExitMessage) {
+		if errors.Is(err, v2constellation.ErrValidatorRequiresExitMessage) {
 			data.MissingExitMessage = true
 		} else {
 			return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
