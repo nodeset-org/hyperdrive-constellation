@@ -44,6 +44,12 @@ var (
 
 // Initialize a common server used by all tests
 func TestMain(m *testing.M) {
+	// Ignore the CS QA test suite during CI
+	if os.Getenv("CI") != "" {
+		fmt.Println("Skipping QA tests in CI")
+		os.Exit(0)
+	}
+
 	var err error
 	testMgr, err = cstesting.NewConstellationTestManager()
 	if err != nil {

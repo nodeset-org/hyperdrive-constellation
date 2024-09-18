@@ -39,4 +39,5 @@ jobs:
       # - name: Run tests
       #   env: 
       #      HARDHAT_URL: "http://localhost:8545"
+      #      CI: true
       #   run: go test -v -p 1 ./...
