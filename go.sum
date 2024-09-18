@@ -389,8 +389,8 @@ github.com/multiformats/go-varint v0.0.7/go.mod h1:r8PUYw/fD/SjBCiKOoDlGF6QawOEL
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/mwitkow/go-conntrack v0.0.0-20161129095857-cc309e4a2223/go.mod h1:qRWi+5nqEBWmkhHvq77mSJWrCKwh8bxhgT7d/eI7P4U=
-github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918191417-afe6c2eac9f0 h1:bEzwNZWQQT4/VsbDyK84Dkbjr+rOwkwKs8LPcsDxQdA=
-github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918191417-afe6c2eac9f0/go.mod h1:MswdfMcdlDIwSPXYzxF6VscKiUiJbmVLnsbVikNnYBU=
+github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918204506-d9a1e56fed31 h1:9ZUuXt5cjtjam5hPE3HmA89mBgCVGFp6VSLJ3A77CBQ=
+github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918204506-d9a1e56fed31/go.mod h1:aFsoBlSL0T7M9YMZcPd0H67cYOwKSMSJZGfh1JeJLt0=
 github.com/nodeset-org/nodeset-client-go v0.0.0-20240917061847-f71fb99145be h1:bndwZAR84dgPcVcUx2455I6oBhVhFb0EUnDwIaIG5ec=
 github.com/nodeset-org/nodeset-client-go v0.0.0-20240917061847-f71fb99145be/go.mod h1:QVa1BhsD5KKtbyvt7Uh9zMxF5A/nMmJvl4+erak/5b4=
 github.com/nodeset-org/osha v0.2.1-0.20240918190450-6a8fd55b69ef h1:OC9tHqBTKIkTaxufSuE91gb521CBi5bVJAj3jFxXL7U=
@@ -466,8 +466,8 @@ github.com/rocket-pool/batch-query v1.0.0 h1:5HejmT1n1fIdLIqUhTNwbkG2PGOPl3IVjCp
 github.com/rocket-pool/batch-query v1.0.0/go.mod h1:d1CmxShzk0fioJ4yX0eFGhz2an1odnW/LZ2cp3eDGIQ=
 github.com/rocket-pool/go-merkletree v1.0.1-0.20220406020931-c262d9b976dd h1:p9KuetSKB9nte9I/MkkiM3pwKFVQgqxxPTQ0y56Ff6s=
 github.com/rocket-pool/go-merkletree v1.0.1-0.20220406020931-c262d9b976dd/go.mod h1:UE9fof8P7iESVtLn1K9CTSkNRYVFHZHlf96RKbU33kA=
-github.com/rocket-pool/node-manager-core v0.5.2-0.20240918185909-415c5fb7e3be h1:BNR7aYE6Dhj0QpP0XdYtCmHClOHt7jzXTuQwNDoSb1s=
-github.com/rocket-pool/node-manager-core v0.5.2-0.20240918185909-415c5fb7e3be/go.mod h1:tLL93eZeU8hkwuMkMl/2ERv82cGHLNFufq8kedsrtSo=
+github.com/rocket-pool/node-manager-core v0.5.2-0.20240918203702-d51249d46722 h1:kti5IaGW44VI2bcBH+xSeMgyOmjN96G/VtirgaDvrPY=
+github.com/rocket-pool/node-manager-core v0.5.2-0.20240918203702-d51249d46722/go.mod h1:tLL93eZeU8hkwuMkMl/2ERv82cGHLNFufq8kedsrtSo=
 github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU5NdKM8=
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/rs/cors v1.10.1 h1:L0uuZVXIKlI1SShY2nhFfo44TYvDPQ1w4oFkUJNfhyo=
