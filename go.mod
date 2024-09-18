@@ -10,11 +10,11 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918060643-f87f8db4e758
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918084125-597cdbf584f9
 	github.com/nodeset-org/nodeset-client-go v0.0.0-20240917061847-f71fb99145be
 	github.com/nodeset-org/osha v0.2.1-0.20240909201548-2fd453c5235d
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20240918042823-2e9f9de9a72e
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20240918070718-74c95eff323a
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
@@ -95,7 +95,7 @@ require (
 	github.com/hashicorp/go-memdb v1.3.4 // indirect
 	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
-	github.com/herumi/bls-eth-go-binary v1.35.0 // indirect
+	github.com/herumi/bls-eth-go-binary v1.36.1 // indirect
 	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -195,6 +195,6 @@ require (
 
 replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20240731214747-81867bb8ff63
 
-replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240729151944-127e460038df
+replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20240918071743-c16e6425c98b
 
 replace github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a => github.com/rocket-pool/go-merkletree v1.0.1-0.20220406020931-c262d9b976dd

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/url"
 
@@ -42,6 +43,7 @@ type minipoolCreateContextFactory struct {
 func (f *minipoolCreateContextFactory) Create(args url.Values) (*MinipoolCreateContext, error) {
 	c := &MinipoolCreateContext{
 		ServiceProvider: f.handler.serviceProvider,
+		Logger:          f.handler.logger.Logger,
 		Context:         f.handler.ctx,
 	}
 	inputErrs := []error{
@@ -63,6 +65,7 @@ func (f *minipoolCreateContextFactory) RegisterRoute(router *mux.Router) {
 type MinipoolCreateContext struct {
 	// Dependencies
 	ServiceProvider cscommon.IConstellationServiceProvider
+	Logger          *slog.Logger
 	Context         context.Context
 
 	// Inputs
@@ -267,6 +270,7 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	prelaunchValueGwei := new(big.Int).Div(prelaunchValueWei, oneGwei)
 	withdrawalCredentials := validator.GetWithdrawalCredsFromAddress(c.ExpectedMinipoolAddress)
 	depositData, err := validator.GetDepositData(
+		c.Logger,
 		validatorKey.PrivateKey,
 		withdrawalCredentials,
 		resources.GenesisForkVersion,

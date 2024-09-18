@@ -152,7 +152,7 @@ func (t *StakeMinipoolsTask) createStakeMinipoolTx(snapshot *NetworkSnapshot, mp
 	// Get validator deposit data
 	stakeValueWei := snapshot.RocketPoolNetworkSettings.MinipoolStakeValue
 	stakeValueGwei := new(big.Int).Div(stakeValueWei, oneGwei).Uint64()
-	depositData, err := validator.GetDepositData(validatorKey, withdrawalCredentials, t.res.GenesisForkVersion, stakeValueGwei, t.res.EthNetworkName)
+	depositData, err := validator.GetDepositData(t.logger, validatorKey, withdrawalCredentials, t.res.GenesisForkVersion, stakeValueGwei, t.res.EthNetworkName)
 	if err != nil {
 		return nil, err
 	}

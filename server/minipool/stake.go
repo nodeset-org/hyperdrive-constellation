@@ -219,6 +219,7 @@ func (c *MinipoolStakeContext) getMinipoolStakeDetails(mp minipool.IMinipool, op
 	// Make the deposit data
 	withdrawalCredentials := mpCommon.WithdrawalCredentials.Get()
 	depositData, err := validator.GetDepositData(
+		c.Logger,
 		validatorPrivateKey,
 		withdrawalCredentials,
 		c.res.GenesisForkVersion,
