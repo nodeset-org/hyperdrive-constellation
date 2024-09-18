@@ -43,6 +43,9 @@ func DepositToRplVaultBeforeTest(testHarness *StandardTestHarness, rplVault cont
 		rplVault.BalanceOf(mc, &xRplBalance, opts.From)
 		return nil
 	}, nil)
+	if err != nil {
+		return err
+	}
 
 	// Deposit RPL to the RPL vault
 	err = testMgr.Constellation_DepositToRplVault(rplVault, amount, opts, opts)
@@ -204,7 +207,10 @@ func CreateMinipoolBeforeTest(testHarness *StandardTestHarness, csNode *cstestin
 	}
 
 	// Save the key
-	SaveValidatorKeyBeforeTest(logger, csNode, data)
+	err = SaveValidatorKeyBeforeTest(logger, csNode, data)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check the Supernode minipool count
 	err = qMgr.Query(nil, nil, rpSuperNode.MinipoolCount)
@@ -407,6 +413,7 @@ func DepositToRplVault(t *testing.T, testMgr *cstesting.ConstellationTestManager
 		rplVault.BalanceOf(mc, &xRplBalance, opts.From)
 		return nil
 	}, nil)
+	require.NoError(t, err)
 
 	// Deposit RPL to the RPL vault
 	err = testMgr.Constellation_DepositToRplVault(rplVault, amount, opts, opts)

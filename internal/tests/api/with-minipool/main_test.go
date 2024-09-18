@@ -150,7 +150,7 @@ func createMinipool(salt *big.Int, node *cstesting.ConstellationNode, nodeAddres
 }
 
 // Makes a minipool, waits for the scrub check, then stakes it
-func stakeMinipool(node *cstesting.ConstellationNode, nodeAddress common.Address, mp minipool.IMinipool) error {
+func stakeMinipool(node *cstesting.ConstellationNode, nodeAddress common.Address, mp minipool.IMinipool) {
 	// Get the scrub period
 	testMgr := harness.TestManager
 	logger := harness.Logger
@@ -161,7 +161,7 @@ func stakeMinipool(node *cstesting.ConstellationNode, nodeAddress common.Address
 		bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod,
 	)
 	if err != nil {
-		return fmt.Errorf("error querying scrub period: %w", err)
+		fail("error querying scrub period: %v", err)
 	}
 
 	// Fast forward time
@@ -170,20 +170,19 @@ func stakeMinipool(node *cstesting.ConstellationNode, nodeAddress common.Address
 	slotsToAdvance := uint(timeToAdvance / secondsPerSlot)
 	err = testMgr.AdvanceSlots(slotsToAdvance, false)
 	if err != nil {
-		return fmt.Errorf("error advancing slots: %w", err)
+		fail("error advancing slots: %v", err)
 	}
 	err = testMgr.CommitBlock()
 	if err != nil {
-		return fmt.Errorf("error committing block: %w", err)
+		fail("error committing block: %v", err)
 	}
 	logger.Info(fmt.Sprintf("Advanced %d slots", slotsToAdvance))
 
 	// Stake the minipool
 	err = cstestutils.StakeMinipoolBeforeTest(harness, node, nodeAddress, mp)
 	if err != nil {
-		return fmt.Errorf("error staking minipool: %w", err)
+		fail("error staking minipool: %v", err)
 	}
-	return nil
 }
 
 // Get the amount of ETH and RPL to deposit into the WETH and RPL vaults respectively in order to launch the given number of minipools

@@ -98,6 +98,9 @@ func (c *MinipoolStatusContext) GetMinipoolDetails(mc *batch.MultiCaller, mp min
 
 func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []minipool.IMinipool, data *csapi.MinipoolStatusData, latestBlockHeader *ethtypes.Header, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	code, err := c.snContext.PrepareData(addresses, mps, c.snData)
+	if err != nil {
+		return code, err
+	}
 	data.MaxValidatorsPerNode = c.maxValidators.Uint64()
 	data.LatestDelegate = c.snData.LatestDelegate
 
@@ -124,5 +127,5 @@ func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []mi
 		data.Minipools[i] = newMp
 	}
 
-	return code, err
+	return types.ResponseStatus_Success, nil
 }

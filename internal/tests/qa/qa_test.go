@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log/slog"
-	"math"
 	"math/big"
 	"path/filepath"
 	"runtime/debug"
@@ -28,14 +27,10 @@ import (
 	"github.com/rocket-pool/node-manager-core/beacon/ssz_types"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/node/validator"
-	"github.com/rocket-pool/rocketpool-go/v2/dao/protocol"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
-	"github.com/rocket-pool/rocketpool-go/v2/rewards"
 	"github.com/rocket-pool/rocketpool-go/v2/types"
 	"github.com/stretchr/testify/require"
 	eth2types "github.com/wealdtech/go-eth2-types/v2"
-	"github.com/wealdtech/go-merkletree"
-	"github.com/wealdtech/go-merkletree/keccak256"
 )
 
 var (
@@ -1068,9 +1063,6 @@ func Test15_StakingTest(t *testing.T) {
 	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	t.Log("Created bindings")
 
-	// Update the timestamp for signatures
-	sigTime := time.Now()
-
 	// Create some subnodes
 	nodes, nodeAddresses, err := createNodesForTest(t, 14, eth.EthToWei(1.1))
 	require.NoError(t, err)
@@ -1125,16 +1117,12 @@ func Test15_StakingTest(t *testing.T) {
 	// Fast forward 1 day
 	secondsPerSlot := testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot
 	seconds := uint64(24 * 60 * 60)
-	secondsDuration := time.Duration(seconds) * time.Second
 	slots := seconds / secondsPerSlot
 	err = testMgr.AdvanceSlots(uint(slots), false)
 	require.NoError(t, err)
 	err = testMgr.CommitBlock()
 	require.NoError(t, err)
 	t.Log("Mined a block")
-
-	// Update the timestamp for signatures
-	sigTime = sigTime.Add(secondsDuration)
 
 	// Send ETH to the RP deposit pool again
 	err = qMgr.Query(nil, nil, bindings.DepositPoolManager.Balance)
@@ -2049,6 +2037,7 @@ func setMinipoolToWithdrawn(t *testing.T, sp cscommon.IConstellationServiceProvi
 	testMgr.MineTx(t, txInfo, opts, fmt.Sprintf("Emulated a Beacon withdraw of %.6f ETH for minipool %s", eth.WeiToEth(beaconBalanceWei), minipool.MinipoolAddress.Hex()))
 }
 
+/*
 // Generates a rewards snapshot for the Rewards Pool
 func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) (map[common.Address]*rewardsInfo, rewards.RewardSubmission, uint64) {
 	// Services
@@ -2214,7 +2203,9 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 
 	return rewardsMap, rewardSnapshot, slots
 }
+*/
 
+/*
 type rewardsInfo struct {
 	CollateralRpl    *big.Int
 	OracleDaoRpl     *big.Int
@@ -2223,7 +2214,6 @@ type rewardsInfo struct {
 	MerkleProof      []common.Hash
 }
 
-/*
 func createRewardsMap(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings) map[common.Address]*rewardsInfo {
 	// Services
 	qMgr := sp.GetQueryManager()
@@ -2266,7 +2256,6 @@ func createRewardsMap(t *testing.T, sp cscommon.IConstellationServiceProvider, b
 	// Get the list of minipools per node
 
 }
-*/
 
 // Generates a Merkle tree for the given rewards map and creates the Merkle proofs for each claimer
 func generateMerkleTree(rewards map[common.Address]*rewardsInfo) (common.Hash, error) {
@@ -2390,7 +2379,9 @@ func createMerkleClaimConfig(t *testing.T, sp cscommon.IConstellationServiceProv
 		AverageRplTreasuryFee: rplTreasuryFee,
 	}
 }
+*/
 
+/*
 // Gets the average fees for the eligible minipools at the end of a rewards interval
 func getAvgFeesForBlock(t *testing.T, sp cscommon.IConstellationServiceProvider, bindings *cstestutils.ContractBindings, blockNumber uint64) (*big.Int, *big.Int, *big.Int) {
 	// Services
@@ -2476,6 +2467,7 @@ func getAvgFeesForBlock(t *testing.T, sp cscommon.IConstellationServiceProvider,
 	rplTreasuryFee.Div(rplTreasuryFee, mpCount)
 	return ethTreasuryFee, nodeFee, rplTreasuryFee
 }
+*/
 
 // Checks if two big.Ints are approximately equal within a small tolerance
 func requireApproxEqual(t *testing.T, expected *big.Int, actual *big.Int) {
@@ -2486,6 +2478,7 @@ func requireApproxEqual(t *testing.T, expected *big.Int, actual *big.Int) {
 	require.True(t, delta.Cmp(tolerance) <= 0, "delta is too high - expected %s, got %s (diff %s)", expected.String(), actual.String(), delta.String())
 }
 
+/*
 // Checks if two big.Ints are approximately equal within a small tolerance
 func requireApproxEqualWithTolerance(t *testing.T, expected *big.Int, actual *big.Int, tolerance *big.Int) {
 	t.Helper()
@@ -2493,6 +2486,7 @@ func requireApproxEqualWithTolerance(t *testing.T, expected *big.Int, actual *bi
 	delta = delta.Abs(delta)
 	require.True(t, delta.Cmp(tolerance) <= 0, "delta is too high - expected %s, got %s (diff %s)", expected.String(), actual.String(), delta.String())
 }
+*/
 
 // Print information about the current tick
 func printTickInfo(t *testing.T, sp cscommon.IConstellationServiceProvider) {
@@ -2513,12 +2507,14 @@ func printTickInfo(t *testing.T, sp cscommon.IConstellationServiceProvider) {
 	t.Logf("Next minipool to tick is %s", nextMinipool.Hex())
 }
 
+/*
 func calculateNodeOpRewardsFactor(t *testing.T, validatorCount float64, maxValidators float64, k float64) *big.Int {
 	// Quick and dirty calculation with float64 math
 	x := validatorCount / maxValidators
 	val := (math.Pow(math.E, k*(x-1)) - math.Pow(math.E, -k)) / (1 - math.Pow(math.E, -k))
 	return eth.EthToWei(val)
 }
+*/
 
 // Make a custom signed deposit data with the provided pubkey instead of the pubkey for the private key. Will fail validation but useful for testing
 func createDepositData(validatorKey *eth2types.BLSPrivateKey, pubkey beacon.ValidatorPubkey, withdrawalCredentials common.Hash, genesisForkVersion []byte, depositAmount uint64, networkName string) (beacon.ExtendedDepositData, error) {

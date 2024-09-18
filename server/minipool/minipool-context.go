@@ -72,20 +72,29 @@ func RegisterMinipoolRoute[ContextType IMinipoolCallContext[DataType], DataType 
 
 		// Check the method
 		if r.Method != http.MethodGet {
-			server.HandleInvalidMethod(logger, w) //nolint:errcheck
+			err := server.HandleInvalidMethod(logger, w)
+			if err != nil {
+				logger.Error("Error handling invalid method", log.Err(err))
+			}
 			return
 		}
 
 		// Create the handler and deal with any input validation errors
 		mpContext, err := factory.Create(args)
 		if err != nil {
-			server.HandleInputError(logger, w, err) //nolint:errcheck
+			err := server.HandleInputError(logger, w, err)
+			if err != nil {
+				logger.Error("Error handling input error", log.Err(err))
+			}
 			return
 		}
 
 		// Run the context's processing routine
 		status, response, err := runMinipoolRoute[DataType](ctx, mpContext, serviceProvider)
-		server.HandleResponse(logger, w, status, response, err) //nolint:errcheck
+		err = server.HandleResponse(logger, w, status, response, err)
+		if err != nil {
+			logger.Error("Error handling response", log.Err(err))
+		}
 	})
 }
 

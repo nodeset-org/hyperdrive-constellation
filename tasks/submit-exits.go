@@ -15,7 +15,6 @@ import (
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/node/validator"
 	"github.com/rocket-pool/rocketpool-go/v2/minipool"
-	"github.com/rocket-pool/rocketpool-go/v2/rocketpool"
 	eth2types "github.com/wealdtech/go-eth2-types/v2"
 )
 
@@ -29,7 +28,6 @@ type SubmitSignedExitsTask struct {
 	w                 *cscommon.Wallet
 	csMgr             *cscommon.ConstellationManager
 	rpMgr             *cscommon.RocketPoolManager
-	rp                *rocketpool.RocketPool
 	bc                beacon.IBeaconClient
 	beaconCfg         *beacon.Eth2Config
 	initialized       bool

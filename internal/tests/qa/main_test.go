@@ -21,8 +21,8 @@ import (
 var (
 	testMgr *cstesting.ConstellationTestManager
 	logger  *slog.Logger
-	nsEmail string = "test@nodeset.io"
-	keygen  *keys.KeyGenerator
+	// nsEmail string = "test@nodeset.io" // No longer used
+	keygen *keys.KeyGenerator
 
 	// Constellation Deployer
 	deployerKey  *ecdsa.PrivateKey

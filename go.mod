@@ -10,17 +10,16 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918204506-d9a1e56fed31
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918233404-ecebbc173573
 	github.com/nodeset-org/nodeset-client-go v0.0.0-20240917061847-f71fb99145be
-	github.com/nodeset-org/osha v0.2.1-0.20240918190450-6a8fd55b69ef
+	github.com/nodeset-org/osha v0.2.1-0.20240918232802-f44f9894c6ab
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20240918203702-d51249d46722
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20240918224929-a9cee1201bee
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
 	github.com/urfave/cli/v2 v2.27.2
 	github.com/wealdtech/go-eth2-types/v2 v2.8.2
-	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -162,6 +161,7 @@ require (
 	github.com/wealdtech/go-ens/v3 v3.6.0 // indirect
 	github.com/wealdtech/go-eth2-util v1.8.2 // indirect
 	github.com/wealdtech/go-eth2-wallet-encryptor-keystorev4 v1.4.1 // indirect
+	github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a // indirect
 	github.com/wealdtech/go-multicodec v1.4.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
