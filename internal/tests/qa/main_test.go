@@ -67,10 +67,6 @@ func TestMain(m *testing.M) {
 	// Make a NodeSet account
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
-	_, err = nsDB.Core.AddUser(nsEmail)
-	if err != nil {
-		fail("error adding user to nodeset: %v", err)
-	}
 
 	// Register the primary
 	err = registerWithNodeset(mainNode, mainNodeAddress)
@@ -204,12 +200,15 @@ func registerWithNodeset(node *cstesting.ConstellationNode, address common.Addre
 	// whitelist the node with the nodeset.io account
 	nsServer := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsServer.GetDatabase()
-	user := nsDB.Core.GetUser(nsEmail)
+	user, err := nsDB.Core.AddUser(address.Hex())
+	if err != nil {
+		fail("error adding user to nodeset: %v", err)
+	}
 	_ = user.WhitelistNode(address)
 
 	// Register with NodeSet
 	hd := node.GetHyperdriveNode().GetApiClient()
-	response, err := hd.NodeSet.RegisterNode(nsEmail)
+	response, err := hd.NodeSet.RegisterNode(address.Hex())
 	if err != nil {
 		fail("error registering node with nodeset: %v", err)
 	}

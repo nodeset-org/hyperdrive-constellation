@@ -1,18 +1,20 @@
 module github.com/nodeset-org/hyperdrive-constellation
 
-go 1.21.10
+go 1.22
+
+toolchain go1.22.7
 
 require (
 	github.com/docker/docker v27.0.3+incompatible
-	github.com/ethereum/go-ethereum v1.14.7
+	github.com/ethereum/go-ethereum v1.14.8
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240917074637-e2d2ec3cd9b3
+	github.com/nodeset-org/hyperdrive-daemon v1.0.2-0.20240918060643-f87f8db4e758
 	github.com/nodeset-org/nodeset-client-go v0.0.0-20240917061847-f71fb99145be
 	github.com/nodeset-org/osha v0.2.1-0.20240909201548-2fd453c5235d
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20240903185110-65b3ec0f1045
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20240918042823-2e9f9de9a72e
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
@@ -34,7 +36,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/btcsuite/btcd v0.24.2 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.3 // indirect
+	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/btcsuite/btcd/btcutil v1.1.5 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -94,7 +96,7 @@ require (
 	github.com/hashicorp/go-uuid v1.0.1 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/herumi/bls-eth-go-binary v1.35.0 // indirect
-	github.com/holiman/uint256 v1.3.0 // indirect
+	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -141,10 +143,10 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/prysmaticlabs/fastssz v0.0.0-20221107182844-78142813af44 // indirect
-	github.com/prysmaticlabs/go-bitfield v0.0.0-20210809151128-385d8c5e3fb7 // indirect
-	github.com/prysmaticlabs/gohashtree v0.0.4-beta // indirect
-	github.com/prysmaticlabs/prysm/v5 v5.0.3 // indirect
+	github.com/prysmaticlabs/fastssz v0.0.0-20240620202422-a981b8ef89d3 // indirect
+	github.com/prysmaticlabs/go-bitfield v0.0.0-20240328144219-a1caa50c3a1e // indirect
+	github.com/prysmaticlabs/gohashtree v0.0.4-beta.0.20240624100937-73632381301b // indirect
+	github.com/prysmaticlabs/prysm/v5 v5.1.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sethvargo/go-password v0.3.1 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
