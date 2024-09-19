@@ -13,6 +13,7 @@ import (
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/server"
+	csshared "github.com/nodeset-org/hyperdrive-constellation/shared"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
@@ -36,7 +37,7 @@ func main() {
 	// Set application info
 	app.Name = "constellation-daemon"
 	app.Usage = "Hyperdrive Daemon for NodeSet Constellation Module Management"
-	app.Version = shared.HyperdriveVersion
+	app.Version = csshared.ConstellationVersion
 	app.Authors = []*cli.Author{
 		{
 			Name:  "Nodeset",
