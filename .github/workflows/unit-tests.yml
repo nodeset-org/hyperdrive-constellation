@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Install OSHA Dependencies
         working-directory: ./osha/hardhat
         run: npm ci
       
@@ -31,10 +31,32 @@ jobs:
         working-directory: ./osha/hardhat
         run: npx hardhat node --port 8545 &
 
+      - name: Checkout Constellation
+        uses: actions/checkout@v4
+        with:
+          repository: nodeset-org/constellation
+          path: ./constellation
+
+      - name: Install Constellation Dependencies
+        working-directory: ./constellation
+        run: npm ci
+
+      - name: Setup Constellation
+        working-directory: ./constellation
+        run: npx hardhat run scripts/sandbox.ts --network localhost
+
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: 1.22.7
+
+      - name: Install Module Dependencies
+        working-directory: ./internal/hardhat
+        run: npm ci
+
+      - name: Setup Module Contracts
+        working-directory: ./internal/hardhat
+        run: npx hardhat run scripts/deploy.js --network localhost
           
       - name: Run tests
         env: 
