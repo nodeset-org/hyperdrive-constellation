@@ -41,14 +41,14 @@ type MinipoolExitDetailsData struct {
 	CurrentEpoch uint64                `json:"currentEpoch"`
 }
 
-type MinipoolExitInfo struct {
+type MinipoolValidatorInfo struct {
 	Address common.Address         `json:"address"`
 	Pubkey  beacon.ValidatorPubkey `json:"pubkey"`
 	Index   string                 `json:"index"`
 }
 
 type MinipoolExitBody struct {
-	Infos []MinipoolExitInfo `json:"infos"`
+	Infos []MinipoolValidatorInfo `json:"infos"`
 }
 
 type MinipoolDetails struct {
@@ -97,7 +97,7 @@ type MinipoolStakeData struct {
 }
 
 type MinipoolUploadSignedExitBody struct {
-	Infos []MinipoolExitInfo `json:"infos"`
+	Infos []MinipoolValidatorInfo `json:"infos"`
 }
 
 type MinipoolVanityArtifactsData struct {
@@ -105,4 +105,7 @@ type MinipoolVanityArtifactsData struct {
 	SuperNodeAddress       common.Address `json:"superNodeAddress"`
 	MinipoolFactoryAddress common.Address `json:"minipoolFactoryAddress"`
 	InitHash               common.Hash    `json:"initHash"`
+}
+type MinipoolGetPubkeysData struct {
+	Infos []MinipoolValidatorInfo `json:"infos"`
 }

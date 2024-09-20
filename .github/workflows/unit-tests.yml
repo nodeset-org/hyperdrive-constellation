@@ -57,9 +57,9 @@ jobs:
       - name: Setup Module Contracts
         working-directory: ./internal/hardhat
         run: npx hardhat run scripts/deploy.js --network localhost
-          
+
       - name: Run tests
         env: 
            HARDHAT_URL: "http://localhost:8545"
            CI: true
-        run: go test -v -p 1 ./...
+        run: go test -p 1 ./...

@@ -88,12 +88,12 @@ func TestSignedExitUpload_Manual(t *testing.T) {
 	t.Logf("Minipool requires signed exit as expected")
 
 	// Send one manually
-	exitInfo := csapi.MinipoolExitInfo{
+	exitInfo := csapi.MinipoolValidatorInfo{
 		Address: mpCommon.Address,
 		Pubkey:  mpCommon.Pubkey.Get(),
 		Index:   mpStatus.Validator.Index,
 	}
-	_, err = cs.Minipool.UploadSignedExits([]csapi.MinipoolExitInfo{exitInfo})
+	_, err = cs.Minipool.UploadSignedExits([]csapi.MinipoolValidatorInfo{exitInfo})
 	require.NoError(t, err)
 
 	// Check the status again

@@ -54,7 +54,7 @@ type MinipoolUploadSignedExitsContext struct {
 	Context         context.Context
 
 	// Arguments
-	Infos []csapi.MinipoolExitInfo
+	Infos []csapi.MinipoolValidatorInfo
 }
 
 func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {

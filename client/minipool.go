@@ -57,11 +57,19 @@ func (r *MinipoolRequester) GetExitDetails(verbose bool) (*types.ApiResponse[csa
 }
 
 // Submit voluntary exits for minipool validators to the Beacon Chain
-func (r *MinipoolRequester) Exit(infos []csapi.MinipoolExitInfo) (*types.ApiResponse[types.SuccessData], error) {
+func (r *MinipoolRequester) Exit(infos []csapi.MinipoolValidatorInfo) (*types.ApiResponse[types.SuccessData], error) {
 	body := csapi.MinipoolExitBody{
 		Infos: infos,
 	}
 	return client.SendPostRequest[types.SuccessData](r, "exit", "Exit", body)
+}
+
+// Get the minipool address, validator pubkey, and Beacon chain index for each of this node's minipools
+func (r *MinipoolRequester) GetPubkeys(includeExited bool) (*types.ApiResponse[csapi.MinipoolGetPubkeysData], error) {
+	args := map[string]string{
+		"includeExited": strconv.FormatBool(includeExited),
+	}
+	return client.SendGetRequest[csapi.MinipoolGetPubkeysData](r, "get-pubkeys", "GetPubkeys", args)
 }
 
 // Get details and transaction info of minipools that are eligible for staking
@@ -77,7 +85,7 @@ func (r *MinipoolRequester) Status() (*types.ApiResponse[csapi.MinipoolStatusDat
 }
 
 // Upload signed voluntary exit messages for minipool validators to the NodeSet server
-func (r *MinipoolRequester) UploadSignedExits(infos []csapi.MinipoolExitInfo) (*types.ApiResponse[types.SuccessData], error) {
+func (r *MinipoolRequester) UploadSignedExits(infos []csapi.MinipoolValidatorInfo) (*types.ApiResponse[types.SuccessData], error) {
 	body := csapi.MinipoolUploadSignedExitBody{
 		Infos: infos,
 	}

@@ -11,6 +11,7 @@ import (
 
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
+	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 
@@ -86,13 +87,46 @@ type MinipoolStakeContext struct {
 
 func (c *MinipoolStakeContext) Initialize(walletStatus wallet.WalletStatus) (types.ResponseStatus, error) {
 	sp := c.ServiceProvider
+	ctx := c.Context
 	c.rpMgr = sp.GetRocketPoolManager()
 	c.csMgr = sp.GetConstellationManager()
 	c.res = sp.GetResources()
 	c.wallet = sp.GetWallet()
 
+	// Requirements
+	err := sp.RequireWalletReady(walletStatus)
+	if err != nil {
+		return types.ResponseStatus_WalletNotReady, err
+	}
+
+	err = sp.RequireEthClientSynced(ctx)
+	if err != nil {
+		if errors.Is(err, services.ErrExecutionClientNotSynced) {
+			return types.ResponseStatus_ClientsNotSynced, err
+		}
+		return types.ResponseStatus_Error, err
+	}
+	err = sp.RequireBeaconClientSynced(ctx)
+	if err != nil {
+		if errors.Is(err, services.ErrBeaconNodeNotSynced) {
+			return types.ResponseStatus_ClientsNotSynced, err
+		}
+		return types.ResponseStatus_Error, err
+	}
+
+	// Refresh RP
+	err = c.rpMgr.RefreshRocketPoolContracts()
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error refreshing Rocket Pool contracts: %w", err)
+	}
+
+	// Refresh constellation contracts
+	err = c.csMgr.LoadContracts()
+	if err != nil {
+		return types.ResponseStatus_Error, fmt.Errorf("error loading Constellation contracts: %w", err)
+	}
+
 	// Bindings
-	var err error
 	c.odaoMgr, err = oracle.NewOracleDaoManager(c.rpMgr.RocketPool)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating oDAO manager binding: %w", err)

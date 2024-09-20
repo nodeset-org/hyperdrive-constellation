@@ -10,6 +10,7 @@ import (
 	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/wallet"
 
+	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
 	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
@@ -37,7 +38,7 @@ func (f *walletCreateValidatorKeyContextFactory) Create(args url.Values) (*walle
 }
 
 func (f *walletCreateValidatorKeyContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterQuerylessGet[*walletCreateValidatorKeyContext, types.SuccessData](
+	server.RegisterQuerylessGet[*walletCreateValidatorKeyContext, csapi.WalletCreateValidatorKeyData](
 		router, "create-validator-key", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
@@ -53,7 +54,7 @@ type walletCreateValidatorKeyContext struct {
 	maxAttempts uint64
 }
 
-func (c *walletCreateValidatorKeyContext) PrepareData(data *types.SuccessData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
+func (c *walletCreateValidatorKeyContext) PrepareData(data *csapi.WalletCreateValidatorKeyData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.handler.serviceProvider
 	vMgr := sp.GetWallet()
 
@@ -63,9 +64,10 @@ func (c *walletCreateValidatorKeyContext) PrepareData(data *types.SuccessData, w
 		return types.ResponseStatus_WalletNotReady, err
 	}
 
-	_, err = vMgr.RecoverValidatorKey(c.pubkey, c.index, c.maxAttempts)
+	index, err := vMgr.RecoverValidatorKey(c.pubkey, c.index, c.maxAttempts)
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error creating validator key: %w", err)
+		return types.ResponseStatus_Error, fmt.Errorf("error creating validator key for pubkey %s: %w", c.pubkey.HexWithPrefix(), err)
 	}
+	data.Index = index
 	return types.ResponseStatus_Success, nil
 }
