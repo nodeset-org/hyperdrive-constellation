@@ -1,0 +1,65 @@
+name: Hyperdrive-Constellation Unit Tests 
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout OSHA
+        uses: actions/checkout@v4
+        with:
+          repository: nodeset-org/osha
+          path: ./osha
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install OSHA Dependencies
+        working-directory: ./osha/hardhat
+        run: npm ci
+      
+      - name: Run Hardhat  
+        working-directory: ./osha/hardhat
+        run: npx hardhat node --port 8545 &
+
+      - name: Checkout Constellation
+        uses: actions/checkout@v4
+        with:
+          repository: nodeset-org/constellation
+          path: ./constellation
+
+      - name: Install Constellation Dependencies
+        working-directory: ./constellation
+        run: npm ci
+
+      - name: Setup Constellation
+        working-directory: ./constellation
+        run: npx hardhat run scripts/sandbox.ts --network localhost
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.22.7
+
+      - name: Install Module Dependencies
+        working-directory: ./internal/hardhat
+        run: npm ci
+
+      - name: Setup Module Contracts
+        working-directory: ./internal/hardhat
+        run: npx hardhat run scripts/deploy.js --network localhost
+
+      - name: Run tests
+        env: 
+           HARDHAT_URL: "http://localhost:8545"
+           CI: true
+        run: go test -p 1 ./...

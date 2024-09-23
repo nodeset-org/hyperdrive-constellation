@@ -19,3 +19,11 @@
 
 # Go workspace file
 go.work
+
+# Hardhat
+internal/hardhat/node_modules/
+internal/hardhat/artifacts/
+internal/hardhat/cache/
+
+build/
+hyperdrive-constellation
