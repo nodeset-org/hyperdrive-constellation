@@ -14,6 +14,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	// The deployment name for Mainnet
+	NodesetDeploymentMainnet string = "mainnet"
+
+	// The deployment name for Holesky testing
+	NodesetDeploymentHolesky string = "holesky"
+)
+
 var (
 	// Mainnet resources for reference in testing
 	MainnetResourcesReference *ConstellationResources = &ConstellationResources{
@@ -48,6 +56,9 @@ type ConstellationSettings struct {
 
 // A collection of network-specific resources and getters for them
 type ConstellationResources struct {
+	// The name of the deployment used by nodeset.io
+	DeploymentName string `yaml:"deploymentName" json:"deploymentName"`
+
 	// The Constellation directory contract address, which houses all of the other contract addresses
 	Directory *common.Address `yaml:"directory" json:"directory"`
 

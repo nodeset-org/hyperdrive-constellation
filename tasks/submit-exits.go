@@ -71,7 +71,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	// Initialize the signed exits cache
 	hd := t.sp.GetHyperdriveClient()
 	if !t.initialized {
-		validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
+		validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(t.res.DeploymentName)
 		if err != nil {
 			return fmt.Errorf("error getting validators from NodeSet: %w", err)
 		}
@@ -85,7 +85,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 
 	// Get the registered address from the server
 	if t.registeredAddress == nil {
-		response, err := hd.NodeSet_Constellation.GetRegisteredAddress()
+		response, err := hd.NodeSet_Constellation.GetRegisteredAddress(t.res.DeploymentName)
 		if err != nil {
 			return fmt.Errorf("error getting registered address from NodeSet: %w", err)
 		}
@@ -261,7 +261,7 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 // Upload signed exits to NodeSet
 func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.ExitData) error {
 	hd := t.sp.GetHyperdriveClient()
-	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(exitMessages)
+	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(t.res.DeploymentName, exitMessages)
 	if err != nil {
 		return fmt.Errorf("error uploading signed exits: %w", err)
 	}
@@ -275,7 +275,7 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.ExitDa
 	t.logger.Debug("Signed exits uploaded to NodeSet")
 
 	// Get the validators to make sure they're marked as submitted
-	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
+	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(t.res.DeploymentName)
 	if err != nil {
 		return fmt.Errorf("error getting validators from NodeSet: %w", err)
 	}

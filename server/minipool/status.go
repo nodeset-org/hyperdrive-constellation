@@ -103,10 +103,11 @@ func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []mi
 	}
 	data.MaxValidatorsPerNode = c.maxValidators.Uint64()
 	data.LatestDelegate = c.snData.LatestDelegate
+	csResources := c.ServiceProvider.GetResources()
 
 	// Get the signed exit status from NodeSet
 	hd := c.ServiceProvider.GetHyperdriveClient()
-	response, err := hd.NodeSet_Constellation.GetValidators()
+	response, err := hd.NodeSet_Constellation.GetValidators(csResources.DeploymentName)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting validator status from the nodeset server: %w", err)
 	}
