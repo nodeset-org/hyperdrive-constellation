@@ -119,7 +119,7 @@ func main() {
 		configFactory := func(hdCfg *hdconfig.HyperdriveConfig) (*csconfig.ConstellationConfig, error) {
 			return csconfig.NewConstellationConfig(hdCfg, settingsList)
 		}
-		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, configFactory, config.ClientTimeout)
+		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, configFactory)
 		if err != nil {
 			return fmt.Errorf("error creating service provider: %w", err)
 		}
