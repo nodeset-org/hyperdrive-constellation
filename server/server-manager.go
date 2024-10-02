@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"net/http"
 	"sync"
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
@@ -10,6 +11,7 @@ import (
 	csservice "github.com/nodeset-org/hyperdrive-constellation/server/service"
 	cswallet "github.com/nodeset-org/hyperdrive-constellation/server/wallet"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
+	"github.com/nodeset-org/hyperdrive-daemon/shared/auth"
 	"github.com/rocket-pool/node-manager-core/api/server"
 )
 
@@ -20,9 +22,9 @@ type ServerManager struct {
 }
 
 // Creates a new server manager
-func NewServerManager(sp cscommon.IConstellationServiceProvider, ip string, port uint16, stopWg *sync.WaitGroup) (*ServerManager, error) {
+func NewServerManager(sp cscommon.IConstellationServiceProvider, ip string, port uint16, stopWg *sync.WaitGroup, authMgr *auth.AuthorizationManager) (*ServerManager, error) {
 	// Start the API server
-	apiServer, err := createServer(sp, ip, port)
+	apiServer, err := createServer(sp, ip, port, authMgr)
 	if err != nil {
 		return nil, fmt.Errorf("error creating API server: %w", err)
 	}
@@ -54,19 +56,27 @@ func (m *ServerManager) Stop() {
 }
 
 // Creates a new Hyperdrive API server
-func createServer(sp cscommon.IConstellationServiceProvider, ip string, port uint16) (*server.NetworkSocketApiServer, error) {
+func createServer(sp cscommon.IConstellationServiceProvider, ip string, port uint16, authMgr *auth.AuthorizationManager) (*server.NetworkSocketApiServer, error) {
 	apiLogger := sp.GetApiLogger()
 	ctx := apiLogger.CreateContextWithLogger(sp.GetBaseContext())
 
+	// Create the API handlers
 	handlers := []server.IHandler{
 		csnode.NewNodeHandler(apiLogger, ctx, sp),
 		csminipool.NewMinipoolHandler(apiLogger, ctx, sp),
 		csservice.NewServiceHandler(apiLogger, ctx, sp),
 		cswallet.NewWalletHandler(apiLogger, ctx, sp),
 	}
+
+	// Create the API server
 	server, err := server.NewNetworkSocketApiServer(apiLogger.Logger, ip, port, handlers, csconfig.DaemonBaseRoute, csconfig.ApiVersion)
 	if err != nil {
 		return nil, err
 	}
+
+	// Add the authorization middleware
+	server.GetApiRouter().Use(func(next http.Handler) http.Handler {
+		return authMgr.GetRequestHandler(apiLogger.Logger, next)
+	})
 	return server, nil
 }

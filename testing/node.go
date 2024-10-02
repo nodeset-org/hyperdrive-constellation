@@ -13,8 +13,13 @@ import (
 	csserver "github.com/nodeset-org/hyperdrive-constellation/server"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	hdservices "github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
+	"github.com/nodeset-org/hyperdrive-daemon/shared/auth"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
+)
+
+const (
+	apiAuthKey string = "cs-test-key"
 )
 
 // A complete Constellation node instance
@@ -43,7 +48,9 @@ func newConstellationNode(sp cscommon.IConstellationServiceProvider, address str
 	// Create the server
 	wg := &sync.WaitGroup{}
 	csCfg := sp.GetConfig()
-	serverMgr, err := csserver.NewServerManager(sp, address, csCfg.ApiPort.Value, wg)
+	serverAuthMgr := auth.NewAuthorizationManager("", "cs-server", auth.DefaultRequestLifespan)
+	serverAuthMgr.SetKey([]byte(apiAuthKey))
+	serverMgr, err := csserver.NewServerManager(sp, address, csCfg.ApiPort.Value, wg, serverAuthMgr)
 	if err != nil {
 		return nil, fmt.Errorf("error creating constellation server: %v", err)
 	}
@@ -54,7 +61,9 @@ func newConstellationNode(sp cscommon.IConstellationServiceProvider, address str
 	if err != nil {
 		return nil, fmt.Errorf("error parsing client URL [%s]: %v", urlString, err)
 	}
-	apiClient := csclient.NewApiClient(url, clientLogger, nil)
+	clientAuthMgr := auth.NewAuthorizationManager("", "cs-client", auth.DefaultRequestLifespan)
+	clientAuthMgr.SetKey([]byte(apiAuthKey))
+	apiClient := csclient.NewApiClient(url, clientLogger, nil, clientAuthMgr)
 
 	return &ConstellationNode{
 		sp:        sp,
