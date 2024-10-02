@@ -48,9 +48,9 @@ func newConstellationNode(sp cscommon.IConstellationServiceProvider, address str
 	// Create the server
 	wg := &sync.WaitGroup{}
 	csCfg := sp.GetConfig()
-	authMgr := auth.NewAuthorizationManager("")
-	authMgr.SetKey([]byte(apiAuthKey))
-	serverMgr, err := csserver.NewServerManager(sp, address, csCfg.ApiPort.Value, wg, authMgr)
+	serverAuthMgr := auth.NewAuthorizationManager("", "cs-server", auth.DefaultRequestLifespan)
+	serverAuthMgr.SetKey([]byte(apiAuthKey))
+	serverMgr, err := csserver.NewServerManager(sp, address, csCfg.ApiPort.Value, wg, serverAuthMgr)
 	if err != nil {
 		return nil, fmt.Errorf("error creating constellation server: %v", err)
 	}
@@ -61,7 +61,9 @@ func newConstellationNode(sp cscommon.IConstellationServiceProvider, address str
 	if err != nil {
 		return nil, fmt.Errorf("error parsing client URL [%s]: %v", urlString, err)
 	}
-	apiClient := csclient.NewApiClient(url, clientLogger, nil, authMgr)
+	clientAuthMgr := auth.NewAuthorizationManager("", "cs-client", auth.DefaultRequestLifespan)
+	clientAuthMgr.SetKey([]byte(apiAuthKey))
+	apiClient := csclient.NewApiClient(url, clientLogger, nil, clientAuthMgr)
 
 	return &ConstellationNode{
 		sp:        sp,
