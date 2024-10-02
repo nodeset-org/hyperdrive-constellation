@@ -18,6 +18,7 @@ import (
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	"github.com/nodeset-org/hyperdrive-daemon/shared"
+	"github.com/nodeset-org/hyperdrive-daemon/shared/auth"
 	"github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/urfave/cli/v2"
@@ -76,6 +77,18 @@ func main() {
 		Usage:   "The port to bind the API server to",
 		Value:   uint(csconfig.DefaultApiPort),
 	}
+	apiKeyFlag := &cli.StringFlag{
+		Name:     "api-key",
+		Aliases:  []string{"k"},
+		Usage:    "Path of the key to use for authenticating incoming API requests",
+		Required: true,
+	}
+	hyperdriveApiKeyFlag := &cli.StringFlag{
+		Name:     "hd-api-key",
+		Aliases:  []string{"hk"},
+		Usage:    "Path of the key to use when sending requests to the Hyperdrive API",
+		Required: true,
+	}
 
 	app.Flags = []cli.Flag{
 		moduleDirFlag,
@@ -83,6 +96,8 @@ func main() {
 		settingsFolderFlag,
 		ipFlag,
 		portFlag,
+		apiKeyFlag,
+		hyperdriveApiKeyFlag,
 	}
 	app.Action = func(c *cli.Context) error {
 		// Get the env vars
@@ -112,6 +127,22 @@ func main() {
 			os.Exit(1)
 		}
 
+		// Make an incoming API auth manager
+		apiKeyPath := c.String(apiKeyFlag.Name)
+		moduleAuthMgr := auth.NewAuthorizationManager(apiKeyPath)
+		err = moduleAuthMgr.LoadAuthKey()
+		if err != nil {
+			return fmt.Errorf("error loading module API key: %w", err)
+		}
+
+		// Make an HD API auth manager
+		hdApiKeyPath := c.String(hyperdriveApiKeyFlag.Name)
+		hdAuthMgr := auth.NewAuthorizationManager(hdApiKeyPath)
+		err = hdAuthMgr.LoadAuthKey()
+		if err != nil {
+			return fmt.Errorf("error loading Hyperdrive API key: %w", err)
+		}
+
 		// Wait group to handle the API server (separate because of error handling)
 		stopWg := new(sync.WaitGroup)
 
@@ -119,7 +150,7 @@ func main() {
 		configFactory := func(hdCfg *hdconfig.HyperdriveConfig) (*csconfig.ConstellationConfig, error) {
 			return csconfig.NewConstellationConfig(hdCfg, settingsList)
 		}
-		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, configFactory)
+		sp, err := services.NewModuleServiceProvider(hyperdriveUrl, moduleDir, csconfig.ModuleName, csconfig.ClientLogName, configFactory, hdAuthMgr)
 		if err != nil {
 			return fmt.Errorf("error creating service provider: %w", err)
 		}
@@ -139,7 +170,7 @@ func main() {
 		// Start the server after the task loop so it can log into NodeSet before this starts serving registration status checks
 		ip := c.String(ipFlag.Name)
 		port := c.Uint64(portFlag.Name)
-		serverMgr, err := server.NewServerManager(constellationSp, ip, uint16(port), stopWg)
+		serverMgr, err := server.NewServerManager(constellationSp, ip, uint16(port), stopWg, moduleAuthMgr)
 		if err != nil {
 			return fmt.Errorf("error creating Constellation server: %w", err)
 		}
