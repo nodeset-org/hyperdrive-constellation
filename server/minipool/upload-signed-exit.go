@@ -63,6 +63,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	w := sp.GetWallet()
 	bc := sp.GetBeaconClient()
 	hd := sp.GetHyperdriveClient()
+	csResources := sp.GetResources()
 
 	// Requirements
 	err := sp.RequireBeaconClientSynced(c.Context)
@@ -124,7 +125,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	}
 
 	// Submit it to the server
-	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(messages)
+	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(csResources.DeploymentName, messages)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error submitting signed exits: %w", err)
 	}
@@ -136,7 +137,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	}
 
 	// Get the list of validators for the node now
-	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators()
+	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(csResources.DeploymentName)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error checking validators list from NodeSet: %w", err)
 	}

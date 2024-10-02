@@ -52,6 +52,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	hd := sp.GetHyperdriveClient()
 	csMgr := sp.GetConstellationManager()
 	ctx := c.handler.ctx
+	csResources := sp.GetResources()
 
 	// Requirements
 	err := sp.RequireWalletReady(walletStatus)
@@ -73,7 +74,7 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 	}
 
 	// Request a registration signature - note this will use the wallet address, not the node address
-	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature()
+	sigResponse, err := hd.NodeSet_Constellation.GetRegistrationSignature(csResources.DeploymentName)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting registration signature: %w", err)
 	}

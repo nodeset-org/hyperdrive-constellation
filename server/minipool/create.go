@@ -180,7 +180,8 @@ func (c *MinipoolCreateContext) GetState(mc *batch.MultiCaller) {
 func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.ServiceProvider
 	hd := sp.GetHyperdriveClient()
-	resources := sp.GetHyperdriveResources()
+	hdResources := sp.GetHyperdriveResources()
+	csResources := sp.GetResources()
 	qMgr := sp.GetQueryManager()
 
 	// Make sure the node's registered
@@ -230,7 +231,7 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	data.MaxMinipoolsReached = c.activeValidatorCount.Cmp(c.maxActiveValidatorsPerNode) >= 0
 
 	// Get a deposit signature
-	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(c.ExpectedMinipoolAddress, c.Salt)
+	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(csResources.DeploymentName, c.ExpectedMinipoolAddress, c.Salt)
 	if err != nil {
 		if errors.Is(err, v2constellation.ErrValidatorRequiresExitMessage) {
 			data.MissingExitMessage = true
@@ -273,9 +274,9 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 		c.Logger,
 		validatorKey.PrivateKey,
 		withdrawalCredentials,
-		resources.GenesisForkVersion,
+		hdResources.GenesisForkVersion,
 		prelaunchValueGwei.Uint64(),
-		resources.EthNetworkName,
+		hdResources.EthNetworkName,
 	)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error creating deposit data for validator [%s]: %w", validatorKey.PublicKey.Hex(), err)

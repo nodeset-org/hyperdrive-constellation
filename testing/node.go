@@ -105,7 +105,7 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	hdClient := hdNode.GetApiClient()
 
 	// Make Constellation resources
-	resources := getTestResources(hdSp.GetResources())
+	resources := getTestResources(hdSp.GetResources(), deploymentName)
 	cfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
 	if err != nil {
 		return nil, fmt.Errorf("error creating Constellation config: %v", err)

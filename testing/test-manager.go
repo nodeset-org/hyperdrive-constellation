@@ -13,6 +13,10 @@ import (
 	"github.com/rocket-pool/node-manager-core/log"
 )
 
+const (
+	deploymentName string = "localtest"
+)
+
 // ConstellationTestManager for managing testing resources and services
 type ConstellationTestManager struct {
 	*hdtesting.HyperdriveTestManager
@@ -35,7 +39,7 @@ func NewConstellationTestManager() (*ConstellationTestManager, error) {
 	hdClient := hdNode.GetApiClient()
 
 	// Make Constellation resources
-	csResources := getTestResources(hdSp.GetResources())
+	csResources := getTestResources(hdSp.GetResources(), deploymentName)
 	csCfg, err := csconfig.NewConstellationConfig(hdCfg, []*csconfig.ConstellationSettings{})
 	if err != nil {
 		closeTestManager(tm)

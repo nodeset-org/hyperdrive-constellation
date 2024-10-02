@@ -32,13 +32,14 @@ const (
 )
 
 // Returns a new ConstellationResources instance with test network values
-func getTestResources(hdResources *hdconfig.MergedResources) *csconfig.MergedResources {
+func getTestResources(hdResources *hdconfig.MergedResources, deploymentName string) *csconfig.MergedResources {
 	csRes := &csconfig.MergedResources{
 		MergedResources: hdResources,
 		ConstellationResources: &csconfig.ConstellationResources{
-			Directory:     config.HexToAddressPtr(DirectoryAddress),
-			RocketStorage: config.HexToAddressPtr(RocketStorageAddress),
-			FeeRecipient:  config.HexToAddressPtr(SmoothingPoolAddress),
+			DeploymentName: deploymentName,
+			Directory:      config.HexToAddressPtr(DirectoryAddress),
+			RocketStorage:  config.HexToAddressPtr(RocketStorageAddress),
+			FeeRecipient:   config.HexToAddressPtr(SmoothingPoolAddress),
 		},
 		SmartNodeResources: &snconfig.SmartNodeResources{
 			StorageAddress:  common.HexToAddress(RocketStorageAddress),
