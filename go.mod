@@ -10,8 +10,8 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.1.0-b2
-	github.com/nodeset-org/nodeset-client-go v1.1.0
+	github.com/nodeset-org/hyperdrive-daemon v1.1.0-b2.0.20241007163607-e439ed3db62f
+	github.com/nodeset-org/nodeset-client-go v1.1.1-0.20241007162432-cba11fc62963
 	github.com/nodeset-org/osha v0.3.1
 	github.com/rocket-pool/batch-query v1.0.0
 	github.com/rocket-pool/node-manager-core v0.5.2-0.20241003024529-05c829d805c6
@@ -24,6 +24,7 @@ require (
 )
 
 require (
+	filippo.io/age v1.2.0 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20240716105424-66b64c4bb379 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20231105174938-2b5cbb29f3e2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect

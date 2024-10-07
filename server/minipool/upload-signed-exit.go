@@ -85,7 +85,7 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	}
 
 	// Get a signed exit for each pubkey
-	messages := make([]nscommon.ExitData, len(c.Infos))
+	messages := make([]nscommon.EncryptedExitData, len(c.Infos))
 	for i, info := range c.Infos {
 		address := info.Address
 		pubkey := info.Pubkey
@@ -106,17 +106,24 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 		if err != nil {
 			return types.ResponseStatus_Error, fmt.Errorf("error getting exit message signature for minipool %s (pubkey %s): %w", address.Hex(), pubkey.Hex(), err)
 		}
+		exitMessage := nscommon.ExitMessage{
+			Message: nscommon.ExitMessageDetails{
+				Epoch:          strconv.FormatUint(epoch, 10),
+				ValidatorIndex: index,
+			},
+			Signature: signature.HexWithPrefix(),
+		}
+
+		// Encrypt it
+		encryptedMessage, err := nscommon.EncryptSignedExitMessage(exitMessage, csResources.EncryptionPubkey)
+		if err != nil {
+			return types.ResponseStatus_Error, fmt.Errorf("error encrypting signed exit message for minipool %s (pubkey %s): %w", address.Hex(), pubkey.Hex(), err)
+		}
 
 		// Add it to the list
-		messages[i] = nscommon.ExitData{
-			Pubkey: pubkey.HexWithPrefix(),
-			ExitMessage: nscommon.ExitMessage{
-				Message: nscommon.ExitMessageDetails{
-					Epoch:          strconv.FormatUint(epoch, 10),
-					ValidatorIndex: index,
-				},
-				Signature: signature.HexWithPrefix(),
-			},
+		messages[i] = nscommon.EncryptedExitData{
+			Pubkey:      pubkey.HexWithPrefix(),
+			ExitMessage: encryptedMessage,
 		}
 		c.Logger.Debug("Created signed exit",
 			slog.String("minipool", address.Hex()),

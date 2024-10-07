@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
+	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/osha/keys"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	"github.com/rocket-pool/rocketpool-go/v2/node"
@@ -144,6 +145,7 @@ func CreateStandardTestHarness(options *StandardTestHarnessOptions) (*StandardTe
 		csMgr.SuperNodeAccount.Address,
 	)
 	deployment.SetAdminPrivateKey(deployerKey)
+	nsDB.SetSecretEncryptionIdentity(hdtesting.EncryptionIdentity)
 
 	// Make the contract bindings
 	bindings, err := CreateBindings(sp)

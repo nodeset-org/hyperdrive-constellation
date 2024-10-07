@@ -143,7 +143,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 }
 
 // Get minipools that are eligible for signed exit submission
-func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipools []minipool.IMinipool) ([]nscommon.ExitData, error) {
+func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipools []minipool.IMinipool) ([]nscommon.EncryptedExitData, error) {
 	// Get the slot to check on Beacon
 	blockTimeUnix := snapshot.ExecutionBlockHeader.Time
 	slotSeconds := blockTimeUnix - t.beaconCfg.GenesisTime
@@ -206,7 +206,7 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 	}
 
 	// Get the signed exits
-	exitData := []nscommon.ExitData{}
+	exitData := []nscommon.EncryptedExitData{}
 	for _, mp := range eligibleMinipools {
 		pubkey := mp.Common().Pubkey.Get()
 		index := statuses[pubkey].Index
@@ -239,15 +239,28 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 			)
 			continue
 		}
-		exitData = append(exitData, nscommon.ExitData{
-			Pubkey: pubkey.HexWithPrefix(),
-			ExitMessage: nscommon.ExitMessage{
-				Message: nscommon.ExitMessageDetails{
-					Epoch:          strconv.FormatUint(epoch, 10),
-					ValidatorIndex: index,
-				},
-				Signature: signature.HexWithPrefix(),
+		exitMessage := nscommon.ExitMessage{
+			Message: nscommon.ExitMessageDetails{
+				Epoch:          strconv.FormatUint(epoch, 10),
+				ValidatorIndex: index,
 			},
+			Signature: signature.HexWithPrefix(),
+		}
+
+		// Encrypt it
+		encryptedMessage, err := nscommon.EncryptSignedExitMessage(exitMessage, t.res.EncryptionPubkey)
+		if err != nil {
+			t.logger.Warn("Error encrypting signed exit message",
+				slog.String("minipool", mp.Common().Address.Hex()),
+				slog.String("pubkey", pubkey.HexWithPrefix()),
+				log.Err(err),
+			)
+			continue
+		}
+
+		exitData = append(exitData, nscommon.EncryptedExitData{
+			Pubkey:      pubkey.HexWithPrefix(),
+			ExitMessage: encryptedMessage,
 		})
 		t.logger.Debug("Signed exit message created",
 			slog.String("minipool", mp.Common().Address.Hex()),
@@ -259,7 +272,7 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 }
 
 // Upload signed exits to NodeSet
-func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.ExitData) error {
+func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.EncryptedExitData) error {
 	hd := t.sp.GetHyperdriveClient()
 	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(t.res.DeploymentName, exitMessages)
 	if err != nil {
