@@ -10,7 +10,7 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.1.0-b2.0.20241008194042-73dbca474c7e
+	github.com/nodeset-org/hyperdrive-daemon v1.1.0-rc1
 	github.com/nodeset-org/nodeset-client-go v1.2.0
 	github.com/nodeset-org/osha v0.3.1
 	github.com/rocket-pool/batch-query v1.0.0
