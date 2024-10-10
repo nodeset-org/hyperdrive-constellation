@@ -124,7 +124,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	}
 
 	// Get signed exits for eligible minipools
-	exitMessages, err := t.getSignedExits(snapshot, requiredMinipools)
+	eligibleMinipools, exitMessages, err := t.getSignedExits(snapshot, requiredMinipools)
 	if err != nil {
 		return fmt.Errorf("error getting signed exits: %w", err)
 	}
@@ -133,7 +133,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 	}
 
 	// Upload signed exits to NodeSet
-	err = t.uploadSignedExits(exitMessages)
+	err = t.uploadSignedExits(eligibleMinipools, exitMessages)
 	if err != nil {
 		return fmt.Errorf("error uploading signed exits: %w", err)
 	}
@@ -143,7 +143,7 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 }
 
 // Get minipools that are eligible for signed exit submission
-func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipools []minipool.IMinipool) ([]nscommon.EncryptedExitData, error) {
+func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipools []minipool.IMinipool) ([]minipool.IMinipool, []nscommon.EncryptedExitData, error) {
 	// Get the slot to check on Beacon
 	blockTimeUnix := snapshot.ExecutionBlockHeader.Time
 	slotSeconds := blockTimeUnix - t.beaconCfg.GenesisTime
@@ -159,7 +159,7 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 	}
 	statuses, err := t.bc.GetValidatorStatuses(t.ctx, pubkeys, opts)
 	if err != nil {
-		return nil, fmt.Errorf("error getting validator statuses: %w", err)
+		return nil, nil, fmt.Errorf("error getting validator statuses: %w", err)
 	}
 
 	// Filter on beacon status
@@ -191,18 +191,18 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 		eligibleMinipools = append(eligibleMinipools, mp)
 	}
 	if len(eligibleMinipools) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	// Get Beacon details for exiting
 	head, err := t.bc.GetBeaconHead(t.ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error getting beacon head: %w", err)
+		return nil, nil, fmt.Errorf("error getting beacon head: %w", err)
 	}
 	epoch := head.FinalizedEpoch // Use the latest finalized epoch for the exit
 	signatureDomain, err := t.bc.GetDomainData(t.ctx, eth2types.DomainVoluntaryExit[:], epoch, false)
 	if err != nil {
-		return nil, fmt.Errorf("error getting domain data: %w", err)
+		return nil, nil, fmt.Errorf("error getting domain data: %w", err)
 	}
 
 	// Get the signed exits
@@ -268,11 +268,11 @@ func (t *SubmitSignedExitsTask) getSignedExits(snapshot *NetworkSnapshot, minipo
 		)
 	}
 
-	return exitData, nil
+	return eligibleMinipools, exitData, nil
 }
 
 // Upload signed exits to NodeSet
-func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.EncryptedExitData) error {
+func (t *SubmitSignedExitsTask) uploadSignedExits(eligibleMinipools []minipool.IMinipool, exitMessages []nscommon.EncryptedExitData) error {
 	hd := t.sp.GetHyperdriveClient()
 	uploadResponse, err := hd.NodeSet_Constellation.UploadSignedExits(t.res.DeploymentName, exitMessages)
 	if err != nil {
@@ -288,14 +288,11 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.Encryp
 	t.logger.Debug("Signed exits uploaded to NodeSet")
 
 	// Get the validators to make sure they're marked as submitted
-	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(t.res.DeploymentName)
-	if err != nil {
-		return fmt.Errorf("error getting validators from NodeSet: %w", err)
-	}
-	for _, validator := range validatorsResponse.Data.Validators {
+	for _, mp := range eligibleMinipools {
 		// Find it in the exit messages
 		found := false
-		pubkey := validator.Pubkey
+		mpCommon := mp.Common()
+		pubkey := mpCommon.Pubkey.Get()
 		for _, exitMessage := range exitMessages {
 			if exitMessage.Pubkey == pubkey.HexWithPrefix() {
 				found = true
@@ -304,13 +301,6 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(exitMessages []nscommon.Encryp
 		}
 		if !found {
 			t.logger.Warn("Validator exit message still missing according to NodeSet and wasn't submitted in this round",
-				slog.String("pubkey", pubkey.HexWithPrefix()),
-			)
-			continue
-		}
-
-		if validator.RequiresExitMessage {
-			t.logger.Warn("Validator exit message was submitted to NodeSet but is still required by the server?",
 				slog.String("pubkey", pubkey.HexWithPrefix()),
 			)
 			continue
