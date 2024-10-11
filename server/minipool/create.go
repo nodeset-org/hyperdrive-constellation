@@ -17,7 +17,6 @@ import (
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	hdapi "github.com/nodeset-org/hyperdrive-daemon/shared/types/api"
-	v2constellation "github.com/nodeset-org/nodeset-client-go/api-v2/constellation"
 	batch "github.com/rocket-pool/batch-query"
 	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
@@ -233,20 +232,50 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	// Get a deposit signature
 	sigResponse, err := hd.NodeSet_Constellation.GetDepositSignature(csResources.DeploymentName, c.ExpectedMinipoolAddress, c.Salt)
 	if err != nil {
-		if errors.Is(err, v2constellation.ErrValidatorRequiresExitMessage) {
-			data.MissingExitMessage = true
-		} else {
-			return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
-		}
+		return types.ResponseStatus_Error, fmt.Errorf("error getting deposit signature: %w", err)
 	}
+	data.IncorrectNodeAddress = sigResponse.Data.IncorrectNodeAddress
+	data.MissingExitMessage = sigResponse.Data.MissingExitMessage
+	data.InvalidPermissions = sigResponse.Data.InvalidPermissions
 	data.NodeSetDepositingDisabled = false // TODO: once the spec is set up with the flag, put it into this check
 
 	// Check if we can deposit
 	data.NotWhitelistedWithConstellation = !c.isWhitelisted
 	data.RocketPoolDepositingDisabled = !c.pdaoMgr.Settings.Node.IsDepositingEnabled.Get()
-	data.CanCreate = !(data.InsufficientBalance || data.InsufficientLiquidity || data.NotRegisteredWithNodeSet || data.NotWhitelistedWithConstellation || data.MissingExitMessage || data.RocketPoolDepositingDisabled || data.NodeSetDepositingDisabled || data.MaxMinipoolsReached)
+	data.CanCreate = !(data.InsufficientBalance ||
+		data.InsufficientLiquidity ||
+		data.NotRegisteredWithNodeSet ||
+		data.NotWhitelistedWithConstellation ||
+		data.IncorrectNodeAddress ||
+		data.MissingExitMessage ||
+		data.InvalidPermissions ||
+		data.RocketPoolDepositingDisabled ||
+		data.NodeSetDepositingDisabled ||
+		data.MaxMinipoolsReached)
 	if !data.CanCreate {
 		return types.ResponseStatus_Success, nil
+	}
+
+	// Handle unexpected nodeset.io conditions
+	if len(sigResponse.Data.Signature) == 0 {
+		unexpectedError := ""
+		if sigResponse.Data.NotRegistered {
+			unexpectedError = "node is not registered with nodeset yet"
+		}
+		if sigResponse.Data.NotWhitelisted {
+			unexpectedError = "you don't have a node whitelisted with Constellation yet"
+		}
+		if sigResponse.Data.LimitReached {
+			unexpectedError = "you've reached the maximum number of minipools you can currently create"
+		}
+		if sigResponse.Data.AddressAlreadyRegistered {
+			unexpectedError = fmt.Sprintf("minipool %s has already been registered to you according to the Constellation contract", c.ExpectedMinipoolAddress.Hex())
+		}
+		if unexpectedError != "" {
+			return types.ResponseStatus_Error, fmt.Errorf("unexpected error from nodeset.io during deposit signature request: %s", unexpectedError)
+		} else {
+			return types.ResponseStatus_Error, fmt.Errorf("nodeset.io provided an empty deposit signature but no errors")
+		}
 	}
 
 	// Create a new validator key

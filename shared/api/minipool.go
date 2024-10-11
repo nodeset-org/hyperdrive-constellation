@@ -57,9 +57,13 @@ type MinipoolDetails struct {
 }
 
 type MinipoolStatusData struct {
-	Minipools            []MinipoolDetails `json:"minipools"`
-	LatestDelegate       common.Address    `json:"latestDelegate"`
-	MaxValidatorsPerNode uint64            `json:"maxValidatorsPerNode"`
+	NotRegisteredWithNodeSet        bool              `json:"notRegisteredWithNodeSet"`
+	NotWhitelistedWithConstellation bool              `json:"notWhitelistedWithConstellation"`
+	IncorrectNodeAddress            bool              `json:"incorrectNodeAddress"`
+	InvalidPermissions              bool              `json:"invalidPermissions"`
+	Minipools                       []MinipoolDetails `json:"minipools"`
+	LatestDelegate                  common.Address    `json:"latestDelegate"`
+	MaxValidatorsPerNode            uint64            `json:"maxValidatorsPerNode"`
 }
 
 type MinipoolCreateData struct {
@@ -68,7 +72,9 @@ type MinipoolCreateData struct {
 	InsufficientLiquidity           bool                   `json:"insufficientLiquidity"`
 	NotRegisteredWithNodeSet        bool                   `json:"notRegisteredWithNodeSet"`
 	NotWhitelistedWithConstellation bool                   `json:"notWhitelistedWithConstellation"`
+	IncorrectNodeAddress            bool                   `json:"incorrectNodeAddress"`
 	MissingExitMessage              bool                   `json:"missingExitMessage"`
+	InvalidPermissions              bool                   `json:"invalidPermissions"`
 	RocketPoolDepositingDisabled    bool                   `json:"rocketPoolDepositingDisabled"`
 	NodeSetDepositingDisabled       bool                   `json:"noteSetDepositingDisabled"`
 	MaxMinipoolsReached             bool                   `json:"maxMinipoolsReached"`

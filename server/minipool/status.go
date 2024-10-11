@@ -111,6 +111,16 @@ func (c *MinipoolStatusContext) PrepareData(addresses []common.Address, mps []mi
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting validator status from the nodeset server: %w", err)
 	}
+	data.NotRegisteredWithNodeSet = response.Data.NotRegistered
+	data.NotWhitelistedWithConstellation = response.Data.NotWhitelisted
+	data.IncorrectNodeAddress = response.Data.IncorrectNodeAddress
+	data.InvalidPermissions = response.Data.InvalidPermissions
+	if data.NotRegisteredWithNodeSet ||
+		data.NotWhitelistedWithConstellation ||
+		data.IncorrectNodeAddress ||
+		data.InvalidPermissions {
+		return types.ResponseStatus_Success, nil
+	}
 
 	// Add each minipool to the list
 	data.Minipools = make([]csapi.MinipoolDetails, len(c.snData.Minipools))

@@ -10,4 +10,6 @@ type NodeRegisterData struct {
 	TxInfo                   *eth.TransactionInfo `json:"txInfo"`
 	NotAuthorized            bool                 `json:"notAuthorized"`
 	NotRegisteredWithNodeSet bool                 `json:"notRegisteredWithNodeSet"`
+	InvalidPermissions       bool                 `json:"invalidPermissions"`
+	IncorrectNodeAddress     bool                 `json:"incorrectNodeAddress"`
 }
