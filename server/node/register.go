@@ -86,6 +86,14 @@ func (c *nodeRegisterContext) PrepareData(data *csapi.NodeRegisterData, walletSt
 		data.NotRegisteredWithNodeSet = true
 		return types.ResponseStatus_Success, nil
 	}
+	if sigResponse.Data.IncorrectNodeAddress {
+		data.IncorrectNodeAddress = true
+		return types.ResponseStatus_Success, nil
+	}
+	if sigResponse.Data.InvalidPermissions {
+		data.InvalidPermissions = true
+		return types.ResponseStatus_Success, nil
+	}
 
 	// Print the signature
 	logger := c.handler.logger

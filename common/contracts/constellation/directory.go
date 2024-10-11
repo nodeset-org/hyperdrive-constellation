@@ -126,6 +126,26 @@ func (c *Directory) GetMerkleClaimStreamerAddress(mc *batch.MultiCaller, out *co
 	eth.AddCallToMulticaller(mc, c.contract, out, "getMerkleClaimStreamerAddress")
 }
 
+func (c *Directory) GetRplAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRPLAddress")
+}
+
+func (c *Directory) GetRocketDaoProtocolProposalAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRocketDAOProtocolProposalAddress")
+}
+
+func (c *Directory) GetRocketDaoProtocolSettingsMinipool(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRocketDAOProtocolSettingsMinipool")
+}
+
+func (c *Directory) GetRocketDaoProtocolSettingsRewardsAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRocketDAOProtocolSettingsRewardsAddress")
+}
+
+func (c *Directory) GetRocketDepositPoolAddress(mc *batch.MultiCaller, out *common.Address) {
+	eth.AddCallToMulticaller(mc, c.contract, out, "getRocketDepositPoolAddress")
+}
+
 // ====================
 // === Transactions ===
 // ====================

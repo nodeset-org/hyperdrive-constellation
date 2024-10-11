@@ -75,6 +75,22 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 		if err != nil {
 			return fmt.Errorf("error getting validators from NodeSet: %w", err)
 		}
+		if validatorsResponse.Data.NotRegistered {
+			t.logger.Debug("Node is not registered with NodeSet, can't send signed exits")
+			return nil
+		}
+		if validatorsResponse.Data.NotWhitelisted {
+			t.logger.Debug("User doesn't have a node registered with Constellation yet, can't send signed exits")
+			return nil
+		}
+		if validatorsResponse.Data.IncorrectNodeAddress {
+			t.logger.Warn("Your user account has a different node whitelisted for Constellation, can't send signed exits")
+			return nil
+		}
+		if validatorsResponse.Data.InvalidPermissions {
+			t.logger.Warn("Your user account does not have the correct permissions for Constellation, can't send signed exits")
+			return nil
+		}
 		for _, validator := range validatorsResponse.Data.Validators {
 			if !validator.RequiresExitMessage {
 				t.signedExitsSent[beacon.ValidatorPubkey(validator.Pubkey)] = true
@@ -95,6 +111,10 @@ func (t *SubmitSignedExitsTask) Run(snapshot *NetworkSnapshot) error {
 		}
 		if response.Data.NotRegisteredWithConstellation {
 			t.logger.Debug("User doesn't have a node registered with Constellation yet, can't send signed exits")
+			return nil
+		}
+		if response.Data.InvalidPermissions {
+			t.logger.Warn("User account does not have the correct permissions for Constellation, can't send signed exits")
 			return nil
 		}
 		t.registeredAddress = &response.Data.RegisteredAddress
@@ -278,12 +298,26 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(eligibleMinipools []minipool.I
 	if err != nil {
 		return fmt.Errorf("error uploading signed exits: %w", err)
 	}
-
 	if uploadResponse.Data.NotRegistered {
 		return fmt.Errorf("node is not registered with nodeset, can't send signed exits")
 	}
-	if uploadResponse.Data.NotAuthorized {
-		return fmt.Errorf("node is not authorized for constellation usage, can't send signed exits")
+	if uploadResponse.Data.NotWhitelisted {
+		return fmt.Errorf("node has not been whitelisted for Constellation usage, can't send signed exits")
+	}
+	if uploadResponse.Data.IncorrectNodeAddress {
+		return fmt.Errorf("your user account has a different node registered for Constellation, can't send signed exits")
+	}
+	if uploadResponse.Data.InvalidValidatorOwner {
+		return fmt.Errorf("your node does not own the validator for one of these exit messages, can't send signed exits")
+	}
+	if uploadResponse.Data.ExitMessageAlreadyExists {
+		return fmt.Errorf("a signed exit message has already been uploaded for one of these validators, can't send signed exits")
+	}
+	if uploadResponse.Data.InvalidExitMessage {
+		return fmt.Errorf("one of the exit messages is invalid, can't send signed exits")
+	}
+	if uploadResponse.Data.InvalidPermissions {
+		return fmt.Errorf("your user account does not have the correct permissions to upload signed exit messages for Constellation, can't send signed exits")
 	}
 	t.logger.Debug("Signed exits uploaded to NodeSet")
 

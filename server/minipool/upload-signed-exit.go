@@ -136,17 +136,52 @@ func (c *MinipoolUploadSignedExitsContext) PrepareData(data *types.SuccessData, 
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error submitting signed exits: %w", err)
 	}
-	if uploadResponse.Data.NotAuthorized {
+	if uploadResponse.Data.NotWhitelisted {
 		return types.ResponseStatus_Error, fmt.Errorf("node is not authorized for constellation")
 	}
 	if uploadResponse.Data.NotRegistered {
 		return types.ResponseStatus_Error, fmt.Errorf("node is not registered with nodeset yet")
+	}
+	if uploadResponse.Data.IncorrectNodeAddress {
+		return types.ResponseStatus_Error, fmt.Errorf("your user account has a different node whitelisted for Constellation")
+	}
+	if uploadResponse.Data.InvalidValidatorOwner {
+		return types.ResponseStatus_Error, fmt.Errorf("your node does not own the validator for one of these exit messages")
+	}
+	if uploadResponse.Data.ExitMessageAlreadyExists {
+		return types.ResponseStatus_Error, fmt.Errorf("a signed exit message has already been uploaded for one of these validators")
+	}
+	if uploadResponse.Data.InvalidExitMessage {
+		return types.ResponseStatus_Error, fmt.Errorf("one of the exit messages is invalid")
+	}
+	if uploadResponse.Data.InvalidPermissions {
+		return types.ResponseStatus_Error, fmt.Errorf("your user account does not have the correct permissions to upload signed exit messages for Constellation")
 	}
 
 	// Get the list of validators for the node now
 	validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(csResources.DeploymentName)
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error checking validators list from NodeSet: %w", err)
+	}
+
+	// Handle unexpected nodeset.io conditions
+	if len(validatorsResponse.Data.Validators) == 0 {
+		unexpectedError := ""
+		if validatorsResponse.Data.NotRegistered {
+			unexpectedError = "node is not registered with nodeset yet"
+		}
+		if validatorsResponse.Data.NotWhitelisted {
+			unexpectedError = "you don't have a node whitelisted with Constellation yet"
+		}
+		if validatorsResponse.Data.IncorrectNodeAddress {
+			unexpectedError = "your user account has a different node whitelisted for Constellation"
+		}
+		if validatorsResponse.Data.InvalidPermissions {
+			unexpectedError = "your user account does not have the correct permissions for Constellation"
+		}
+		if unexpectedError != "" {
+			return types.ResponseStatus_Error, fmt.Errorf("unexpected error from nodeset.io during validator status request: %s", unexpectedError)
+		}
 	}
 
 	// Make sure each minipool is marked as submitted
