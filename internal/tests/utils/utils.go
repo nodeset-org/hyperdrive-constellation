@@ -657,6 +657,7 @@ func StakeMinipool(t *testing.T, testMgr *cstesting.ConstellationTestManager, cs
 
 	// Find the details for the MP and stake it
 	for _, details := range stakeResponse.Data.Details {
+		require.True(t, details.CanStake)
 		if details.Address == mp.Common().Address {
 			err = testMgr.MineTxViaHyperdrive(csNode.GetHyperdriveNode().GetApiClient(), details.TxInfo)
 			require.NoError(t, err)

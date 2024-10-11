@@ -1,9 +1,13 @@
 package with_minipool
 
 import (
+	"fmt"
+	"math/big"
 	"runtime/debug"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
@@ -165,6 +169,130 @@ func TestSignedExitUpload_Task(t *testing.T) {
 	// Check the status again
 	require.NotNil(t, nsValidator.GetExitMessage())
 	t.Logf("Minipool no longer requires signed exit as expected")
+}
+
+// Check if the signed exit upload task works as expected with multiple minipools
+func TestMultiSignedExitUpload_Task(t *testing.T) {
+	// Take a snapshot, revert at the end
+	testMgr := harness.TestManager
+	mainNode := harness.MainNode
+	mainNodeAddress := harness.MainNodeAddress
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := mainNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	res := sp.GetResources()
+	bn := testMgr.GetBeaconMockManager()
+	csMgr := sp.GetConstellationManager()
+
+	// Make sure MP details are populated
+	mpCommon := mp.Common()
+	err = qMgr.Query(nil, nil,
+		mpCommon.Pubkey,
+		mpCommon.WithdrawalCredentials,
+	)
+	require.NoError(t, err)
+
+	// Set up the NS Mock
+	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
+	nsDB := nsMgr.GetDatabase()
+	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
+	pubkey := mpCommon.Pubkey.Get()
+	deployment.SetValidatorInfoForMinipool(mpCommon.Address, pubkey)
+	_, err = bn.AddValidator(pubkey, mpCommon.WithdrawalCredentials.Get())
+	require.NoError(t, err)
+
+	// Make a task
+	logger := sp.GetTasksLogger()
+	ctx := logger.CreateContextWithLogger(sp.GetBaseContext())
+	snapshotTask := cstasks.NewNetworkSnapshotTask(ctx, sp, logger)
+	exitTask := cstasks.NewSubmitSignedExitsTask(ctx, sp, logger)
+
+	// Make sure a signed exit hasn't been uploaded yet
+	nsNode, _ := nsDB.Core.GetNode(mainNodeAddress)
+	nsValidator := deployment.GetValidator(nsNode, pubkey)
+	require.Nil(t, nsValidator.GetExitMessage())
+	t.Logf("Minipool requires signed exit as expected")
+
+	// Run the task
+	walletResponse, err := hd.Wallet.Status()
+	require.NoError(t, err)
+	walletStatus := walletResponse.Data.WalletStatus
+	snapshot, err := snapshotTask.Run(&walletStatus)
+	require.NoError(t, err)
+	err = exitTask.Run(snapshot)
+	require.NoError(t, err)
+
+	// Check the status again
+	require.NotNil(t, nsValidator.GetExitMessage())
+	t.Logf("Minipool no longer requires signed exit as expected")
+
+	// === Minipool 2 ===
+
+	// Set the max validators cap to 2
+	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(common.Big2, harness.DeployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, harness.DeployerOpts, "Set max validators to 2")
+
+	// Get the deposit amounts
+	wethAmount, rplAmount := getDepositAmounts(2)
+
+	// Deposit to the vaults
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, harness.Bindings.Rpl, rplAmount, harness.DeployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, harness.Bindings.Weth, wethAmount, harness.DeployerOpts)
+
+	// Make another minipool
+	salt2 := big.NewInt(0x90de5e702)
+	mp2 := cstestutils.CreateMinipool(t, testMgr, mainNode, mainNodeAddress, salt2, harness.Bindings.RpSuperNode, harness.Bindings.MinipoolManager)
+
+	// Fast forward time
+	timeToAdvance := harness.Bindings.OracleDaoManager.Settings.Minipool.ScrubPeriod.Formatted()
+	secondsPerSlot := time.Duration(testMgr.GetBeaconMockManager().GetConfig().SecondsPerSlot) * time.Second
+	slotsToAdvance := uint(timeToAdvance / secondsPerSlot)
+	err = testMgr.AdvanceSlots(slotsToAdvance, false)
+	require.NoError(t, err)
+	err = testMgr.CommitBlock()
+	require.NoError(t, err)
+	t.Logf(fmt.Sprintf("Advanced %d slots", slotsToAdvance))
+
+	// Stake it
+	cstestutils.StakeMinipool(t, testMgr, mainNode, mainNodeAddress, mp2)
+
+	// Make sure MP details are populated
+	mp2Common := mp2.Common()
+	err = qMgr.Query(nil, nil,
+		mp2Common.Pubkey,
+		mp2Common.WithdrawalCredentials,
+	)
+	require.NoError(t, err)
+
+	// Set up the NS mock and BN
+	pubkey = mp2Common.Pubkey.Get()
+	deployment.SetValidatorInfoForMinipool(mp2Common.Address, pubkey)
+	_, err = bn.AddValidator(pubkey, mp2Common.WithdrawalCredentials.Get())
+	require.NoError(t, err)
+
+	// Make sure a signed exit hasn't been uploaded yet
+	nsValidator = deployment.GetValidator(nsNode, pubkey)
+	require.Nil(t, nsValidator.GetExitMessage())
+	t.Logf("Minipool 2 requires signed exit as expected")
+
+	// Run the task again
+	exitTask = cstasks.NewSubmitSignedExitsTask(ctx, sp, logger) // Test re-initialization
+	snapshot, err = snapshotTask.Run(&walletStatus)
+	require.NoError(t, err)
+	err = exitTask.Run(snapshot)
+	require.NoError(t, err)
+
+	// Check the status again
+	require.NotNil(t, nsValidator.GetExitMessage())
+	t.Logf("Minipool 2 no longer requires signed exit as expected")
 }
 
 // Cleanup after a unit test
