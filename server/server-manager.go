@@ -7,6 +7,7 @@ import (
 
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csminipool "github.com/nodeset-org/hyperdrive-constellation/server/minipool"
+	csnetwork "github.com/nodeset-org/hyperdrive-constellation/server/network"
 	csnode "github.com/nodeset-org/hyperdrive-constellation/server/node"
 	csservice "github.com/nodeset-org/hyperdrive-constellation/server/service"
 	cswallet "github.com/nodeset-org/hyperdrive-constellation/server/wallet"
@@ -62,8 +63,9 @@ func createServer(sp cscommon.IConstellationServiceProvider, ip string, port uin
 
 	// Create the API handlers
 	handlers := []server.IHandler{
-		csnode.NewNodeHandler(apiLogger, ctx, sp),
 		csminipool.NewMinipoolHandler(apiLogger, ctx, sp),
+		csnetwork.NewNetworkHandler(apiLogger, ctx, sp),
+		csnode.NewNodeHandler(apiLogger, ctx, sp),
 		csservice.NewServiceHandler(apiLogger, ctx, sp),
 		cswallet.NewWalletHandler(apiLogger, ctx, sp),
 	}

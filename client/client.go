@@ -13,6 +13,7 @@ import (
 type ApiClient struct {
 	context  client.IRequesterContext
 	Minipool *MinipoolRequester
+	Network  *NetworkRequester
 	Node     *NodeRequester
 	Service  *ServiceRequester
 	Wallet   *WalletRequester
@@ -25,6 +26,7 @@ func NewApiClient(apiUrl *url.URL, logger *slog.Logger, tracer *httptrace.Client
 	client := &ApiClient{
 		context:  context,
 		Minipool: NewMinipoolRequester(context),
+		Network:  NewNetworkRequester(context),
 		Node:     NewNodeRequester(context),
 		Service:  NewServiceRequester(context),
 		Wallet:   NewWalletRequester(context),
