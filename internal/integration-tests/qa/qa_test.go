@@ -17,7 +17,7 @@ import (
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts"
 	"github.com/nodeset-org/hyperdrive-constellation/common/contracts/constellation"
-	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
+	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/integration-tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"

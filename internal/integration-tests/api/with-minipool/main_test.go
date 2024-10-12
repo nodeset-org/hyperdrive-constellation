@@ -9,7 +9,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
+	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/integration-tests/utils"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
+	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/integration-tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
 	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
