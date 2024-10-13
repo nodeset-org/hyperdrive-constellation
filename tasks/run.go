@@ -18,8 +18,14 @@ import (
 
 // Config
 const (
+	// Time to wait after finishing tasks before starting the next iteration
 	tasksInterval time.Duration = time.Minute * 5
-	taskCooldown  time.Duration = time.Second
+
+	// Time between individual tasks
+	taskCooldown time.Duration = time.Second
+
+	// Time to wait if the tasks loop isn't ready before checking again
+	notReadySleepTime time.Duration = time.Second * 15
 
 	ErrorColor             = color.FgRed
 	WarningColor           = color.FgYellow
@@ -217,10 +223,10 @@ func (t *TaskLoop) waitUntilReady() (*wallet.WalletStatus, waitUntilReadyResult)
 	return walletStatus, waitUntilReadySuccess
 }
 
-// Sleep on the context for the task cooldown time, and return either exit or continue
+// Sleep on the context for the not-ready sleep time, and return either exit or continue
 // based on whether the context was cancelled.
 func (t *TaskLoop) sleepAndReturnReadyResult() waitUntilReadyResult {
-	if utils.SleepWithCancel(t.ctx, taskCooldown) {
+	if utils.SleepWithCancel(t.ctx, notReadySleepTime) {
 		return waitUntilReadyExit
 	} else {
 		return waitUntilReadyContinue
