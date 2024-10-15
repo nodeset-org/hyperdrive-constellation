@@ -16,7 +16,11 @@
                 "--hd",
                 "http://localhost:8080",
                 "-s",
-                "/usr/share/hyperdrive/networks/modules/constellation"
+                "/usr/share/hyperdrive/networks/modules/constellation",
+                "-hk",
+                "${env:HOME}/.hyperdrive/secrets/daemon.key",
+                "-k",
+                "${env:HOME}/.hyperdrive/secrets/modules/constellation/daemon.key"
             ]
         }
     ]
