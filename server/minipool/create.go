@@ -47,6 +47,8 @@ func (f *minipoolCreateContextFactory) Create(args url.Values) (*MinipoolCreateC
 	}
 	inputErrs := []error{
 		nmcserver.ValidateArg("salt", args, input.ValidateBigInt, &c.Salt),
+		nmcserver.ValidateOptionalArg("skipLiquidityCheck", args, input.ValidateBool, &c.SkipLiquidityCheck, nil),
+		nmcserver.ValidateOptionalArg("skipBalanceCheck", args, input.ValidateBool, &c.SkipBalanceCheck, nil),
 	}
 	return c, errors.Join(inputErrs...)
 }
@@ -70,6 +72,8 @@ type MinipoolCreateContext struct {
 	// Inputs
 	ExpectedMinipoolAddress common.Address
 	Salt                    *big.Int
+	SkipLiquidityCheck      bool
+	SkipBalanceCheck        bool
 
 	// Services
 	nodeAddress        common.Address
@@ -213,18 +217,22 @@ func (c *MinipoolCreateContext) PrepareData(data *csapi.MinipoolCreateData, opts
 	if err != nil {
 		return types.ResponseStatus_Error, fmt.Errorf("error getting node balance: %w", err)
 	}
-	data.InsufficientBalance = c.lockThreshold.Cmp(data.NodeBalance) > 0
+	if !c.SkipBalanceCheck {
+		data.InsufficientBalance = c.lockThreshold.Cmp(data.NodeBalance) > 0
+	}
 
 	// Check for sufficient liquidity
-	var hasSufficientLiquidity bool
-	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &hasSufficientLiquidity, c.minipoolBondAmount)
-		return nil
-	}, nil)
-	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error checking for sufficient liquidity: %w", err)
+	if !c.SkipLiquidityCheck {
+		var hasSufficientLiquidity bool
+		err = qMgr.Query(func(mc *batch.MultiCaller) error {
+			c.csMgr.SuperNodeAccount.HasSufficientLiquidity(mc, &hasSufficientLiquidity, c.minipoolBondAmount)
+			return nil
+		}, nil)
+		if err != nil {
+			return types.ResponseStatus_Error, fmt.Errorf("error checking for sufficient liquidity: %w", err)
+		}
+		data.InsufficientLiquidity = !hasSufficientLiquidity
 	}
-	data.InsufficientLiquidity = !hasSufficientLiquidity
 
 	// Check the minipool limit
 	data.MaxMinipoolsReached = c.activeValidatorCount.Cmp(c.maxActiveValidatorsPerNode) >= 0

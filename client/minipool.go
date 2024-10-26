@@ -41,9 +41,11 @@ func (r *MinipoolRequester) GetCloseDetails() (*types.ApiResponse[csapi.Minipool
 }
 
 // Deposit to Constellation to create a new minipool
-func (r *MinipoolRequester) Create(salt *big.Int) (*types.ApiResponse[csapi.MinipoolCreateData], error) {
+func (r *MinipoolRequester) Create(salt *big.Int, skipLiquidityCheck bool, skipBalanceCheck bool) (*types.ApiResponse[csapi.MinipoolCreateData], error) {
 	args := map[string]string{
-		"salt": salt.String(),
+		"salt":               salt.String(),
+		"skipLiquidityCheck": strconv.FormatBool(skipLiquidityCheck),
+		"skipBalanceCheck":   strconv.FormatBool(skipBalanceCheck),
 	}
 	return client.SendGetRequest[csapi.MinipoolCreateData](r, "create", "Create", args)
 }

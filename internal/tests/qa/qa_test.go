@@ -470,7 +470,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	for i, node := range wave3Nodes {
 		cs := node.GetApiClient()
 		salt := wave3Salts[i][0]
-		depositResponse, err := cs.Minipool.Create(salt)
+		depositResponse, err := cs.Minipool.Create(salt, false, false)
 		require.NoError(t, err)
 		require.False(t, depositResponse.Data.CanCreate)
 		require.True(t, depositResponse.Data.InsufficientLiquidity)
@@ -1204,7 +1204,7 @@ func Test15_StakingTest(t *testing.T) {
 	for i, node := range wave3Nodes {
 		cs := node.GetApiClient()
 		salt := wave3Salts[i][0]
-		depositResponse, err := cs.Minipool.Create(salt)
+		depositResponse, err := cs.Minipool.Create(salt, false, false)
 		require.NoError(t, err)
 		require.False(t, depositResponse.Data.CanCreate)
 		require.True(t, depositResponse.Data.InsufficientLiquidity)

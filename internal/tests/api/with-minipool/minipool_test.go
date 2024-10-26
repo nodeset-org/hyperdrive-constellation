@@ -1,9 +1,12 @@
 package with_minipool
 
 import (
+	"context"
+	"math/big"
 	"runtime/debug"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
@@ -39,9 +42,101 @@ func TestDuplicateSalts(t *testing.T) {
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
 
 	// Try making another one with the same salt, it should fail
-	_, err = cs.Minipool.Create(standardSalt)
+	_, err = cs.Minipool.Create(standardSalt, false, false)
 	require.Error(t, err)
 	t.Logf("Failed to create minipool with duplicate salt as expected: %v", err)
+}
+
+func TestSkipLiquidityCheck(t *testing.T) {
+	// Take a snapshot, revert at the end
+	testMgr := harness.TestManager
+	mainNode := harness.MainNode
+	deployerOpts := harness.DeployerOpts
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := mainNode.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	cs := mainNode.GetApiClient()
+
+	// Set max validators to 2
+	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(common.Big2, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, "Set max validators to 2")
+
+	// Create without liquidity check
+	response, err := cs.Minipool.Create(big.NewInt(2), true, false)
+	require.NoError(t, err)
+	require.True(t, response.Data.CanCreate)
+	require.False(t, response.Data.InsufficientLiquidity)
+	t.Logf("MP create succeeded with skip-liquidity check on")
+
+	// Create with liquidity check
+	response, err = cs.Minipool.Create(big.NewInt(2), false, false)
+	require.NoError(t, err)
+	require.False(t, response.Data.CanCreate)
+	require.True(t, response.Data.InsufficientLiquidity)
+	t.Logf("MP create failed with skip-liquidity check off")
+}
+
+func TestSkipBalanceCheck(t *testing.T) {
+	// Take a snapshot, revert at the end
+	testMgr := harness.TestManager
+	mainNode := harness.MainNode
+	deployerOpts := harness.DeployerOpts
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	bindings := harness.Bindings
+	sp := mainNode.GetServiceProvider()
+	csMgr := sp.GetConstellationManager()
+	cs := mainNode.GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	ec := sp.GetEthClient()
+
+	// Deposit RPL to the RPL vault
+	rplAmount := eth.EthToWei(3200)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+
+	// Deposit WETH to the WETH vault
+	wethAmount := eth.EthToWei(90)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+
+	// Set max validators to 2
+	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(common.Big2, deployerOpts)
+	require.NoError(t, err)
+	testMgr.MineTx(t, txInfo, deployerOpts, "Set max validators to 2")
+
+	// Send all the node's ETH to the deployer
+	nodeBalance, err := ec.BalanceAt(context.Background(), harness.MainNodeAddress, nil)
+	require.NoError(t, err)
+	amount := new(big.Int).Sub(nodeBalance, eth.EthToWei(0.5))
+	sendResponse, err := hd.Wallet.Send(amount, "eth", deployerOpts.From)
+	require.NoError(t, err)
+	err = testMgr.MineTxViaHyperdrive(hd, sendResponse.Data.TxInfo)
+	require.NoError(t, err)
+
+	// Create without balance check
+	response, err := cs.Minipool.Create(common.Big2, false, true)
+	require.NoError(t, err)
+	require.True(t, response.Data.CanCreate)
+	require.False(t, response.Data.InsufficientBalance)
+	t.Logf("MP create succeeded with skip-balance check on")
+
+	// Create with balance check
+	response, err = cs.Minipool.Create(common.Big2, false, false)
+	require.NoError(t, err)
+	require.False(t, response.Data.CanCreate)
+	require.True(t, response.Data.InsufficientBalance)
+	t.Logf("MP create failed with skip-balance check off")
 }
 
 // Check if the manual signed exit upload command works as expected

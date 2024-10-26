@@ -237,7 +237,7 @@ func BuildAndVerifyCreateMinipoolTxBeforeTest(logger *slog.Logger, deployment *d
 	cs := csNode.GetApiClient()
 
 	// Make the minipool
-	depositResponse, err := cs.Minipool.Create(salt)
+	depositResponse, err := cs.Minipool.Create(salt, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +475,7 @@ func BuildAndVerifyCreateMinipoolTx(t *testing.T, deployment *db.ConstellationDe
 	cs := csNode.GetApiClient()
 
 	// Make the minipool
-	depositResponse, err := cs.Minipool.Create(salt)
+	depositResponse, err := cs.Minipool.Create(salt, false, false)
 	require.NoError(t, err)
 	require.True(t, depositResponse.Data.CanCreate)
 	if shouldSucceed {
