@@ -45,6 +45,11 @@ func NewStakeMinipoolsTask(ctx context.Context, sp cscommon.IConstellationServic
 	hdCfg := sp.GetHyperdriveConfig()
 	log := logger.With(slog.String(keys.TaskKey, "Minipool Stake"))
 	maxFee, maxPriorityFee := tx.GetAutoTxInfo(hdCfg, log)
+	gasThreshold := hdCfg.AutoTxGasThreshold.Value
+	if maxFee != nil {
+		log.Info("Auto-tx gas threshold is disabled because max fee is set.")
+		gasThreshold = -1
+	}
 	return &StakeMinipoolsTask{
 		ctx:            ctx,
 		sp:             sp,
@@ -52,7 +57,7 @@ func NewStakeMinipoolsTask(ctx context.Context, sp cscommon.IConstellationServic
 		res:            sp.GetResources(),
 		w:              sp.GetWallet(),
 		csMgr:          sp.GetConstellationManager(),
-		gasThreshold:   hdCfg.AutoTxGasThreshold.Value,
+		gasThreshold:   gasThreshold,
 		maxFee:         maxFee,
 		maxPriorityFee: maxPriorityFee,
 	}
