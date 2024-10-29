@@ -310,14 +310,67 @@ func (t *SubmitSignedExitsTask) uploadSignedExits(eligibleMinipools []minipool.I
 	if uploadResponse.Data.InvalidValidatorOwner {
 		return fmt.Errorf("your node does not own the validator for one of these exit messages, can't send signed exits")
 	}
-	if uploadResponse.Data.ExitMessageAlreadyExists {
-		return fmt.Errorf("a signed exit message has already been uploaded for one of these validators, can't send signed exits")
-	}
 	if uploadResponse.Data.InvalidExitMessage {
 		return fmt.Errorf("one of the exit messages is invalid, can't send signed exits")
 	}
 	if uploadResponse.Data.InvalidPermissions {
 		return fmt.Errorf("your user account does not have the correct permissions to upload signed exit messages for Constellation, can't send signed exits")
+	}
+	if uploadResponse.Data.ExitMessageAlreadyExists {
+		t.logger.Warn("One of the validators already has a signed exit message uploaded (probably manually), refreshing the cache...")
+		origMessageCount := len(exitMessages)
+
+		// Signed exits were probably submitted manually so update the cache
+		validatorsResponse, err := hd.NodeSet_Constellation.GetValidators(t.res.DeploymentName)
+		if err != nil {
+			return fmt.Errorf("error getting validators from NodeSet: %w", err)
+		}
+		for _, validator := range validatorsResponse.Data.Validators {
+			// Ignore validators that still require an exit message
+			if validator.RequiresExitMessage {
+				continue
+			}
+
+			// Ignore validators that have already been marked as submitted
+			_, alreadyMarked := t.signedExitsSent[beacon.ValidatorPubkey(validator.Pubkey)]
+			if alreadyMarked {
+				continue
+			}
+
+			// Mark this as uploaded
+			t.logger.Info("New signed exit found", slog.String("pubkey", validator.Pubkey.HexWithPrefix()))
+			t.signedExitsSent[beacon.ValidatorPubkey(validator.Pubkey)] = true
+
+			// Remove it from the eligible minipool list
+			newEligibleMinipools := []minipool.IMinipool{}
+			for _, mp := range eligibleMinipools {
+				if mp.Common().Pubkey.Get() != validator.Pubkey {
+					newEligibleMinipools = append(newEligibleMinipools, mp)
+				}
+			}
+			eligibleMinipools = newEligibleMinipools
+
+			// Remove it from the exit messages
+			newExitMessages := []nscommon.EncryptedExitData{}
+			for _, exitMessage := range exitMessages {
+				if exitMessage.Pubkey != validator.Pubkey.HexWithPrefix() {
+					newExitMessages = append(newExitMessages, exitMessage)
+				}
+			}
+			exitMessages = newExitMessages
+		}
+
+		// Check if any signed exits were removed
+		if len(exitMessages) == origMessageCount {
+			return fmt.Errorf("nodeset reported a signed exit was already uploaded but no signed exits were removed after regenerating the cache")
+		}
+		if len(exitMessages) == 0 {
+			t.logger.Info("All pending signed exits were already uploaded, no new signed exits required")
+			return nil
+		}
+
+		// Try again
+		return t.uploadSignedExits(eligibleMinipools, exitMessages)
 	}
 	t.logger.Debug("Signed exits uploaded to NodeSet")
 
