@@ -10,11 +10,11 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.1.1-0.20241028171353-e4b6a5d23ef7
-	github.com/nodeset-org/nodeset-client-go v1.2.1
+	github.com/nodeset-org/hyperdrive-daemon v1.1.1-0.20241029202513-b6c52afaf416
+	github.com/nodeset-org/nodeset-client-go v1.2.2
 	github.com/nodeset-org/osha v0.3.1
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20241026054448-4827602a297b
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20241029172412-6cb22253be3f
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0

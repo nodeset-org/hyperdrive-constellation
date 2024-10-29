@@ -64,13 +64,13 @@ func (cfg *ConstellationConfig) IsDoppelgangerEnabled() bool {
 }
 
 // Used by text/template to format validator.yml
-func (cfg *ConstellationConfig) Graffiti() (string, error) {
+func (cfg *ConstellationConfig) Graffiti() string {
 	prefix := cfg.hdCfg.GraffitiPrefix()
 	customGraffiti := cfg.VcCommon.Graffiti.Value
 	if customGraffiti == "" {
-		return prefix, nil
+		return prefix
 	}
-	return fmt.Sprintf("%s (%s)", prefix, customGraffiti), nil
+	return fmt.Sprintf("%s (%s)", prefix, customGraffiti)
 }
 
 func (cfg *ConstellationConfig) IsEnabled() bool {
