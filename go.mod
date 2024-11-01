@@ -10,11 +10,11 @@ require (
 	github.com/fatih/color v1.17.0
 	github.com/gorilla/mux v1.8.1
 	github.com/hashicorp/go-version v1.6.0
-	github.com/nodeset-org/hyperdrive-daemon v1.1.1
+	github.com/nodeset-org/hyperdrive-daemon v1.1.2-0.20241101034516-11f034b4070f
 	github.com/nodeset-org/nodeset-client-go v1.2.2
 	github.com/nodeset-org/osha v0.3.1
 	github.com/rocket-pool/batch-query v1.0.0
-	github.com/rocket-pool/node-manager-core v0.5.2-0.20241029172412-6cb22253be3f
+	github.com/rocket-pool/node-manager-core v0.5.2-0.20241031175200-2488d6dc142f
 	github.com/rocket-pool/rocketpool-go/v2 v2.0.0-b2.0.20240709170030-c27aeb5fb99b
 	github.com/rocket-pool/smartnode/v2 v2.0.0-olddev.0.20240710181452-edcbd6208bdd
 	github.com/stretchr/testify v1.9.0
@@ -200,6 +200,6 @@ require (
 
 replace github.com/rocket-pool/rocketpool-go/v2 => github.com/nodeset-org/rocketpool-go/v2 v2.0.0-b2.0.20241026065119-927a7f649ce0
 
-replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20241002073413-7c50008efc66
+replace github.com/rocket-pool/smartnode/v2 => github.com/nodeset-org/rocketpool-smartnode/v2 v2.0.0-olddev.0.20241101035758-47ce71276dd7
 
 replace github.com/wealdtech/go-merkletree v1.0.1-0.20190605192610-2bb163c2ea2a => github.com/rocket-pool/go-merkletree v1.0.1-0.20220406020931-c262d9b976dd
