@@ -51,7 +51,7 @@ func TestMain(m *testing.M) {
 	}
 
 	var err error
-	testMgr, err = cstesting.NewConstellationTestManager()
+	testMgr, err = cstesting.NewConstellationTestManager(nil)
 	if err != nil {
 		fail("error creating test manager: %v", err)
 	}

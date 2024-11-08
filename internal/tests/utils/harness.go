@@ -57,7 +57,7 @@ func CreateStandardTestHarness(options *StandardTestHarnessOptions) (*StandardTe
 	}
 
 	// Test manager
-	testMgr, err := cstesting.NewConstellationTestManager()
+	testMgr, err := cstesting.NewConstellationTestManager(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating test manager: %v", err)
 	}
