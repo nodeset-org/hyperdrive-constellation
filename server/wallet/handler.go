@@ -24,6 +24,8 @@ func NewWalletHandler(logger *log.Logger, ctx context.Context, serviceProvider c
 	}
 	h.factories = []server.IContextFactory{
 		&walletCreateValidatorKeyContextFactory{handler: h},
+		&walletGetKeysContextFactory{handler: h},
+		&walletDeleteValidatorKeysContextFactory{handler: h},
 	}
 	return h
 }

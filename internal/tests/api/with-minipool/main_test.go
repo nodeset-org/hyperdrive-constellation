@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
+	vcserver "github.com/nodeset-org/osha/vc/server"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/rocket-pool/node-manager-core/log"
@@ -22,6 +23,7 @@ var (
 	harness      *cstestutils.StandardTestHarness
 	standardSalt *big.Int = big.NewInt(0x90de5e7)
 	mp           minipool.IMinipool
+	vc           *vcserver.VcMockServer
 )
 
 // Initialize a common server used by all tests

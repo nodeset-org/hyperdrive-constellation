@@ -2,19 +2,21 @@ package cscommon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
 	"github.com/nodeset-org/hyperdrive-daemon/shared"
 
-	"github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/node/validator"
+	"github.com/rocket-pool/node-manager-core/node/validator/keymanager"
 
 	eth2types "github.com/wealdtech/go-eth2-types/v2"
 )
@@ -45,12 +47,10 @@ type Wallet struct {
 }
 
 // Create a new wallet
-func NewWallet(sp services.IModuleServiceProvider) (*Wallet, error) {
-	moduleDir := sp.GetModuleDir()
-	validatorPath := filepath.Join(moduleDir, config.ValidatorsDirectory)
+func NewWallet(sp services.IModuleServiceProvider, validatorPath string, keyManager keymanager.IKeyManagerClient) (*Wallet, error) {
 	wallet := &Wallet{
 		sp:               sp,
-		validatorManager: validator.NewValidatorManager(validatorPath),
+		validatorManager: validator.NewValidatorManager(validatorPath, keyManager),
 	}
 
 	err := wallet.Reload()
@@ -112,6 +112,11 @@ func (w *Wallet) saveData() error {
 	return nil
 }
 
+// Get all keys stored on disk and/or VC
+func (w *Wallet) GetStoredAndLoadedKeys(ctx context.Context, logger *slog.Logger, includeVc bool) (map[beacon.ValidatorPubkey]validator.StoredValidatorKeyInfo, error) {
+	return w.validatorManager.GetAllKeys(ctx, logger, includeVc)
+}
+
 // Get the next validator key without saving it.
 // You are responsible for saving it before using it for actual validation duties.
 func (w *Wallet) GetNextValidatorKey() (*ValidatorKey, error) {
@@ -141,9 +146,9 @@ func (w *Wallet) GetNextValidatorKey() (*ValidatorKey, error) {
 }
 
 // Save a validator key
-func (w *Wallet) SaveValidatorKey(key *ValidatorKey) error {
+func (w *Wallet) SaveValidatorKey(ctx context.Context, logger *slog.Logger, key *ValidatorKey) error {
 	// Save the key to the VC stores
-	err := w.validatorManager.StoreKey(key.PrivateKey, key.DerivationPath)
+	err := w.validatorManager.StoreKey(ctx, logger, key.PrivateKey, key.DerivationPath, nil, false)
 	if err != nil {
 		return fmt.Errorf("error saving validator key: %w", err)
 	}
@@ -165,14 +170,8 @@ func (w *Wallet) LoadValidatorKey(pubkey beacon.ValidatorPubkey) (*eth2types.BLS
 	return w.validatorManager.LoadKey(pubkey)
 }
 
-/*
-func (w *Wallet) GetAllLocalValidatorKeys() ([]*eth2types.BLSPrivateKey, error) {
-	return w.validatorManager.LoadKey(pubkey)
-}
-*/
-
 // Recover a validator key by public key
-func (w *Wallet) RecoverValidatorKey(pubkey beacon.ValidatorPubkey, startIndex uint64, maxAttempts uint64) (uint64, error) {
+func (w *Wallet) RecoverValidatorKey(ctx context.Context, logger *slog.Logger, pubkey beacon.ValidatorPubkey, startIndex uint64, maxAttempts uint64, slashingProtection *beacon.SlashingProtectionData, loadIntoVc bool) (uint64, error) {
 	client := w.sp.GetHyperdriveClient()
 
 	// Find matching validator key
@@ -212,10 +211,12 @@ func (w *Wallet) RecoverValidatorKey(pubkey beacon.ValidatorPubkey, startIndex u
 	}
 
 	// Update keystores
-	err := w.validatorManager.StoreKey(validatorKey, derivationPath)
+	err := w.validatorManager.StoreKey(ctx, logger, validatorKey, derivationPath, slashingProtection, loadIntoVc)
 	if err != nil {
 		return 0, fmt.Errorf("error storing validator %s key: %w", pubkey.HexWithPrefix(), err)
 	}
+
+	// Save the wallet data
 	err = w.saveData()
 	if err != nil {
 		return 0, fmt.Errorf("error storing wallet data: %w", err)
@@ -223,4 +224,9 @@ func (w *Wallet) RecoverValidatorKey(pubkey beacon.ValidatorPubkey, startIndex u
 
 	// Return
 	return index + startIndex, nil
+}
+
+// Delete a validator key from disk and unload it from the VC
+func (w *Wallet) DeleteValidatorKey(ctx context.Context, logger *slog.Logger, pubkey beacon.ValidatorPubkey, deleteFromVc bool) (*beacon.SlashingProtectionData, error) {
+	return w.validatorManager.DeleteKey(ctx, logger, pubkey, deleteFromVc)
 }

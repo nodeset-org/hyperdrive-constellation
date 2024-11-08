@@ -267,7 +267,7 @@ func SaveValidatorKeyBeforeTest(logger *slog.Logger, csNode *cstesting.Constella
 	// Save the key
 	pubkey := data.ValidatorPubkey
 	index := data.Index
-	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1)
+	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1, true, nil)
 	if err != nil {
 		return fmt.Errorf("error creating validator key: %w", err)
 	}
@@ -538,7 +538,7 @@ func SaveValidatorKey(t *testing.T, csNode *cstesting.ConstellationNode, data *c
 	// Save the key
 	pubkey := data.ValidatorPubkey
 	index := data.Index
-	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1)
+	_, err := cs.Wallet.CreateValidatorKey(pubkey, index, 1, true, nil)
 	require.NoError(t, err)
 	t.Logf("Saved validator key for pubkey %s, index %d", pubkey.Hex(), index)
 }

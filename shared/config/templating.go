@@ -2,7 +2,9 @@ package csconfig
 
 import (
 	"fmt"
+	"path/filepath"
 
+	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
 	"github.com/rocket-pool/node-manager-core/config"
 )
 
@@ -73,6 +75,17 @@ func (cfg *ConstellationConfig) Graffiti() string {
 	return fmt.Sprintf("%s (%s)", prefix, customGraffiti)
 }
 
+// Check if the constellation service is enabled
 func (cfg *ConstellationConfig) IsEnabled() bool {
 	return cfg.Enabled.Value
+}
+
+// Get the name of the Graffiti file
+func (cfg *ConstellationConfig) GraffitiFile() string {
+	return GraffitiFile
+}
+
+// Get the full path to the Graffiti file
+func (cfg *ConstellationConfig) GetFullGraffitiPath(moduleDir string) string {
+	return filepath.Join(moduleDir, hdconfig.ValidatorsDirectory, cfg.GraffitiFile())
 }

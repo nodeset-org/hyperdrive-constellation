@@ -60,7 +60,14 @@ func NewConstellationTestManager() (*ConstellationTestManager, error) {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, csCfg, csResources)
+	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(
+		moduleSp,
+		csCfg,
+		csResources,
+		&cscommon.ConstellationServiceProviderOptions{
+			KeyManagerClient: tm.GetKeyManagerClient(),
+		},
+	)
 	if err != nil {
 		closeTestManager(tm)
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)

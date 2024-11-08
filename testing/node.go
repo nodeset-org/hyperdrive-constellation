@@ -143,7 +143,14 @@ func (n *ConstellationNode) CreateSubNode(hdNode *hdtesting.HyperdriveNode, addr
 	if err != nil {
 		return nil, fmt.Errorf("error creating service provider: %v", err)
 	}
-	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(moduleSp, cfg, resources)
+	csSp, err := cscommon.NewConstellationServiceProviderFromCustomServices(
+		moduleSp,
+		cfg,
+		resources,
+		&cscommon.ConstellationServiceProviderOptions{
+			KeyManagerClient: n.sp.GetKeyManagerClient(),
+		},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("error creating constellation service provider: %v", err)
 	}

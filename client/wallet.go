@@ -30,11 +30,32 @@ func (r *WalletRequester) GetContext() client.IRequesterContext {
 }
 
 // Recover a validator key
-func (r *WalletRequester) CreateValidatorKey(pubkey beacon.ValidatorPubkey, index uint64, maxAttempts uint64) (*types.ApiResponse[csapi.WalletCreateValidatorKeyData], error) {
-	args := map[string]string{
-		"pubkey":       pubkey.Hex(),
-		"start-index":  strconv.FormatUint(index, 10),
-		"max-attempts": strconv.FormatUint(maxAttempts, 10),
+func (r *WalletRequester) CreateValidatorKey(pubkey beacon.ValidatorPubkey, index uint64, maxAttempts uint64, loadIntoVc bool, slashingProtection *beacon.SlashingProtectionData) (*types.ApiResponse[csapi.WalletCreateValidatorKeyData], error) {
+	body := &csapi.WalletCreateValidatorKeyBody{
+		Pubkey:             pubkey,
+		StartIndex:         index,
+		MaxAttempts:        maxAttempts,
+		LoadIntoVc:         loadIntoVc,
+		SlashingProtection: slashingProtection,
 	}
-	return client.SendGetRequest[csapi.WalletCreateValidatorKeyData](r, "create-validator-key", "CreateValidatorKey", args)
+
+	return client.SendPostRequest[csapi.WalletCreateValidatorKeyData](r, "create-validator-key", "CreateValidatorKey", body)
+}
+
+// Get all validator keys
+func (r *WalletRequester) GetValidatorKeys(includeVc bool) (*types.ApiResponse[csapi.WalletGetKeysData], error) {
+	args := map[string]string{
+		"include-vc": strconv.FormatBool(includeVc),
+	}
+	return client.SendGetRequest[csapi.WalletGetKeysData](r, "validator-keys", "GetValidatorKeys", args)
+}
+
+// Delete a validator key
+func (r *WalletRequester) DeleteValidatorKey(pubkey beacon.ValidatorPubkey, includeVc bool) (*types.ApiResponse[csapi.WalletDeleteKeyData], error) {
+	body := &csapi.WalletDeleteKeyBody{
+		Pubkey:    pubkey,
+		IncludeVc: includeVc,
+	}
+
+	return client.SendPostRequest[csapi.WalletDeleteKeyData](r, "delete-validator-key", "DeleteValidatorKey", body)
 }

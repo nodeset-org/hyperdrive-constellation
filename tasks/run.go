@@ -82,6 +82,12 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 
 // Run daemon
 func (t *TaskLoop) Run() error {
+	// Write the graffiti to the file
+	err := UpdateGraffitiFile(t.sp)
+	if err != nil {
+		return err
+	}
+
 	// Wait until the HD daemon has tried logging into the NodeSet server to check registration status
 	t.getNodeSetRegistrationStatus()
 

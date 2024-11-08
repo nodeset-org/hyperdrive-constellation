@@ -1,20 +1,15 @@
 package cswallet
 
 import (
-	"errors"
 	"fmt"
-	"net/url"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/gorilla/mux"
-	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/wallet"
 
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/server"
-	nmcserver "github.com/rocket-pool/node-manager-core/api/server"
 	"github.com/rocket-pool/node-manager-core/api/types"
-	"github.com/rocket-pool/node-manager-core/utils/input"
 )
 
 // ===============
@@ -25,20 +20,16 @@ type walletCreateValidatorKeyContextFactory struct {
 	handler *WalletHandler
 }
 
-func (f *walletCreateValidatorKeyContextFactory) Create(args url.Values) (*walletCreateValidatorKeyContext, error) {
+func (f *walletCreateValidatorKeyContextFactory) Create(body csapi.WalletCreateValidatorKeyBody) (*walletCreateValidatorKeyContext, error) {
 	c := &walletCreateValidatorKeyContext{
 		handler: f.handler,
 	}
-	inputErrs := []error{
-		nmcserver.ValidateArg("pubkey", args, input.ValidatePubkey, &c.pubkey),
-		nmcserver.ValidateArg("start-index", args, input.ValidateUint, &c.index),
-		nmcserver.ValidateArg("max-attempts", args, input.ValidateUint, &c.maxAttempts),
-	}
-	return c, errors.Join(inputErrs...)
+	c.body = body
+	return c, nil
 }
 
 func (f *walletCreateValidatorKeyContextFactory) RegisterRoute(router *mux.Router) {
-	server.RegisterQuerylessGet[*walletCreateValidatorKeyContext, csapi.WalletCreateValidatorKeyData](
+	server.RegisterQuerylessPost[*walletCreateValidatorKeyContext, csapi.WalletCreateValidatorKeyBody, csapi.WalletCreateValidatorKeyData](
 		router, "create-validator-key", f, f.handler.logger.Logger, f.handler.serviceProvider,
 	)
 }
@@ -48,14 +39,16 @@ func (f *walletCreateValidatorKeyContextFactory) RegisterRoute(router *mux.Route
 // ===============
 
 type walletCreateValidatorKeyContext struct {
-	handler     *WalletHandler
-	pubkey      beacon.ValidatorPubkey
-	index       uint64
-	maxAttempts uint64
+	handler *WalletHandler
+
+	// Inputs
+	body csapi.WalletCreateValidatorKeyBody
 }
 
 func (c *walletCreateValidatorKeyContext) PrepareData(data *csapi.WalletCreateValidatorKeyData, walletStatus wallet.WalletStatus, opts *bind.TransactOpts) (types.ResponseStatus, error) {
 	sp := c.handler.serviceProvider
+	ctx := c.handler.ctx
+	logger := c.handler.logger
 	vMgr := sp.GetWallet()
 
 	// Requirements
@@ -64,9 +57,19 @@ func (c *walletCreateValidatorKeyContext) PrepareData(data *csapi.WalletCreateVa
 		return types.ResponseStatus_WalletNotReady, err
 	}
 
-	index, err := vMgr.RecoverValidatorKey(c.pubkey, c.index, c.maxAttempts)
+	// Regenerate the key, save it, and load into VC if requested
+	pubkey := c.body.Pubkey
+	index, err := vMgr.RecoverValidatorKey(
+		ctx,
+		logger.Logger,
+		pubkey,
+		c.body.StartIndex,
+		c.body.MaxAttempts,
+		c.body.SlashingProtection,
+		c.body.LoadIntoVc,
+	)
 	if err != nil {
-		return types.ResponseStatus_Error, fmt.Errorf("error creating validator key for pubkey %s: %w", c.pubkey.HexWithPrefix(), err)
+		return types.ResponseStatus_Error, fmt.Errorf("error creating validator key for pubkey %s: %w", pubkey.HexWithPrefix(), err)
 	}
 	data.Index = index
 	return types.ResponseStatus_Success, nil

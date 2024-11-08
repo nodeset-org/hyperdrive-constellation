@@ -3,10 +3,14 @@ package cscommon
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
 
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	"github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
+	hdconfig "github.com/nodeset-org/hyperdrive-daemon/shared/config"
+	config "github.com/rocket-pool/node-manager-core/config"
+	"github.com/rocket-pool/node-manager-core/node/validator/keymanager"
 	"github.com/rocket-pool/node-manager-core/wallet"
 	snservices "github.com/rocket-pool/smartnode/v2/rocketpool-daemon/common/services"
 	snconfig "github.com/rocket-pool/smartnode/v2/shared/config"
@@ -61,6 +65,12 @@ type IConstellationRequirementsProvider interface {
 	RequireRegisteredWithConstellation(ctx context.Context, walletStatus wallet.WalletStatus, useWalletAddress bool) error
 }
 
+// Provides the key manager client
+type IKeyManagerClientProvider interface {
+	// Gets the key manager client
+	GetKeyManagerClient() keymanager.IKeyManagerClient
+}
+
 // Provides all services for the Constellation daemon
 type IConstellationServiceProvider interface {
 	IConstellationConfigProvider
@@ -68,6 +78,7 @@ type IConstellationServiceProvider interface {
 	IConstellationRequirementsProvider
 	IConstellationWalletProvider
 	ISmartNodeServiceProvider
+	IKeyManagerClientProvider
 
 	services.IModuleServiceProvider
 }
@@ -76,6 +87,11 @@ type IConstellationServiceProvider interface {
 // === Service Provider ===
 // ========================
 
+type ConstellationServiceProviderOptions struct {
+	// The key manager client
+	KeyManagerClient keymanager.IKeyManagerClient
+}
+
 type constellationServiceProvider struct {
 	services.IModuleServiceProvider
 	csCfg     *csconfig.ConstellationConfig
@@ -83,6 +99,7 @@ type constellationServiceProvider struct {
 	csMgr     *ConstellationManager
 	rpMgr     *RocketPoolManager
 	snSp      *smartNodeServiceProvider
+	keyMgr    keymanager.IKeyManagerClient
 	wallet    *Wallet
 }
 
@@ -113,11 +130,14 @@ func NewConstellationServiceProvider(sp services.IModuleServiceProvider, setting
 		return nil, fmt.Errorf("no constellation resources found for selected network [%s]", hdCfg.Network.Value)
 	}
 
-	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, csResources)
+	return NewConstellationServiceProviderFromCustomServices(sp, csCfg, csResources, nil)
 }
 
 // Create a new service provider with Constellation daemon-specific features, using custom services instead of loading them from the module service provider.
-func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.MergedResources) (IConstellationServiceProvider, error) {
+func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServiceProvider, cfg *csconfig.ConstellationConfig, csresources *csconfig.MergedResources, opts *ConstellationServiceProviderOptions) (IConstellationServiceProvider, error) {
+	moduleDir := sp.GetModuleDir()
+	keystoreBaseDir := filepath.Join(moduleDir, hdconfig.ValidatorsDirectory)
+
 	// Create the Constellation manager
 	csMgr, err := NewConstellationManager(csresources.ConstellationResources, sp.GetEthClient(), sp.GetQueryManager(), sp.GetTransactionManager())
 	if err != nil {
@@ -130,8 +150,29 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		return nil, fmt.Errorf("error creating Rocket Pool manager: %w", err)
 	}
 
+	// Create the key manager client if not provided
+	if opts == nil {
+		opts = &ConstellationServiceProviderOptions{}
+	}
+	if opts.KeyManagerClient == nil || (reflect.ValueOf(opts.KeyManagerClient).Kind() == reflect.Ptr && reflect.ValueOf(opts.KeyManagerClient).IsNil()) {
+		hdCfg := sp.GetHyperdriveConfig()
+		bn := hdCfg.GetSelectedBeaconNode()
+		vcEndpoint := fmt.Sprintf("http://%s:%d", csconfig.ContainerID_ConstellationValidator, cfg.VcCommon.KeyManagerPort.Value)
+
+		// Get the validator keystore base directory and JWT file path
+		kmJwtPath := filepath.Join(keystoreBaseDir, csconfig.KeyManagerJwtFile)
+
+		// Create the key manager
+		switch bn {
+		case config.BeaconNode_Lighthouse:
+			opts.KeyManagerClient, err = keymanager.NewLighthouseKeyManagerClient(vcEndpoint, keystoreBaseDir, nil)
+		default:
+			opts.KeyManagerClient, err = keymanager.NewStandardKeyManagerClient(vcEndpoint, kmJwtPath, nil)
+		}
+	}
+
 	// Create the wallet
-	wallet, err := NewWallet(sp)
+	wallet, err := NewWallet(sp, keystoreBaseDir, opts.KeyManagerClient)
 	if err != nil {
 		return nil, fmt.Errorf("error creating wallet: %w", err)
 	}
@@ -143,6 +184,7 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		resources:              csresources,
 		csMgr:                  csMgr,
 		rpMgr:                  rpMgr,
+		keyMgr:                 opts.KeyManagerClient,
 		wallet:                 wallet,
 	}
 
@@ -177,6 +219,10 @@ func (s *constellationServiceProvider) GetRocketPoolManager() *RocketPoolManager
 
 func (s *constellationServiceProvider) GetSmartNodeServiceProvider() snservices.ISmartNodeServiceProvider {
 	return s.snSp
+}
+
+func (s *constellationServiceProvider) GetKeyManagerClient() keymanager.IKeyManagerClient {
+	return s.keyMgr
 }
 
 func (s *constellationServiceProvider) GetWallet() *Wallet {

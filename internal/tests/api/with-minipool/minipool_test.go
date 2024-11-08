@@ -380,6 +380,91 @@ func TestSignedExitUpload_TaskAfterManual(t *testing.T) {
 	t.Logf("Minipools 1 and 2 no longer require signed exits as expected")
 }
 
+// Test getting the stored keys
+func TestGetKeys(t *testing.T) {
+	// Take a snapshot, revert at the end
+	testMgr := harness.TestManager
+	mainNode := harness.MainNode
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := mainNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	cs := mainNode.GetApiClient()
+
+	// Make sure MP details are populated
+	mpCommon := mp.Common()
+	err = qMgr.Query(nil, nil,
+		mpCommon.Pubkey,
+	)
+	require.NoError(t, err)
+
+	// Get the saved keys
+	keysResponse, err := cs.Wallet.GetValidatorKeys(true)
+	require.NoError(t, err)
+
+	// Check the keys
+	require.Len(t, keysResponse.Data.KeysOnDisk, 1)
+	require.Len(t, keysResponse.Data.KeysInVc, 1)
+	pubkey := mpCommon.Pubkey.Get()
+	require.Contains(t, keysResponse.Data.KeysOnDisk, pubkey)
+	require.Contains(t, keysResponse.Data.KeysInVc, pubkey)
+	t.Logf("Key retrieved from disk and VC: %s", pubkey.HexWithPrefix())
+}
+
+// Test deleting a stored key
+func TestDeleteKey(t *testing.T) {
+	// Take a snapshot, revert at the end
+	testMgr := harness.TestManager
+	mainNode := harness.MainNode
+	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	if err != nil {
+		fail("Error creating custom snapshot: %v", err)
+	}
+	defer nodeset_cleanup(snapshotName)
+
+	// Get some services
+	sp := mainNode.GetServiceProvider()
+	qMgr := sp.GetQueryManager()
+	cs := mainNode.GetApiClient()
+
+	// Make sure MP details are populated
+	mpCommon := mp.Common()
+	err = qMgr.Query(nil, nil,
+		mpCommon.Pubkey,
+	)
+	require.NoError(t, err)
+
+	// Get the saved keys
+	keysResponse, err := cs.Wallet.GetValidatorKeys(true)
+	require.NoError(t, err)
+
+	// Check the keys
+	require.Len(t, keysResponse.Data.KeysOnDisk, 1)
+	require.Len(t, keysResponse.Data.KeysInVc, 1)
+	pubkey := mpCommon.Pubkey.Get()
+	require.Contains(t, keysResponse.Data.KeysOnDisk, pubkey)
+	require.Contains(t, keysResponse.Data.KeysInVc, pubkey)
+	t.Logf("Key retrieved from disk and VC: %s", pubkey.HexWithPrefix())
+
+	// Delete the key
+	_, err = cs.Wallet.DeleteValidatorKey(pubkey, true)
+	require.NoError(t, err)
+
+	// Get the saved keys again
+	keysResponse, err = cs.Wallet.GetValidatorKeys(true)
+	require.NoError(t, err)
+
+	// Make sure the key is gone
+	require.Len(t, keysResponse.Data.KeysOnDisk, 0)
+	require.Len(t, keysResponse.Data.KeysInVc, 0)
+	t.Logf("Key deleted from disk and VC: %s", pubkey.HexWithPrefix())
+}
+
 // Cleanup after a unit test
 func nodeset_cleanup(snapshotName string) {
 	testMgr := harness.TestManager
