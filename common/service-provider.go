@@ -65,10 +65,13 @@ type IConstellationRequirementsProvider interface {
 	RequireRegisteredWithConstellation(ctx context.Context, walletStatus wallet.WalletStatus, useWalletAddress bool) error
 }
 
-// Provides the key manager client
-type IKeyManagerClientProvider interface {
+// Provides the key manager and other VC manager services
+type IVcManagerProvider interface {
 	// Gets the key manager client
 	GetKeyManagerClient() keymanager.IKeyManagerClient
+
+	// Gets the graffiti manager
+	GetGraffitiManager() *GraffitiManager
 }
 
 // Provides all services for the Constellation daemon
@@ -78,7 +81,7 @@ type IConstellationServiceProvider interface {
 	IConstellationRequirementsProvider
 	IConstellationWalletProvider
 	ISmartNodeServiceProvider
-	IKeyManagerClientProvider
+	IVcManagerProvider
 
 	services.IModuleServiceProvider
 }
@@ -100,6 +103,7 @@ type constellationServiceProvider struct {
 	rpMgr     *RocketPoolManager
 	snSp      *smartNodeServiceProvider
 	keyMgr    keymanager.IKeyManagerClient
+	grafMgr   *GraffitiManager
 	wallet    *Wallet
 }
 
@@ -198,6 +202,11 @@ func NewConstellationServiceProviderFromCustomServices(sp services.IModuleServic
 		return nil, fmt.Errorf("error creating Smart Node service provider: %w", err)
 	}
 	constellationSp.snSp = snSp
+
+	// Create the graffiti manager
+	graffitiMgr := NewGraffitiManager(constellationSp)
+	constellationSp.grafMgr = graffitiMgr
+
 	return constellationSp, nil
 }
 
@@ -223,6 +232,10 @@ func (s *constellationServiceProvider) GetSmartNodeServiceProvider() snservices.
 
 func (s *constellationServiceProvider) GetKeyManagerClient() keymanager.IKeyManagerClient {
 	return s.keyMgr
+}
+
+func (s *constellationServiceProvider) GetGraffitiManager() *GraffitiManager {
+	return s.grafMgr
 }
 
 func (s *constellationServiceProvider) GetWallet() *Wallet {

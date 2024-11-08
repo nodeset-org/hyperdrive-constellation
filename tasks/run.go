@@ -2,6 +2,7 @@ package cstasks
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	"github.com/nodeset-org/hyperdrive-constellation/shared/keys"
 	"github.com/nodeset-org/hyperdrive-daemon/shared/types/api"
+	"github.com/rocket-pool/node-manager-core/beacon"
 	"github.com/rocket-pool/node-manager-core/log"
 	"github.com/rocket-pool/node-manager-core/utils"
 	"github.com/rocket-pool/node-manager-core/wallet"
@@ -43,12 +45,13 @@ const (
 
 type TaskLoop struct {
 	// Services
-	ctx    context.Context
-	logger *log.Logger
-	sp     cscommon.IConstellationServiceProvider
-	wg     *sync.WaitGroup
-	csMgr  *cscommon.ConstellationManager
-	rpMgr  *cscommon.RocketPoolManager
+	ctx     context.Context
+	logger  *log.Logger
+	sp      cscommon.IConstellationServiceProvider
+	wg      *sync.WaitGroup
+	csMgr   *cscommon.ConstellationManager
+	rpMgr   *cscommon.RocketPoolManager
+	grafMgr *cscommon.GraffitiManager
 
 	// Tasks
 	createNetworkSnapshot *NetworkSnapshotTask
@@ -58,6 +61,7 @@ type TaskLoop struct {
 	// Internal
 	wasExecutionClientSynced bool
 	wasBeaconClientSynced    bool
+	checkedGraffiti          bool
 }
 
 func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) *TaskLoop {
@@ -70,6 +74,7 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 		wg:                    wg,
 		csMgr:                 sp.GetConstellationManager(),
 		rpMgr:                 sp.GetRocketPoolManager(),
+		grafMgr:               sp.GetGraffitiManager(),
 		createNetworkSnapshot: NewNetworkSnapshotTask(ctx, sp, logger),
 		stakeMinipools:        NewStakeMinipoolsTask(ctx, sp, logger),
 		sendExitData:          NewSubmitSignedExitsTask(ctx, sp, logger),
@@ -83,9 +88,9 @@ func NewTaskLoop(sp cscommon.IConstellationServiceProvider, wg *sync.WaitGroup) 
 // Run daemon
 func (t *TaskLoop) Run() error {
 	// Write the graffiti to the file
-	err := UpdateGraffitiFile(t.sp)
+	err := t.grafMgr.UpdateGraffitiFile(t.logger.Logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("error updating graffiti file: %w", err)
 	}
 
 	// Wait until the HD daemon has tried logging into the NodeSet server to check registration status
@@ -97,6 +102,12 @@ func (t *TaskLoop) Run() error {
 		defer t.wg.Done()
 
 		for {
+			// Update the graffiti in the VC key manager
+			err := t.updateGraffitiInVc()
+			if err != nil {
+				t.logger.Warn("Updating graffiti in VC failed", log.Err(err))
+			}
+
 			// Make sure all of the resources are ready for task processing
 			walletStatus, readyResult := t.waitUntilReady()
 			switch readyResult {
@@ -263,4 +274,31 @@ func (t *TaskLoop) runTasks(walletStatus *wallet.WalletStatus) bool {
 	}
 
 	return utils.SleepWithCancel(t.ctx, tasksInterval)
+}
+
+// Update the graffiti in the VC key manager
+func (t *TaskLoop) updateGraffitiInVc() error {
+	if t.checkedGraffiti {
+		return nil
+	}
+
+	// Get the list of keys in the VC
+	km := t.sp.GetKeyManagerClient()
+	loadedKeys, err := km.GetLoadedKeys(t.ctx, t.logger.Logger)
+	if err != nil {
+		return fmt.Errorf("error getting keys loaded in VC: %w", err)
+	}
+
+	// Update the graffiti for each key
+	keys := make([]beacon.ValidatorPubkey, 0, len(loadedKeys))
+	for _, loadedKey := range loadedKeys {
+		keys = append(keys, loadedKey.Pubkey)
+	}
+	err = t.grafMgr.UpdateGraffitiInVc(t.ctx, t.logger.Logger, keys)
+	if err != nil {
+		return fmt.Errorf("error updating graffiti in VC: %w", err)
+	}
+
+	t.checkedGraffiti = true
+	return nil
 }
