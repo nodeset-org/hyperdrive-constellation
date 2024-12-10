@@ -11,7 +11,6 @@ import (
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
-	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/stretchr/testify/require"
@@ -23,7 +22,7 @@ func TestDuplicateSalts(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -54,7 +53,7 @@ func TestSkipLiquidityCheck(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -90,7 +89,7 @@ func TestSkipBalanceCheck(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -146,7 +145,7 @@ func TestSignedExitUpload_Manual(t *testing.T) {
 	// Take a snapshot, revert at the end
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -208,7 +207,7 @@ func TestSignedExitUpload_Task(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	mainNodeAddress := harness.MainNodeAddress
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -270,7 +269,7 @@ func TestSignedExitUpload_TaskAfterManual(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	mainNodeAddress := harness.MainNodeAddress
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -394,7 +393,7 @@ func nodeset_cleanup(snapshotName string) {
 
 	// Revert to the snapshot taken at the start of the test
 	if snapshotName != "" {
-		err := testMgr.RevertToCustomSnapshot(snapshotName)
+		err := testMgr.RevertSnapshot(snapshotName)
 		if err != nil {
 			fail("Error reverting to custom snapshot: %v", err)
 		}

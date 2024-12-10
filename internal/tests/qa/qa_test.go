@@ -20,7 +20,6 @@ import (
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
-	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/nodeset-client-go/utils"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/beacon"
@@ -40,7 +39,7 @@ var (
 // Run test 3 of the QA suite
 func Test3_ComplexRoundTrip(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -323,7 +322,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 // Run test 4 of the QA suite
 func Test4_SimpleNOConcurrency(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -385,7 +384,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 // Run test 5 of the QA suite
 func Test5_ComplexNOConcurrency(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -482,7 +481,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 // Run test 13 of the QA suite
 func Test13_OrderlyStressTest(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -1045,7 +1044,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 // Run test 15 of the QA suite
 func Test15_StakingTest(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -1215,7 +1214,7 @@ func Test15_StakingTest(t *testing.T) {
 
 func TestGetMinipools(t *testing.T) {
 	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
+	snapshotName, err := testMgr.CreateSnapshot()
 	if err != nil {
 		fail("Error creating custom snapshot: %v", err)
 	}
@@ -2583,7 +2582,7 @@ func qa_cleanup(snapshotName string) {
 
 	// Revert to the snapshot taken at the start of the test
 	if snapshotName != "" {
-		err := testMgr.RevertToCustomSnapshot(snapshotName)
+		err := testMgr.RevertSnapshot(snapshotName)
 		if err != nil {
 			fail("Error reverting to custom snapshot: %v", err)
 		}
