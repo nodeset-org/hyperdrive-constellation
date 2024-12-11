@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"math/big"
 	"path/filepath"
-	"runtime/debug"
 	"testing"
 	"time"
 
@@ -38,17 +37,13 @@ var (
 
 // Run test 3 of the QA suite
 func Test3_ComplexRoundTrip(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	require.NoError(t, err)
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -66,7 +61,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Deposit RPL to the RPL vault
 	rplAmount := eth.EthToWei(4000)
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, testMgr.GetDeployerOpts())
 	printTickInfo(t, sp)
 
 	// Deposit WETH to the WETH vault
@@ -74,9 +69,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	wethAmount := eth.EthToWei(100)
 	var xrEthBalance *big.Int
 	var mintFee *big.Int
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, testMgr.GetDeployerOpts())
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.WethVault.BalanceOf(mc, &xrEthBalance, deployerOpts.From)
+		csMgr.WethVault.BalanceOf(mc, &xrEthBalance, testMgr.GetDeployerOpts().From)
 		csMgr.WethVault.GetMintFee(mc, &mintFee)
 		return nil
 	}, nil)
@@ -157,7 +152,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	// Submit 0.010 ETH in rewards on Beacon and 0.005 on the EL per validator
 	elRewardsPerMinipool := eth.EthToWei(0.005)
 	beaconRewardsPerValidator := 1e7 // Beacon is in gwei
-	simulateBeaconRewards(t, sp, datas, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), deployerOpts)
+	simulateBeaconRewards(t, sp, datas, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), testMgr.GetDeployerOpts())
 	totalYieldAccrued, oracleError := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	t.Logf(
 		"The new total yield accrued to report is %.10f (%s wei) and the error is %.10f (%s wei)",
@@ -176,11 +171,11 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
 	newTime := time.Now().Add(timeToAdvance)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, testMgr.GetDeployerKey())
 	require.NoError(t, err)
-	txInfo, err := csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
+	txInfo, err := csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
 
 	// Verify the new ETH:xrETH price
@@ -193,7 +188,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Redeem 5 xrETH
 	xrEthRedeemAmount := eth.EthToWei(5)
-	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
+	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, testMgr.GetDeployerOpts())
 	expectedAmount = new(big.Int).Mul(xrEthRedeemAmount, xrEthPriceAccordingToVault)
 	expectedAmount.Div(expectedAmount, oneEth)
 	requireApproxEqual(t, expectedAmount, wethReturned)
@@ -211,7 +206,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Redeem 5 xRPL
 	xRplRedeemAmount := eth.EthToWei(5)
-	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
+	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, testMgr.GetDeployerOpts())
 	expectedAmount = xRplRedeemAmount
 	require.Equal(t, expectedAmount, rplReturned)
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
@@ -228,7 +223,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 	// Exit the first 3 minipools and set their balance as withdrawn
 	for i := 0; i < 3; i++ {
-		setMinipoolToWithdrawn(t, sp, datas[i][0], deployerOpts)
+		setMinipoolToWithdrawn(t, sp, datas[i][0], testMgr.GetDeployerOpts())
 	}
 	t.Log("Exited the first 3 minipools")
 
@@ -257,9 +252,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 		t.Logf("The next minipool to tick is %s as expected (index %d)", nextMinipoolAddress.Hex(), expectedMpIndex)
 		t.Logf("The minipool count is %d, next index = %d", mpCount.Int64(), nextMpIndex.Int64())
 
-		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
+		txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(testMgr.GetDeployerOpts())
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Processed the next minipool (tick %d)", i+1))
+		testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Processed the next minipool (tick %d)", i+1))
 
 		printTickInfo(t, sp)
 		expectedMpIndex++
@@ -277,11 +272,11 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	totalYieldAccrued, oracleError = calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	newTime = newTime.Add(time.Hour)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
-	sig, err = createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
+	sig, err = createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, newTime, csMgr.PoAConstellationOracle.Address, chainID, testMgr.GetDeployerKey())
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, deployerOpts)
+	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, newTime, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, "Updated the xrETH Oracle")
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), "Updated the xrETH Oracle")
 
 	// Verify the new ETH:xrETH price
 	xrEthPriceAccordingToVault = getTokenPrice(t, qMgr, csMgr.WethVault)
@@ -304,13 +299,13 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	)
 
 	// Run a treasury claim
-	treasuryRecipient := odaoOpts[0].From
+	treasuryRecipient := testMgr.GetOdaoOpts()[0].From
 	preBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 	require.NoError(t, err)
 
-	txInfo, err = csMgr.Treasury.ClaimEth(treasuryRecipient, adminOpts)
+	txInfo, err = csMgr.Treasury.ClaimEth(treasuryRecipient, testMgr.GetAdminOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, adminOpts, "Treasury claimed ETH rewards")
+	testMgr.MineTx(t, txInfo, testMgr.GetAdminOpts(), "Treasury claimed ETH rewards")
 
 	postBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 	require.NoError(t, err)
@@ -321,12 +316,8 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 // Run test 4 of the QA suite
 func Test4_SimpleNOConcurrency(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
 	sp := testMgr.GetNode().GetServiceProvider()
@@ -335,7 +326,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	res := sp.GetResources()
 	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	csMgr := sp.GetConstellationManager()
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
@@ -350,15 +341,15 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), 1)
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, testMgr.GetDeployerOpts())
 
 	// Deposit RPL to the RPL vault
 	initialAmount := eth.EthToWei(300)
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, initialAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, initialAmount, testMgr.GetDeployerOpts())
 
 	// Deposit RPL to the RPL vault
 	remainder := new(big.Int).Sub(rplAmount, initialAmount)
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, remainder, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, remainder, testMgr.GetDeployerOpts())
 
 	// Build the minipool creation TXs
 	_, hashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, nodes, nodeAddresses, 1, nil, bindings.RpSuperNode)
@@ -369,7 +360,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	t.Log("Mined a block")
 
 	// The first one should succeed
-	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
 	_, err = hd.Tx.WaitForTransaction(hashes[0][0])
 	require.NoError(t, err)
 	t.Log("First minipool creation TX succeeded")
@@ -383,15 +374,11 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 
 // Run test 5 of the QA suite
 func Test5_ComplexNOConcurrency(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	sp := testMgr.GetNode().GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
@@ -421,10 +408,10 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	wethAmount, rplAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools but no more
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, testMgr.GetDeployerOpts())
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, testMgr.GetDeployerOpts())
 
 	// Build the wave 1 minipool creation TXs
 	wave1Nodes := nodes[:5]
@@ -438,7 +425,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 should succeed
-	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1Hashes {
 		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
 		require.NoError(t, err)
@@ -480,15 +467,11 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 // Run test 13 of the QA suite
 func Test13_OrderlyStressTest(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	require.NoError(t, err)
 	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
@@ -523,9 +506,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	ethDepositAmount := eth.EthToWei(1000)
 	var xrEthBalance *big.Int
 	var mintFee *big.Int
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, ethDepositAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, ethDepositAmount, testMgr.GetDeployerOpts())
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.WethVault.BalanceOf(mc, &xrEthBalance, deployerOpts.From)
+		csMgr.WethVault.BalanceOf(mc, &xrEthBalance, testMgr.GetDeployerOpts().From)
 		csMgr.WethVault.GetMintFee(mc, &mintFee)
 		return nil
 	}, nil)
@@ -543,7 +526,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	rplDepositAmount.Mul(rplDepositAmount, twentyPercent)
 	rplDepositAmount.Div(rplDepositAmount, oneEth)
 	rplDepositAmount.Div(rplDepositAmount, oneEth)
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, testMgr.GetDeployerOpts())
 
 	// Create some subnodes
 	nodes, nodeAddresses, err := createNodesForTest(t, 2, eth.EthToWei(50))
@@ -551,24 +534,24 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Set max minipools per node
 	wave1MinipoolsPerNode := 4
-	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(wave1MinipoolsPerNode)), deployerOpts)
+	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(wave1MinipoolsPerNode)), testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the max validators to %d", wave1MinipoolsPerNode))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the max validators to %d", wave1MinipoolsPerNode))
 
 	// Make the RP deposit pool way bigger to account for the minipool creation count
 	depositPoolSize := eth.EthToWei(2000)
-	txInfo, err = bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Bootstrap(depositPoolSize, deployerOpts)
+	txInfo, err = bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Bootstrap(depositPoolSize, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the maximum deposit pool size to %.2f ETH", eth.WeiToEth(depositPoolSize)))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the maximum deposit pool size to %.2f ETH", eth.WeiToEth(depositPoolSize)))
 
 	// Deposit into the RP deposit pool
 	fundOpts := &bind.TransactOpts{
-		From:  deployerOpts.From,
+		From:  testMgr.GetDeployerOpts().From,
 		Value: depositPoolSize,
 	}
 	fundTxInfo, err := bindings.DepositPoolManager.Deposit(fundOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool")
+	testMgr.MineTx(t, fundTxInfo, testMgr.GetDeployerOpts(), "Funded the RP deposit pool")
 
 	// Create minipools
 	wave1Data, wave1CreateHashes := cstestutils.BuildAndSubmitCreateMinipoolTxs(t, deployment, nodes, nodeAddresses, wave1MinipoolsPerNode, nil, bindings.RpSuperNode)
@@ -579,7 +562,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 creation should succeed
-	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1CreateHashes {
 		for _, hash := range hashesPerNode {
 			_, err = hd.Tx.WaitForTransaction(hash)
@@ -600,14 +583,14 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 	// Redeem 10 xrETH
 	xrEthRedeemAmount := eth.EthToWei(10)
-	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
+	wethReturned := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, testMgr.GetDeployerOpts())
 	require.Equal(t, xrEthRedeemAmount, wethReturned)
 	t.Logf("Redeemed %.6f xrETH (%s wei) for %.6f WETH (%s wei)", eth.WeiToEth(xrEthRedeemAmount), xrEthRedeemAmount.String(), eth.WeiToEth(wethReturned), wethReturned.String())
 	printTickInfo(t, sp)
 
 	// Redeem 100 xrRPL
 	xRplRedeemAmount := eth.EthToWei(100)
-	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
+	rplReturned := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, testMgr.GetDeployerOpts())
 	require.Equal(t, xRplRedeemAmount, rplReturned)
 	t.Logf("Redeemed %.6f xRPL (%s wei) for %.6f RPL (%s wei)", eth.WeiToEth(xRplRedeemAmount), xRplRedeemAmount.String(), eth.WeiToEth(rplReturned), rplReturned.String())
 	printTickInfo(t, sp)
@@ -659,7 +642,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Assume 0.010 ETH in rewards on Beacon and 0.005 on the EL per validator
 	elRewardsPerMinipool := eth.EthToWei(0.005)
 	beaconRewardsPerValidator := 1e7 // Beacon is in gwei
-	simulateBeaconRewards(t, sp, wave1Data, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), deployerOpts)
+	simulateBeaconRewards(t, sp, wave1Data, elRewardsPerMinipool, uint64(beaconRewardsPerValidator), testMgr.GetDeployerOpts())
 	totalYieldAccrued, oracleError := calculateXrEthOracleTotalYieldAccrued(t, sp, bindings)
 	t.Logf("The new total yield accrued to report is %.10f (%s wei)", eth.WeiToEth(totalYieldAccrued), totalYieldAccrued.String())
 
@@ -671,11 +654,11 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	chainID := new(big.Int).SetUint64(testMgr.GetBeaconMockManager().GetConfig().ChainID)
-	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, sigTime, csMgr.PoAConstellationOracle.Address, chainID, deployerKey)
+	sig, err := createXrEthOracleSignature(totalYieldAccrued, expectedOracleError, sigTime, csMgr.PoAConstellationOracle.Address, chainID, testMgr.GetDeployerKey())
 	require.NoError(t, err)
-	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, sigTime, deployerOpts)
+	txInfo, err = csMgr.PoAConstellationOracle.SetTotalYieldAccrued(totalYieldAccrued, oracleError, sig, sigTime, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, adminOpts, "Updated the xrETH Oracle")
+	testMgr.MineTx(t, txInfo, testMgr.GetAdminOpts(), "Updated the xrETH Oracle")
 	printTickInfo(t, sp)
 
 	// Verify the new ETH:xrETH price
@@ -707,10 +690,10 @@ func Test13_OrderlyStressTest(t *testing.T) {
 			[]*big.Int{constellationRewards.SmoothingPoolEth},
 			[][]common.Hash{constellationRewards.MerkleProof},
 			merkleCfg,
-			deployerOpts,
+			testMgr.GetDeployerOpts(),
 		)
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, deployerOpts, "Executed the Merkle claim")
+		testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), "Executed the Merkle claim")
 		t.Logf("Rewards amount: %.6f ETH (%s wei), %.6f RPL (%s wei)",
 			eth.WeiToEth(constellationRewards.SmoothingPoolEth),
 			constellationRewards.SmoothingPoolEth.String(),
@@ -794,9 +777,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 		// Set max minipools per node
 		wave2MaxMinipoolsPerNode := 5
-		txInfo, err = csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(wave2MaxMinipoolsPerNode)), deployerOpts)
+		txInfo, err = csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(wave2MaxMinipoolsPerNode)), testMgr.GetDeployerOpts())
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the max validators to %d", wave2MaxMinipoolsPerNode))
+		testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the max validators to %d", wave2MaxMinipoolsPerNode))
 		printTickInfo(t, sp)
 
 		// Node 1 and 2 should make 1 more minipool each
@@ -909,16 +892,16 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 		// Make node 1 exit the new minipool and another one out of spite
 		spiteMinipool := wave2Data[1][0]
-		setMinipoolToWithdrawn(t, sp, spiteMinipool, deployerOpts)
+		setMinipoolToWithdrawn(t, sp, spiteMinipool, testMgr.GetDeployerOpts())
 		t.Logf("Node 1 exited minipool %s out of spite", spiteMinipool.MinipoolAddress.Hex())
 		extraMinipool := wave1Data[1][0]
-		setMinipoolToWithdrawn(t, sp, extraMinipool, deployerOpts)
+		setMinipoolToWithdrawn(t, sp, extraMinipool, testMgr.GetDeployerOpts())
 		t.Logf("Node 1 exited minipool %s as well", extraMinipool.MinipoolAddress.Hex())
 
 		// Tick the spite minipool
-		txInfo, err = csMgr.OperatorDistributor.ProcessMinipool(spiteMinipool.MinipoolAddress, deployerOpts)
+		txInfo, err = csMgr.OperatorDistributor.ProcessMinipool(spiteMinipool.MinipoolAddress, testMgr.GetDeployerOpts())
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Ticked minipool %s", spiteMinipool.MinipoolAddress.Hex()))
+		testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Ticked minipool %s", spiteMinipool.MinipoolAddress.Hex()))
 
 		// Verify the next minipool hasn't changed
 		err = qMgr.Query(func(mc *batch.MultiCaller) error {
@@ -931,23 +914,23 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 		// Deposit into the RPL vault
 		rplDepositAmount = eth.EthToWei(1000)
-		deployerOpts.Nonce = nil
-		err = testMgr.Constellation_DepositToRplVault(csMgr.RplVault, rplDepositAmount, deployerOpts, deployerOpts)
+		testMgr.GetDeployerOpts().Nonce = nil
+		err = testMgr.Constellation_DepositToRplVault(csMgr.RplVault, rplDepositAmount, testMgr.GetDeployerOpts(), testMgr.GetDeployerOpts())
 		require.NoError(t, err)
 		t.Logf("Deposited %.6f ETH (%s wei) into the RPL vault", eth.WeiToEth(rplDepositAmount), rplDepositAmount.String())
 
 		// Attempt to deposit into the WETH vault - should fail
 		ethDepositAmount = eth.EthToWei(2000)
-		deployerOpts.Nonce = nil
-		err = testMgr.Constellation_DepositToWethVault(bindings.Weth, csMgr.WethVault, ethDepositAmount, deployerOpts)
-		deployerOpts.Nonce = nil
+		testMgr.GetDeployerOpts().Nonce = nil
+		err = testMgr.Constellation_DepositToWethVault(bindings.Weth, csMgr.WethVault, ethDepositAmount, testMgr.GetDeployerOpts())
+		testMgr.GetDeployerOpts().Nonce = nil
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed with status 0")
 		t.Logf("Depositing into the WETH vault failed as expected: %v", err)
 
 		// Redeem 8 xrETH
 		xrEthRedeemAmount = eth.EthToWei(8)
-		wethReturned2 := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, deployerOpts)
+		wethReturned2 := redeemToken(t, qMgr, txMgr, csMgr.WethVault, xrEthRedeemAmount, false, testMgr.GetDeployerOpts())
 		expectedAmount = new(big.Int).Mul(xrEthRedeemAmount, expectedXrEthPrice)
 		expectedAmount.Div(expectedAmount, oneEth)
 		requireApproxEqual(t, expectedAmount, wethReturned2)
@@ -955,7 +938,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 		// Redeem 100 xrRPL
 		xRplRedeemAmount = eth.EthToWei(100)
-		rplReturned2 := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, deployerOpts)
+		rplReturned2 := redeemToken(t, qMgr, txMgr, csMgr.RplVault, xRplRedeemAmount, false, testMgr.GetDeployerOpts())
 		expectedAmount = new(big.Int).Mul(xRplRedeemAmount, expectedXRplPrice)
 		expectedAmount.Div(expectedAmount, oneEth)
 		requireApproxEqualWithTolerance(t, expectedAmount, rplReturned2, big.NewInt(100))
@@ -974,9 +957,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		// Tick all the minipools to collect rewards
 		totalMpCount := wave1MinipoolsPerNode*len(nodes) + wave2MinipoolsPerNode*len(wave2Nodes)
 		for i := 0; i < totalMpCount; i++ {
-			txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(deployerOpts)
+			txInfo, err := csMgr.OperatorDistributor.ProcessNextMinipool(testMgr.GetDeployerOpts())
 			require.NoError(t, err)
-			testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Executed tick %d", i))
+			testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Executed tick %d", i))
 		}
 
 		// Verify post-tick details
@@ -998,13 +981,13 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		t.Logf("Interval 2 had %.6f ETH (%s wei) as expected", eth.WeiToEth(rewardsContractBalanceDelta), rewardsContractBalanceDelta.String())
 
 		// Run a treasury claim for ETH
-		treasuryRecipient := odaoOpts[0].From
+		treasuryRecipient := testMgr.GetOdaoOpts()[0].From
 		preBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 		require.NoError(t, err)
 
-		txInfo, err = csMgr.Treasury.ClaimEth(treasuryRecipient, adminOpts)
+		txInfo, err = csMgr.Treasury.ClaimEth(treasuryRecipient, testMgr.GetAdminOpts())
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, adminOpts, "Treasury claimed ETH rewards")
+		testMgr.MineTx(t, txInfo, testMgr.GetAdminOpts(), "Treasury claimed ETH rewards")
 
 		postBalance, err := ec.BalanceAt(context.Background(), treasuryRecipient, nil)
 		require.NoError(t, err)
@@ -1017,7 +1000,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 		t.Logf("Treasury claimed ETH rewards and received %.6f ETH (%s wei)", eth.WeiToEth(treasuryRewards), treasuryRewards.String())
 
 		// Run a treasury claim for RPL
-		treasuryRecipient = odaoOpts[0].From
+		treasuryRecipient = testMgr.GetOdaoOpts()[0].From
 		err = qMgr.Query(func(mc *batch.MultiCaller) error {
 			bindings.Rpl.BalanceOf(mc, &preBalance, treasuryRecipient)
 			return nil
@@ -1026,9 +1009,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 		rplContract, err := sp.GetRocketPoolManager().RocketPool.GetContract(rocketpool.ContractName_RocketTokenRPL)
 		require.NoError(t, err)
-		txInfo, err = csMgr.Treasury.ClaimToken(rplContract.Address, treasuryRecipient, adminOpts)
+		txInfo, err = csMgr.Treasury.ClaimToken(rplContract.Address, treasuryRecipient, testMgr.GetAdminOpts())
 		require.NoError(t, err)
-		testMgr.MineTx(t, txInfo, adminOpts, "Treasury claimed RPL rewards")
+		testMgr.MineTx(t, txInfo, testMgr.GetAdminOpts(), "Treasury claimed RPL rewards")
 
 		err = qMgr.Query(func(mc *batch.MultiCaller) error {
 			bindings.Rpl.BalanceOf(mc, &postBalance, treasuryRecipient)
@@ -1043,15 +1026,11 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 // Run test 15 of the QA suite
 func Test15_StakingTest(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	require.NoError(t, err)
 	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
@@ -1073,10 +1052,10 @@ func Test15_StakingTest(t *testing.T) {
 	wethAmount, rplDepositAmount := getDepositAmounts(t, bindings, sp, 10) // Enough for 10 minipools
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplDepositAmount, testMgr.GetDeployerOpts())
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, testMgr.GetDeployerOpts())
 
 	// Create salts
 	salts := make([][]*big.Int, 15)
@@ -1099,7 +1078,7 @@ func Test15_StakingTest(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 creation should succeed
-	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1CreateHashes {
 		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
 		require.NoError(t, err)
@@ -1128,12 +1107,12 @@ func Test15_StakingTest(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("RP deposit pool balance: %.2f ETH", eth.WeiToEth(bindings.DepositPoolManager.Balance.Get()))
 	fundOpts := &bind.TransactOpts{
-		From:  deployerOpts.From,
+		From:  testMgr.GetDeployerOpts().From,
 		Value: eth.EthToWei(120),
 	}
 	fundTxInfo, err := bindings.DepositPoolManager.Deposit(fundOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool again")
+	testMgr.MineTx(t, fundTxInfo, testMgr.GetDeployerOpts(), "Funded the RP deposit pool again")
 
 	// Build wave 1 minipools stake TXs
 	wave1StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave1Nodes, wave1Data)
@@ -1180,7 +1159,7 @@ func Test15_StakingTest(t *testing.T) {
 	// Send ETH to the RP deposit pool again
 	fundTxInfo, err = bindings.DepositPoolManager.Deposit(fundOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, fundTxInfo, deployerOpts, "Funded the RP deposit pool again")
+	testMgr.MineTx(t, fundTxInfo, testMgr.GetDeployerOpts(), "Funded the RP deposit pool again")
 
 	// Build wave 2 minipools stake TXs
 	wave2StakeHashes := cstestutils.BuildAndSubmitStakeMinipoolTxs(t, wave2Nodes, wave2Data)
@@ -1213,15 +1192,11 @@ func Test15_StakingTest(t *testing.T) {
 }
 
 func TestGetMinipools(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateSnapshot()
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.DependsOnConstellationBaseline()
+	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
 	require.NoError(t, err)
 	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
@@ -1235,24 +1210,24 @@ func TestGetMinipools(t *testing.T) {
 	t.Log("Created bindings")
 
 	// Register the main node with Constellation
-	cstestutils.RegisterWithConstellation(t, testMgr, mainNode)
+	cstestutils.RegisterWithConstellation(t, testMgr, testMgr.GetNode())
 
 	// Set the max validator count
 	minipoolCount := 1000
-	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(minipoolCount)), deployerOpts)
+	txInfo, err := csMgr.SuperNodeAccount.SetMaxValidators(big.NewInt(int64(minipoolCount)), testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the max validators to %d", minipoolCount))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the max validators to %d", minipoolCount))
 
 	// Make the deposit pool large enough
 	dpSize := eth.EthToWei(float64(minipoolCount) * 24)
-	txInfo, err = bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Bootstrap(dpSize, deployerOpts)
+	txInfo, err = bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Bootstrap(dpSize, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the deposit pool size to %.2f ETH", eth.WeiToEth(dpSize)))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the deposit pool size to %.2f ETH", eth.WeiToEth(dpSize)))
 
 	// Make the global minipool count large enough
-	txInfo, err = bindings.ProtocolDaoManager.Settings.Minipool.MaximumCount.Bootstrap(big.NewInt(int64(minipoolCount)), deployerOpts)
+	txInfo, err = bindings.ProtocolDaoManager.Settings.Minipool.MaximumCount.Bootstrap(big.NewInt(int64(minipoolCount)), testMgr.GetDeployerOpts())
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Set the global minipool count to %d", minipoolCount))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Set the global minipool count to %d", minipoolCount))
 
 	// Do enough deposits to fill the deposit pool
 	maxDeposit := eth.EthToWei(8000)
@@ -1260,7 +1235,7 @@ func TestGetMinipools(t *testing.T) {
 	chainID := big.NewInt(int64(beaconCfg.ChainID))
 	for i := 10; i < 20; i++ {
 		// Make the private key
-		key, err := keygen.GetEthPrivateKey(uint(i))
+		key, err := testMgr.GetKeyGenerator().GetEthPrivateKey(uint(i))
 		require.NoError(t, err)
 		opts, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 		require.NoError(t, err)
@@ -1290,10 +1265,10 @@ func TestGetMinipools(t *testing.T) {
 	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), minipoolCount)
 
 	// Deposit WETH to the WETH vault
-	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
+	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, testMgr.GetDeployerOpts())
 
 	// Deposit RPL to the RPL vault
-	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, deployerOpts)
+	cstestutils.DepositToRplVault(t, testMgr, csMgr.RplVault, bindings.Rpl, rplAmount, testMgr.GetDeployerOpts())
 
 	// Make the salts
 	salts := make([]*big.Int, minipoolCount)
@@ -1304,6 +1279,7 @@ func TestGetMinipools(t *testing.T) {
 	// Get the expected addresses
 	addresses := make([]common.Address, minipoolCount)
 	maxQuerySize := 250
+	mainNodeAddress := testMgr.GetMainNodeAddress()
 	err = qMgr.BatchQuery(minipoolCount, maxQuerySize, func(mc *batch.MultiCaller, index int) error {
 		salt := salts[index]
 		saltBytes := [32]byte{}
@@ -1317,7 +1293,7 @@ func TestGetMinipools(t *testing.T) {
 	t.Log("Got the expected minipool addresses")
 
 	// Make the first BLS key
-	blsKey, err := keygen.GetBlsPrivateKey(0)
+	blsKey, err := testMgr.GetKeyGenerator().GetBlsPrivateKey(0)
 	require.NoError(t, err)
 
 	// Build the minipool creation TXs
@@ -1335,9 +1311,9 @@ func TestGetMinipools(t *testing.T) {
 		withdrawalCreds := validator.GetWithdrawalCredsFromAddress(expectedAddress)
 
 		// Get a signature and increment the node nonce
-		sig, err := deployment.GetMinipoolDepositSignature(mainNodeAddress, expectedAddress, salt)
+		sig, err := deployment.GetMinipoolDepositSignature(testMgr.GetNode().Address, expectedAddress, salt)
 		require.NoError(t, err)
-		deployment.IncrementSuperNodeNonce(mainNodeAddress)
+		deployment.IncrementSuperNodeNonce(testMgr.GetNode().Address)
 
 		// Make a dummy deposit data
 		depositData, err := createDepositData(blsKey, pubkey, withdrawalCreds, beaconCfg.GenesisForkVersion, uint64(prelaunchValueGwei), res.EthNetworkName)
@@ -1404,7 +1380,7 @@ func TestGetMinipools(t *testing.T) {
 	// Get the list of minipools from SNA
 	var minipoolAddressesFromSna []common.Address
 	err = qMgr.Query(func(mc *batch.MultiCaller) error {
-		csMgr.SuperNodeAccount.GetSubNodeMinipools(mc, &minipoolAddressesFromSna, mainNodeAddress)
+		csMgr.SuperNodeAccount.GetSubNodeMinipools(mc, &minipoolAddressesFromSna, testMgr.GetMainNodeAddress())
 		return nil
 	}, nil)
 	require.NoError(t, err)
@@ -1419,7 +1395,7 @@ func TestGetMinipools(t *testing.T) {
 // Also sends ETH to the RP deposit pool for convenience
 func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 	// Services
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
@@ -1450,12 +1426,12 @@ func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 
 	// Send ETH to the RP deposit pool
 	fundOpts := &bind.TransactOpts{
-		From:  deployerOpts.From,
+		From:  testMgr.GetDeployerOpts().From,
 		Value: bindings.ProtocolDaoManager.Settings.Deposit.MaximumDepositPoolSize.Get(), // Deposit the maximum amount
 	}
 	txInfo, err := bindings.DepositPoolManager.Deposit(fundOpts)
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, deployerOpts, fmt.Sprintf("Funded the RP deposit pool with %.6f ETH (%s wei)", eth.WeiToEth(fundOpts.Value), fundOpts.Value.String()))
+	testMgr.MineTx(t, txInfo, testMgr.GetDeployerOpts(), fmt.Sprintf("Funded the RP deposit pool with %.6f ETH (%s wei)", eth.WeiToEth(fundOpts.Value), fundOpts.Value.String()))
 }
 
 // Create a set of subnodes running HD and CS, register them with the nodeset, and send them some ETH.
@@ -1468,7 +1444,7 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	for i := 0; i < subnodeCount; i++ {
 		var err error
 		nodeDir := filepath.Join(basePath, fmt.Sprintf("node%d", i+1))
-		subNodes[i], subnodeAddresses[i], err = createNewNode(mainNode, nodeDir)
+		subNodes[i], subnodeAddresses[i], err = createNewNode(testMgr.GetNode(), nodeDir)
 		require.NoError(t, err)
 		logger.Info(
 			"Created subnode",
@@ -1478,7 +1454,7 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	}
 
 	// Send the subnodes some ETH
-	hd := mainNode.GetHyperdriveNode().GetApiClient()
+	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
 	submissions := make([]*eth.TransactionSubmission, len(subnodeAddresses))
 	for i, addr := range subnodeAddresses {
 		resp, err := hd.Wallet.Send(initialFunding, "eth", addr)
@@ -1503,8 +1479,8 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	}
 
 	// Amend the main node to the subnodes
-	nodes := append([]*cstesting.ConstellationNode{mainNode}, subNodes...)
-	addresses := append([]common.Address{mainNodeAddress}, subnodeAddresses...)
+	nodes := append([]*cstesting.ConstellationNode{testMgr.GetNode()}, subNodes...)
+	addresses := append([]common.Address{testMgr.GetMainNodeAddress()}, subnodeAddresses...)
 
 	// Register the nodes with Constellation
 	for _, node := range nodes {
@@ -1587,20 +1563,20 @@ func setCoverageRatios(t *testing.T, sp cscommon.IConstellationServiceProvider, 
 
 	submissions := []*eth.TransactionSubmission{}
 	if maxWethRplRatio != nil {
-		txInfo, err := csMgr.WethVault.SetMaxWethRplRatio(maxWethRplRatio, deployerOpts)
+		txInfo, err := csMgr.WethVault.SetMaxWethRplRatio(maxWethRplRatio, testMgr.GetDeployerOpts())
 		submission, err := eth.CreateTxSubmissionFromInfo(txInfo, err)
 		require.NoError(t, err)
 		submissions = append(submissions, submission)
 	}
 	if minWethRplRatio != nil {
-		txInfo, err := csMgr.RplVault.SetMinWethRplRatio(minWethRplRatio, deployerOpts)
+		txInfo, err := csMgr.RplVault.SetMinWethRplRatio(minWethRplRatio, testMgr.GetDeployerOpts())
 		submission, err := eth.CreateTxSubmissionFromInfo(txInfo, err)
 		require.NoError(t, err)
 		submissions = append(submissions, submission)
 	}
 
 	// Submit the transactions
-	txs, err := txMgr.BatchExecuteTransactions(submissions, deployerOpts)
+	txs, err := txMgr.BatchExecuteTransactions(submissions, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
 
 	// Mine the block
@@ -1647,21 +1623,21 @@ func setLiquidityReservePercents(t *testing.T, sp cscommon.IConstellationService
 
 	submissions := []*eth.TransactionSubmission{}
 	if wethVault != nil {
-		txInfo, err := csMgr.WethVault.SetLiquidityReservePercent(wethVault, deployerOpts)
+		txInfo, err := csMgr.WethVault.SetLiquidityReservePercent(wethVault, testMgr.GetDeployerOpts())
 		submission, err := eth.CreateTxSubmissionFromInfo(txInfo, err)
 		require.NoError(t, err)
 		submissions = append(submissions, submission)
 	}
 	if rplVault != nil {
-		txInfo, err := csMgr.RplVault.SetLiquidityReservePercent(rplVault, deployerOpts)
+		txInfo, err := csMgr.RplVault.SetLiquidityReservePercent(rplVault, testMgr.GetDeployerOpts())
 		submission, err := eth.CreateTxSubmissionFromInfo(txInfo, err)
 		require.NoError(t, err)
 		submissions = append(submissions, submission)
 	}
 
 	// Submit the transactions
-	deployerOpts.Nonce = nil
-	txs, err := txMgr.BatchExecuteTransactions(submissions, deployerOpts)
+	testMgr.GetDeployerOpts().Nonce = nil
+	txs, err := txMgr.BatchExecuteTransactions(submissions, testMgr.GetDeployerOpts())
 	require.NoError(t, err)
 
 	// Mine the block
@@ -2081,9 +2057,9 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 	t.Logf("Fast forwarded %d slots", slots)
 
 	// Mint the RPL inflation
-	txInfo, err := rplBinding.MintInflationRPL(odaoOpts[0])
+	txInfo, err := rplBinding.MintInflationRPL(testMgr.GetOdaoOpts()[0])
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, odaoOpts[0], "Minted RPL inflation")
+	testMgr.MineTx(t, txInfo, testMgr.GetOdaoOpts()[0], "Minted RPL inflation")
 
 	// Make sure the vault has the new inflation
 	var vaultRpl *big.Int
@@ -2099,7 +2075,7 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 	// Send some ETH to the Smoothing Pool
 	smoothingPoolEth := 10.0
 	smoothingPoolEthWei := eth.EthToWei(smoothingPoolEth)
-	sender := odaoOpts[0]
+	sender := testMgr.GetOdaoOpts()[0]
 	newOpts := &bind.TransactOpts{
 		From:  sender.From,
 		Value: smoothingPoolEthWei,
@@ -2130,17 +2106,17 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 
 	// Make the rewards map
 	rewardsMap := map[common.Address]*rewardsInfo{
-		odaoOpts[0].From: {
+		testMgr.GetOdaoOpts()[0].From: {
 			CollateralRpl:    common.Big0,
 			OracleDaoRpl:     odaoAmountPerNode,
 			SmoothingPoolEth: common.Big0,
 		},
-		odaoOpts[1].From: {
+		testMgr.GetOdaoOpts()[1].From: {
 			CollateralRpl:    common.Big0,
 			OracleDaoRpl:     odaoAmountPerNode,
 			SmoothingPoolEth: common.Big0,
 		},
-		odaoOpts[2].From: {
+		testMgr.GetOdaoOpts()[2].From: {
 			CollateralRpl:    common.Big0,
 			OracleDaoRpl:     odaoAmountPerNode,
 			SmoothingPoolEth: common.Big0,
@@ -2186,12 +2162,12 @@ func executeRpRewardsInterval(t *testing.T, sp cscommon.IConstellationServicePro
 	t.Log("Rewards submission created")
 
 	// Submit it with 2 Oracles
-	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, odaoOpts[0])
+	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, testMgr.GetOdaoOpts()[0])
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, odaoOpts[0], "Submitted rewards snapshot from ODAO 1")
-	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, odaoOpts[1])
+	testMgr.MineTx(t, txInfo, testMgr.GetOdaoOpts()[0], "Submitted rewards snapshot from ODAO 1")
+	txInfo, err = rewardsPool.SubmitRewardSnapshot(rewardSnapshot, testMgr.GetOdaoOpts()[1])
 	require.NoError(t, err)
-	testMgr.MineTx(t, txInfo, odaoOpts[1], "Submitted rewards snapshot from ODAO 2")
+	testMgr.MineTx(t, txInfo, testMgr.GetOdaoOpts()[1], "Submitted rewards snapshot from ODAO 2")
 
 	// Ensure the interval was incremented and the snapshot is canon
 	err = qMgr.Query(nil, nil, rewardsPool.RewardIndex)
@@ -2367,7 +2343,7 @@ func createMerkleClaimConfig(t *testing.T, sp cscommon.IConstellationServiceProv
 	)
 
 	// Sign the message
-	signature, err := utils.CreateSignature(message, deployerKey)
+	signature, err := utils.CreateSignature(message, testMgr.GetDeployerKey())
 	require.NoError(t, err)
 
 	return &constellation.MerkleRewardsConfig{
@@ -2569,34 +2545,4 @@ func createDepositData(validatorKey *eth2types.BLSPrivateKey, pubkey beacon.Vali
 		ForkVersion:           genesisForkVersion,
 		NetworkName:           networkName,
 	}, nil
-}
-
-// Cleanup after a unit test
-func qa_cleanup(snapshotName string) {
-	// Handle panics
-	r := recover()
-	if r != nil {
-		debug.PrintStack()
-		fail("Recovered from panic: %v", r)
-	}
-
-	// Revert to the snapshot taken at the start of the test
-	if snapshotName != "" {
-		err := testMgr.RevertSnapshot(snapshotName)
-		if err != nil {
-			fail("Error reverting to custom snapshot: %v", err)
-		}
-	}
-
-	// Reload the HD wallet to undo any changes made during the test
-	err := mainNode.GetHyperdriveNode().GetServiceProvider().GetWallet().Reload(testMgr.GetLogger())
-	if err != nil {
-		fail("Error reloading hyperdrive wallet: %v", err)
-	}
-
-	// Reload the CS wallet to undo any changes made during the test
-	err = mainNode.GetServiceProvider().GetWallet().Reload()
-	if err != nil {
-		fail("Error reloading constellation wallet: %v", err)
-	}
 }
