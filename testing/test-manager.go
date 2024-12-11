@@ -149,7 +149,7 @@ func (m *ConstellationTestManager) SetupTest() error {
 	nsDB := nsMgr.GetDatabase()
 
 	// Register the primary
-	err = m.registerWithNodeset(mainNode, m.mainNodeAddress)
+	err = m.RegisterWithNodeset(mainNode, m.mainNodeAddress)
 	if err != nil {
 		return fmt.Errorf("error registering with nodeset: %v", err)
 	}
@@ -159,7 +159,7 @@ func (m *ConstellationTestManager) SetupTest() error {
 	if err != nil {
 		return fmt.Errorf("error creating key generator: %v", err)
 	}
-	m.deployerKey, err = keygen.GetEthPrivateKey(0)
+	m.deployerKey, err = m.keygen.GetEthPrivateKey(0)
 	if err != nil {
 		return fmt.Errorf("error getting deployer key: %v", err)
 	}
@@ -213,7 +213,7 @@ func (m *ConstellationTestManager) SetupTest() error {
 	deployment.SetAdminPrivateKey(m.deployerKey)
 
 	// Bootstrap the oDAO - indices are addresses 10-12
-	m.odaoNodes, m.odaoOpts, err = m.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, m.deployerOpts)
+	m.odaoNodes, m.odaoOpts, err = m.RocketPool_CreateOracleDaoNodesWithDefaults(m.keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, m.deployerOpts)
 	if err != nil {
 		return fmt.Errorf("error creating oDAO nodes: %v", err)
 	}
@@ -224,6 +224,14 @@ func (m *ConstellationTestManager) SetupTest() error {
 // ===============
 // === Getters ===
 // ===============
+
+func (m *ConstellationTestManager) GetMainNodeOpts() *bind.TransactOpts {
+	return m.mainNodeOpts
+}
+
+func (m *ConstellationTestManager) GetKeyGenerator() *keys.KeyGenerator {
+	return m.keygen
+}
 
 func (m *ConstellationTestManager) GetOdaoOpts() []*bind.TransactOpts {
 	return m.odaoOpts
@@ -316,7 +324,7 @@ func closeTestManager(tm *hdtesting.HyperdriveTestManager) {
 }
 
 // Register a node with nodeset
-func (m *ConstellationTestManager) registerWithNodeset(node *ConstellationNode, address common.Address) error {
+func (m *ConstellationTestManager) RegisterWithNodeset(node *ConstellationNode, address common.Address) error {
 	// whitelist the node with the nodeset.io account
 	nsServer := m.GetNodeSetMockServer().GetManager()
 	nsDB := nsServer.GetDatabase()

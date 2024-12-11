@@ -1298,6 +1298,7 @@ func TestGetMinipools(t *testing.T) {
 
 	// Build the minipool creation TXs
 	prelaunchValueGwei := 1e9
+	mainNodeOpts := testMgr.GetMainNodeOpts()
 	mainNodeOpts.Value = eth.GweiToWei(prelaunchValueGwei)
 	txInfos := make([]*eth.TransactionInfo, minipoolCount)
 	for i := 0; i < minipoolCount; i++ {
@@ -1311,9 +1312,9 @@ func TestGetMinipools(t *testing.T) {
 		withdrawalCreds := validator.GetWithdrawalCredsFromAddress(expectedAddress)
 
 		// Get a signature and increment the node nonce
-		sig, err := deployment.GetMinipoolDepositSignature(testMgr.GetNode().Address, expectedAddress, salt)
+		sig, err := deployment.GetMinipoolDepositSignature(testMgr.GetMainNodeAddress(), expectedAddress, salt)
 		require.NoError(t, err)
-		deployment.IncrementSuperNodeNonce(testMgr.GetNode().Address)
+		deployment.IncrementSuperNodeNonce(testMgr.GetMainNodeAddress())
 
 		// Make a dummy deposit data
 		depositData, err := createDepositData(blsKey, pubkey, withdrawalCreds, beaconCfg.GenesisForkVersion, uint64(prelaunchValueGwei), res.EthNetworkName)

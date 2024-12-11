@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
 	"github.com/rocket-pool/node-manager-core/log"
 )
@@ -56,34 +57,34 @@ func cleanup() {
 	testMgr = nil
 }
 
-// // Create a new node pair with a given user directory, initialize its wallet, and register it with nodeset
-// func createNewNode(primary *cstesting.ConstellationNode, newUserDir string) (*cstesting.ConstellationNode, common.Address, error) {
-// 	// Make the HD node
-// 	hdNode, err := primary.GetHyperdriveNode().CreateSubNode(newUserDir, "localhost", 0)
-// 	if err != nil {
-// 		return nil, common.Address{}, fmt.Errorf("error creating HD subnode: %v", err)
-// 	}
+// Create a new node pair with a given user directory, initialize its wallet, and register it with nodeset
+func createNewNode(primary *cstesting.ConstellationNode, newUserDir string) (*cstesting.ConstellationNode, common.Address, error) {
+	// Make the HD node
+	hdNode, err := primary.GetHyperdriveNode().CreateSubNode(newUserDir, "localhost", 0)
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("error creating HD subnode: %v", err)
+	}
 
-// 	// Make the CS node
-// 	csNode, err := primary.CreateSubNode(hdNode, "localhost", 0)
-// 	if err != nil {
-// 		return nil, common.Address{}, fmt.Errorf("error creating CS subnode: %v", err)
-// 	}
+	// Make the CS node
+	csNode, err := primary.CreateSubNode(hdNode, "localhost", 0)
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("error creating CS subnode: %v", err)
+	}
 
-// 	// Generate a new wallet
-// 	password := "test_password123"
-// 	hd := hdNode.GetApiClient()
-// 	initResponse, err := hd.Wallet.Initialize(nil, nil, true, password, true)
-// 	if err != nil {
-// 		fail("error generating wallet: %v", err)
-// 	}
-// 	nodeAddress := initResponse.Data.AccountAddress
+	// Generate a new wallet
+	password := "test_password123"
+	hd := hdNode.GetApiClient()
+	initResponse, err := hd.Wallet.Initialize(nil, nil, true, password, true)
+	if err != nil {
+		fail("error generating wallet: %v", err)
+	}
+	nodeAddress := initResponse.Data.AccountAddress
 
-// 	// Register with nodeset
-// 	err = registerWithNodeset(csNode, nodeAddress)
-// 	if err != nil {
-// 		return nil, common.Address{}, fmt.Errorf("error registering with nodeset: %v", err)
-// 	}
+	// Register with nodeset
+	err = testMgr.RegisterWithNodeset(csNode, nodeAddress)
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("error registering with nodeset: %v", err)
+	}
 
-// 	return csNode, nodeAddress, nil
-// }
+	return csNode, nodeAddress, nil
+}
