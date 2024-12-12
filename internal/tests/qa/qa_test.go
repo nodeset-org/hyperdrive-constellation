@@ -37,7 +37,7 @@ var (
 
 // Run test 3 of the QA suite
 func Test3_ComplexRoundTrip(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services
@@ -316,7 +316,7 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 // Run test 4 of the QA suite
 func Test4_SimpleNOConcurrency(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services
@@ -374,7 +374,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 
 // Run test 5 of the QA suite
 func Test5_ComplexNOConcurrency(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services
@@ -467,7 +467,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 // Run test 13 of the QA suite
 func Test13_OrderlyStressTest(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services
@@ -1026,7 +1026,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 // Run test 15 of the QA suite
 func Test15_StakingTest(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services
@@ -1192,7 +1192,7 @@ func Test15_StakingTest(t *testing.T) {
 }
 
 func TestGetMinipools(t *testing.T) {
-	err := testMgr.DependsOnConstellationBaseline()
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
 	require.NoError(t, err)
 
 	// Get some services

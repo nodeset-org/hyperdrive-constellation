@@ -115,17 +115,17 @@ func NewConstellationTestManager() (*ConstellationTestManager, error) {
 		node:                  node,
 	}
 
-	err = module.SetupTest()
-	if err != nil {
-		return nil, fmt.Errorf("error setting up test: %w", err)
-	}
+	// err = module.SetupTest()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error setting up test: %w", err)
+	// }
 
 	tm.RegisterModule(module)
-	baselineSnapshot, err := tm.CreateSnapshot()
-	if err != nil {
-		return nil, fmt.Errorf("error creating baseline snapshot: %w", err)
-	}
-	module.baselineSnapshotID = baselineSnapshot
+	// baselineSnapshot, err := tm.CreateSnapshot()
+	// if err != nil {
+	// 	return nil, fmt.Errorf("error creating baseline snapshot: %w", err)
+	// }
+	// module.baselineSnapshotID = baselineSnapshot
 	return module, nil
 }
 
