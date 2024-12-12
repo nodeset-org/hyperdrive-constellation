@@ -148,6 +148,9 @@ func TestMain(m *testing.M) {
 
 	// Take Snapshot
 	qaTestSnapshot, err = testMgr.CreateSnapshot()
+	if err != nil {
+		fail("error taking snapshot: %v", err)
+	}
 
 	// Run tests
 	code := m.Run()
