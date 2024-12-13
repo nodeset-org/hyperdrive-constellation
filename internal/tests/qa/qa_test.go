@@ -320,7 +320,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
 	res := sp.GetResources()
@@ -338,7 +338,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	runPreflightChecks(t, bindings)
 
 	// Get the deposit amounts
-	wethAmount, rplAmount := getDepositAmounts(t, bindings, mainNode.GetServiceProvider(), 1)
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), 1)
 
 	// Deposit WETH to the WETH vault
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
@@ -379,7 +379,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
 	res := sp.GetResources()
@@ -473,7 +473,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -1032,7 +1032,7 @@ func Test15_StakingTest(t *testing.T) {
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
@@ -1198,7 +1198,7 @@ func TestGetMinipools(t *testing.T) {
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := mainNode.GetServiceProvider()
+	sp := testMgr.GetNode().GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -1262,7 +1262,7 @@ func TestGetMinipools(t *testing.T) {
 	}
 
 	// Get the deposit amounts
-	wethAmount, rplAmount := getDepositAmounts(t, bindings, mainNode.GetServiceProvider(), minipoolCount)
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), minipoolCount)
 
 	// Deposit WETH to the WETH vault
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
@@ -1422,6 +1422,7 @@ func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 	t.Log("Deposit pool balance is zero")
 	require.Equal(t, 1, rplPrice.Cmp(common.Big0))
 	t.Logf("RPL price is %.6f RPL/ETH (%s wei)", eth.WeiToEth(rplPrice), rplPrice.String())
+
 	// Send ETH to the RP deposit pool
 	fundOpts := &bind.TransactOpts{
 		From:  deployerOpts.From,
