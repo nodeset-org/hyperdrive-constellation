@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 	}
 	harness = _harness
 
+	fmt.Printf("!!! TEST MAIN !!!\n")
 	// Create a minipool
 	mp = createMinipool(standardSalt, harness.MainNode, harness.MainNodeAddress)
 	stakeMinipool(harness.MainNode, harness.MainNodeAddress, mp)

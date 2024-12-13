@@ -41,9 +41,9 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -320,13 +320,13 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
 	res := sp.GetResources()
 	deployment := nsDB.Constellation.GetDeployment(res.DeploymentName)
 	csMgr := sp.GetConstellationManager()
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
 	t.Log("Created bindings")
 
@@ -338,7 +338,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	runPreflightChecks(t, bindings)
 
 	// Get the deposit amounts
-	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), 1)
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, mainNode.GetServiceProvider(), 1)
 
 	// Deposit WETH to the WETH vault
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
@@ -360,7 +360,7 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 	t.Log("Mined a block")
 
 	// The first one should succeed
-	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	_, err = hd.Tx.WaitForTransaction(hashes[0][0])
 	require.NoError(t, err)
 	t.Log("First minipool creation TX succeeded")
@@ -378,8 +378,8 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
-	sp := testMgr.GetNode().GetServiceProvider()
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
+	sp := mainNode.GetServiceProvider()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
 	nsDB := nsMgr.GetDatabase()
 	res := sp.GetResources()
@@ -425,7 +425,7 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 should succeed
-	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1Hashes {
 		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
 		require.NoError(t, err)
@@ -471,9 +471,9 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -562,7 +562,7 @@ func Test13_OrderlyStressTest(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 creation should succeed
-	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1CreateHashes {
 		for _, hash := range hashesPerNode {
 			_, err = hd.Tx.WaitForTransaction(hash)
@@ -1030,9 +1030,9 @@ func Test15_StakingTest(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	nsMgr := testMgr.GetNodeSetMockServer().GetManager()
@@ -1078,7 +1078,7 @@ func Test15_StakingTest(t *testing.T) {
 	t.Log("Mined a block")
 
 	// Wave 1 creation should succeed
-	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	for _, hashesPerNode := range wave1CreateHashes {
 		_, err = hd.Tx.WaitForTransaction(hashesPerNode[0])
 		require.NoError(t, err)
@@ -1196,9 +1196,9 @@ func TestGetMinipools(t *testing.T) {
 	require.NoError(t, err)
 
 	// Get some services
-	bindings, err := cstestutils.CreateBindings(testMgr.GetNode().GetServiceProvider())
+	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
 	require.NoError(t, err)
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 	txMgr := sp.GetTransactionManager()
@@ -1210,7 +1210,7 @@ func TestGetMinipools(t *testing.T) {
 	t.Log("Created bindings")
 
 	// Register the main node with Constellation
-	cstestutils.RegisterWithConstellation(t, testMgr, testMgr.GetNode())
+	cstestutils.RegisterWithConstellation(t, testMgr, mainNode)
 
 	// Set the max validator count
 	minipoolCount := 1000
@@ -1262,7 +1262,7 @@ func TestGetMinipools(t *testing.T) {
 	}
 
 	// Get the deposit amounts
-	wethAmount, rplAmount := getDepositAmounts(t, bindings, testMgr.GetNode().GetServiceProvider(), minipoolCount)
+	wethAmount, rplAmount := getDepositAmounts(t, bindings, mainNode.GetServiceProvider(), minipoolCount)
 
 	// Deposit WETH to the WETH vault
 	cstestutils.DepositToWethVault(t, testMgr, csMgr.WethVault, bindings.Weth, wethAmount, deployerOpts)
@@ -1279,7 +1279,6 @@ func TestGetMinipools(t *testing.T) {
 	// Get the expected addresses
 	addresses := make([]common.Address, minipoolCount)
 	maxQuerySize := 250
-	mainNodeAddress := mainNodeAddress
 	err = qMgr.BatchQuery(minipoolCount, maxQuerySize, func(mc *batch.MultiCaller, index int) error {
 		salt := salts[index]
 		saltBytes := [32]byte{}
@@ -1395,7 +1394,7 @@ func TestGetMinipools(t *testing.T) {
 // Also sends ETH to the RP deposit pool for convenience
 func runPreflightChecks(t *testing.T, bindings *cstestutils.ContractBindings) {
 	// Services
-	sp := testMgr.GetNode().GetServiceProvider()
+	sp := mainNode.GetServiceProvider()
 	csMgr := sp.GetConstellationManager()
 	qMgr := sp.GetQueryManager()
 
@@ -1443,7 +1442,7 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	for i := 0; i < subnodeCount; i++ {
 		var err error
 		nodeDir := filepath.Join(basePath, fmt.Sprintf("node%d", i+1))
-		subNodes[i], subnodeAddresses[i], err = createNewNode(testMgr.GetNode(), nodeDir)
+		subNodes[i], subnodeAddresses[i], err = createNewNode(mainNode, nodeDir)
 		require.NoError(t, err)
 		logger.Info(
 			"Created subnode",
@@ -1453,7 +1452,7 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	}
 
 	// Send the subnodes some ETH
-	hd := testMgr.GetNode().GetHyperdriveNode().GetApiClient()
+	hd := mainNode.GetHyperdriveNode().GetApiClient()
 	submissions := make([]*eth.TransactionSubmission, len(subnodeAddresses))
 	for i, addr := range subnodeAddresses {
 		resp, err := hd.Wallet.Send(initialFunding, "eth", addr)
@@ -1478,7 +1477,7 @@ func createNodesForTest(t *testing.T, subnodeCount int, initialFunding *big.Int)
 	}
 
 	// Amend the main node to the subnodes
-	nodes := append([]*cstesting.ConstellationNode{testMgr.GetNode()}, subNodes...)
+	nodes := append([]*cstesting.ConstellationNode{mainNode}, subNodes...)
 	addresses := append([]common.Address{mainNodeAddress}, subnodeAddresses...)
 
 	// Register the nodes with Constellation
