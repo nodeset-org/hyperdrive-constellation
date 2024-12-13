@@ -27,3 +27,6 @@ internal/hardhat/cache/
 
 build/
 hyperdrive-constellation
+
+# Misc
+.DS_Store

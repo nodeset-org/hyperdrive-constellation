@@ -40,6 +40,8 @@ var (
 	// Oracle DAO
 	odaoOpts  []*bind.TransactOpts
 	odaoNodes []*node.Node
+
+	qaTestSnapshot string
 )
 
 // Initialize a common server used by all tests
@@ -142,6 +144,12 @@ func TestMain(m *testing.M) {
 	odaoNodes, odaoOpts, err = testMgr.RocketPool_CreateOracleDaoNodesWithDefaults(keygen, big.NewInt(int64(chainID)), []uint{10, 11, 12}, deployerOpts)
 	if err != nil {
 		fail("error creating oDAO nodes: %v", err)
+	}
+
+	// Take Snapshot
+	qaTestSnapshot, err = testMgr.CreateSnapshot()
+	if err != nil {
+		fail("error taking snapshot: %v", err)
 	}
 
 	// Run tests
