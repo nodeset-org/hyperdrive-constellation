@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/common"
 	cscommon "github.com/nodeset-org/hyperdrive-constellation/common"
 	csconfig "github.com/nodeset-org/hyperdrive-constellation/shared/config"
 	hdservices "github.com/nodeset-org/hyperdrive-daemon/module-utils/services"
@@ -90,11 +89,6 @@ func NewConstellationTestManager() (*ConstellationTestManager, error) {
 		node:                  node,
 	}
 
-	// err = module.SetupTest()
-	// if err != nil {
-	// 	return nil, fmt.Errorf("error setting up test: %w", err)
-	// }
-
 	tm.RegisterModule(module)
 	baselineSnapshot, err := tm.CreateSnapshot()
 	if err != nil {
@@ -143,6 +137,11 @@ func (m *ConstellationTestManager) RevertModuleToSnapshot(moduleState any) error
 	if err != nil {
 		return fmt.Errorf("error reverting to snapshot: %w", err)
 	}
+	// wallet := m.node.sp.GetWallet()
+	// err = wallet.Reload()
+	// if err != nil {
+	// 	return fmt.Errorf("error reloading wallet: %w", err)
+	// }
 	return nil
 }
 
@@ -172,30 +171,4 @@ func closeTestManager(tm *hdtesting.HyperdriveTestManager) {
 	if err != nil {
 		tm.GetLogger().Error("Error closing test manager", log.Err(err))
 	}
-}
-
-// Register a node with nodeset
-func (m *ConstellationTestManager) RegisterWithNodeset(node *ConstellationNode, address common.Address) error {
-	// whitelist the node with the nodeset.io account
-	nsServer := m.GetNodeSetMockServer().GetManager()
-	nsDB := nsServer.GetDatabase()
-	user, err := nsDB.Core.AddUser(address.Hex())
-	if err != nil {
-		return fmt.Errorf("error adding user to nodeset: %v", err)
-	}
-	_ = user.WhitelistNode(address)
-
-	// Register with NodeSet
-	hd := node.GetHyperdriveNode().GetApiClient()
-	response, err := hd.NodeSet.RegisterNode(address.Hex())
-	if err != nil {
-		return fmt.Errorf("error registering node with nodeset: %v", err)
-	}
-	if response.Data.AlreadyRegistered {
-		return fmt.Errorf("node is already registered with nodeset")
-	}
-	if response.Data.NotWhitelisted {
-		return fmt.Errorf("node is not whitelisted with a nodeset user account")
-	}
-	return nil
 }
