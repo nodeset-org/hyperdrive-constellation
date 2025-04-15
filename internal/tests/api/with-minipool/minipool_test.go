@@ -3,7 +3,6 @@ package with_minipool
 import (
 	"context"
 	"math/big"
-	"runtime/debug"
 	"strconv"
 	"testing"
 
@@ -11,7 +10,6 @@ import (
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstasks "github.com/nodeset-org/hyperdrive-constellation/tasks"
-	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/eth"
 	"github.com/stretchr/testify/require"
@@ -23,11 +21,8 @@ func TestDuplicateSalts(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings := harness.Bindings
@@ -54,11 +49,8 @@ func TestSkipLiquidityCheck(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	sp := mainNode.GetServiceProvider()
@@ -90,11 +82,8 @@ func TestSkipBalanceCheck(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	deployerOpts := harness.DeployerOpts
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings := harness.Bindings
@@ -146,11 +135,8 @@ func TestSignedExitUpload_Manual(t *testing.T) {
 	// Take a snapshot, revert at the end
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	sp := mainNode.GetServiceProvider()
@@ -208,11 +194,8 @@ func TestSignedExitUpload_Task(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	mainNodeAddress := harness.MainNodeAddress
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	sp := mainNode.GetServiceProvider()
@@ -270,11 +253,8 @@ func TestSignedExitUpload_TaskAfterManual(t *testing.T) {
 	testMgr := harness.TestManager
 	mainNode := harness.MainNode
 	mainNodeAddress := harness.MainNodeAddress
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer nodeset_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(minipoolTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	sp := mainNode.GetServiceProvider()
@@ -378,37 +358,4 @@ func TestSignedExitUpload_TaskAfterManual(t *testing.T) {
 	require.NotNil(t, nsValidator.GetExitMessage())
 	require.NotNil(t, nsValidator2.GetExitMessage())
 	t.Logf("Minipools 1 and 2 no longer require signed exits as expected")
-}
-
-// Cleanup after a unit test
-func nodeset_cleanup(snapshotName string) {
-	testMgr := harness.TestManager
-	mainNode := harness.MainNode
-
-	// Handle panics
-	r := recover()
-	if r != nil {
-		debug.PrintStack()
-		fail("Recovered from panic: %v", r)
-	}
-
-	// Revert to the snapshot taken at the start of the test
-	if snapshotName != "" {
-		err := testMgr.RevertToCustomSnapshot(snapshotName)
-		if err != nil {
-			fail("Error reverting to custom snapshot: %v", err)
-		}
-	}
-
-	// Reload the HD wallet to undo any changes made during the test
-	err := mainNode.GetHyperdriveNode().GetServiceProvider().GetWallet().Reload(testMgr.GetLogger())
-	if err != nil {
-		fail("Error reloading hyperdrive wallet: %v", err)
-	}
-
-	// Reload the SW wallet to undo any changes made during the test
-	err = mainNode.GetServiceProvider().GetWallet().Reload()
-	if err != nil {
-		fail("Error reloading constellation wallet: %v", err)
-	}
 }

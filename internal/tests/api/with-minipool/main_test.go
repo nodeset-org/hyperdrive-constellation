@@ -19,9 +19,10 @@ import (
 
 // Various singleton variables used for testing
 var (
-	harness      *cstestutils.StandardTestHarness
-	standardSalt *big.Int = big.NewInt(0x90de5e7)
-	mp           minipool.IMinipool
+	harness              *cstestutils.StandardTestHarness
+	standardSalt         *big.Int = big.NewInt(0x90de5e7)
+	mp                   minipool.IMinipool
+	minipoolTestSnapshot string
 )
 
 // Initialize a common server used by all tests
@@ -32,9 +33,15 @@ func TestMain(m *testing.M) {
 	}
 	harness = _harness
 
+	fmt.Printf("!!! TEST MAIN !!!\n")
 	// Create a minipool
 	mp = createMinipool(standardSalt, harness.MainNode, harness.MainNodeAddress)
 	stakeMinipool(harness.MainNode, harness.MainNodeAddress, mp)
+
+	minipoolTestSnapshot, err = harness.TestManager.CreateSnapshot()
+	if err != nil {
+		fail("error creating test snapshot: %v", err)
+	}
 
 	// Run tests
 	code := m.Run()

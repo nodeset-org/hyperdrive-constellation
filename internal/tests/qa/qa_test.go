@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"math/big"
 	"path/filepath"
-	"runtime/debug"
 	"testing"
 	"time"
 
@@ -20,7 +19,6 @@ import (
 	cstestutils "github.com/nodeset-org/hyperdrive-constellation/internal/tests/utils"
 	csapi "github.com/nodeset-org/hyperdrive-constellation/shared/api"
 	cstesting "github.com/nodeset-org/hyperdrive-constellation/testing"
-	hdtesting "github.com/nodeset-org/hyperdrive-daemon/testing"
 	"github.com/nodeset-org/nodeset-client-go/utils"
 	batch "github.com/rocket-pool/batch-query"
 	"github.com/rocket-pool/node-manager-core/beacon"
@@ -39,12 +37,8 @@ var (
 
 // Run test 3 of the QA suite
 func Test3_ComplexRoundTrip(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
@@ -322,12 +316,8 @@ func Test3_ComplexRoundTrip(t *testing.T) {
 
 // Run test 4 of the QA suite
 func Test4_SimpleNOConcurrency(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	sp := testMgr.GetNode().GetServiceProvider()
@@ -384,12 +374,8 @@ func Test4_SimpleNOConcurrency(t *testing.T) {
 
 // Run test 5 of the QA suite
 func Test5_ComplexNOConcurrency(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
@@ -481,12 +467,8 @@ func Test5_ComplexNOConcurrency(t *testing.T) {
 
 // Run test 13 of the QA suite
 func Test13_OrderlyStressTest(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
@@ -1044,12 +1026,8 @@ func Test13_OrderlyStressTest(t *testing.T) {
 
 // Run test 15 of the QA suite
 func Test15_StakingTest(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
@@ -1214,12 +1192,8 @@ func Test15_StakingTest(t *testing.T) {
 }
 
 func TestGetMinipools(t *testing.T) {
-	// Take a snapshot, revert at the end
-	snapshotName, err := testMgr.CreateCustomSnapshot(hdtesting.Service_EthClients | hdtesting.Service_Filesystem | hdtesting.Service_NodeSet)
-	if err != nil {
-		fail("Error creating custom snapshot: %v", err)
-	}
-	defer qa_cleanup(snapshotName)
+	err := testMgr.RevertSnapshot(qaTestSnapshot)
+	require.NoError(t, err)
 
 	// Get some services
 	bindings, err := cstestutils.CreateBindings(mainNode.GetServiceProvider())
@@ -2570,34 +2544,4 @@ func createDepositData(validatorKey *eth2types.BLSPrivateKey, pubkey beacon.Vali
 		ForkVersion:           genesisForkVersion,
 		NetworkName:           networkName,
 	}, nil
-}
-
-// Cleanup after a unit test
-func qa_cleanup(snapshotName string) {
-	// Handle panics
-	r := recover()
-	if r != nil {
-		debug.PrintStack()
-		fail("Recovered from panic: %v", r)
-	}
-
-	// Revert to the snapshot taken at the start of the test
-	if snapshotName != "" {
-		err := testMgr.RevertToCustomSnapshot(snapshotName)
-		if err != nil {
-			fail("Error reverting to custom snapshot: %v", err)
-		}
-	}
-
-	// Reload the HD wallet to undo any changes made during the test
-	err := mainNode.GetHyperdriveNode().GetServiceProvider().GetWallet().Reload(testMgr.GetLogger())
-	if err != nil {
-		fail("Error reloading hyperdrive wallet: %v", err)
-	}
-
-	// Reload the CS wallet to undo any changes made during the test
-	err = mainNode.GetServiceProvider().GetWallet().Reload()
-	if err != nil {
-		fail("Error reloading constellation wallet: %v", err)
-	}
 }

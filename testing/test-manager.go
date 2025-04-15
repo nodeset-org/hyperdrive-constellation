@@ -23,6 +23,9 @@ type ConstellationTestManager struct {
 
 	// The complete Constellation node
 	node *ConstellationNode
+
+	// The snapshot ID of the baseline snapshot
+	baselineSnapshotID string
 }
 
 // Creates a new TestManager instance
@@ -81,11 +84,26 @@ func NewConstellationTestManager() (*ConstellationTestManager, error) {
 	}
 
 	// Return
-	m := &ConstellationTestManager{
+	module := &ConstellationTestManager{
 		HyperdriveTestManager: tm,
 		node:                  node,
 	}
-	return m, nil
+
+	tm.RegisterModule(module)
+	baselineSnapshot, err := tm.CreateSnapshot()
+	if err != nil {
+		return nil, fmt.Errorf("error creating baseline snapshot: %w", err)
+	}
+	module.baselineSnapshotID = baselineSnapshot
+	return module, nil
+}
+
+// ===============
+// === Getters ===
+// ===============
+
+func (m *ConstellationTestManager) GetModuleName() string {
+	return "hyperdrive-constellation"
 }
 
 // Get the Constellation node handle
@@ -93,8 +111,42 @@ func (m *ConstellationTestManager) GetNode() *ConstellationNode {
 	return m.node
 }
 
+// ====================
+// === Snapshotting ===
+// ====================
+
+// Reverts the service states to the baseline snapshot
+func (m *ConstellationTestManager) DependsOnConstellationBaseline() error {
+	err := m.RevertSnapshot(m.baselineSnapshotID)
+	if err != nil {
+		return fmt.Errorf("error reverting to baseline snapshot: %w", err)
+	}
+	return nil
+}
+
+func (m *ConstellationTestManager) TakeModuleSnapshot() (any, error) {
+	snapshotName, err := m.HyperdriveTestManager.TakeModuleSnapshot()
+	if err != nil {
+		return nil, fmt.Errorf("error taking snapshot: %w", err)
+	}
+	return snapshotName, nil
+}
+
+func (m *ConstellationTestManager) RevertModuleToSnapshot(moduleState any) error {
+	err := m.HyperdriveTestManager.RevertModuleToSnapshot(moduleState)
+	if err != nil {
+		return fmt.Errorf("error reverting to snapshot: %w", err)
+	}
+	// wallet := m.node.sp.GetWallet()
+	// err = wallet.Reload()
+	// if err != nil {
+	// 	return fmt.Errorf("error reloading wallet: %w", err)
+	// }
+	return nil
+}
+
 // Closes the test manager, shutting down the nodeset mock server and all other resources
-func (m *ConstellationTestManager) Close() error {
+func (m *ConstellationTestManager) CloseModule() error {
 	err := m.node.Close()
 	if err != nil {
 		return fmt.Errorf("error closing Constellation node: %w", err)
